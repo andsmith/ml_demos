@@ -29,5 +29,5 @@ The upper plot shows the histogram again, with the distribution that generated i
 -i, --iter     Maximum number of iterations to run
 -s, --spread   Spread of the true model (SD of dist between comps)
 -p, --n_points Number of data points to generate
--a, -animate_frames Only show every n-th frame of animation 
+-a, --animate_frames Only show every n-th frame of animation 
 ```            
