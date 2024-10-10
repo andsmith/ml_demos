@@ -14,11 +14,13 @@ The sampled points are plotted on the bottom (vertical position is random to bet
 
 
 ![EM_data](/EM/assets/EM_algo.png)
+
 The upper plot shows the evolving gaussian components (solid) as well as the mixture distribution (dashed) fit at each iteration.  The bottom plot shows which component has highest $p(y=i|x)$. 
 
  After convergence or max_iter is reached, the final model is plotted along with the model that generated the original data:
 
 ![EM_data](/EM/assets/EM_final.png)
+
 The upper plot shows the histogram again, with the distribution that generated it and the distribution of the newly fit GMM.  The lower plot shows the individual (weighted) Gaussian distributions within each model.
 
 #### Options:
