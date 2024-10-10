@@ -4,6 +4,8 @@ Demonstrate EM For fitting mixtures of 1-D Gaussians
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
+from argparse import ArgumentParser
+from util import Histogram, plot_classification, plot_dist, normalize_log_probs, sum_log_probs
 
 
 class GaussianComponent(object):
@@ -33,31 +35,6 @@ class GaussianComponent(object):
         return np.random.normal(self.mean, self.sd, n)
 
 
-class Histogram(object):
-    def __init__(self, x, n_bins):
-        margin = 0.05
-        x_min, x_max = np.min(x), np.max(x)
-        x_span = x_max - x_min
-        self._x_min = x_min - margin * x_span
-        self._x_max = x_max + margin * x_span
-        self._n = n_bins
-        self._bin_width = (self._x_max - self._x_min) / self._n
-        self._counts, self._bins = np.histogram(x, bins=self._n, range=(self._x_min, self._x_max))
-        self._density = self._counts / (len(x) * self._bin_width)
-
-    def plot(self, ax, *args, **kwargs):
-        """
-        Plot the histogram. (black and white bar outlines)
-        :param ax: the axis to plot on
-        :param args: additional arguments to pass to ax.plot
-        """
-        label = "Histogram of x"
-        bin_centers = self._bins[:-1] + self._bin_width / 2
-        ax.bar(bin_centers, self._density, width=self._bin_width, label=label,
-               fill=False, edgecolor='white', *args, **kwargs)
-        ax.set_xlim(self._x_min, self._x_max)
-
-
 class GaussianMixtureModel(object):
     def __init__(self, priors, components, colors=None):
         self.priors = priors
@@ -74,20 +51,23 @@ class GaussianMixtureModel(object):
         """
         Generate a random Gaussian mixture model.
         """
-        priors = np.random.rand(n)
+        priors = np.ones(n)/n
         priors /= priors.sum()
-        components = [GaussianComponent(np.random.rand() * spread, np.random.rand())
-                      for _ in range(n)]
+        means = np.random.randn(n) * spread
+        sds = np.random.rand(n) 
+        sds = np.maximum(sds, 0.1)  # not too small
+        components = [GaussianComponent(means[i], sds[i])
+                      for i in range(n)]
         return GaussianMixtureModel(priors, components)
-    
+
     @staticmethod
     def _rand_colors(n):
         return np.random.rand(n, 3)
 
     @staticmethod
-    def from_data(data, n, max_iter=10, plot=False):
-        colors=GaussianMixtureModel._rand_colors(n) if plot else None
-        priors, components = GaussianMixtureModel.fit_em(data, n, max_iter, colors)
+    def from_data(data, n, max_iter=10, animate_interval=0):
+        colors = GaussianMixtureModel._rand_colors(n) 
+        priors, components = GaussianMixtureModel.fit_em(data, n, max_iter, colors, animate_interval)
         return GaussianMixtureModel(priors, components, colors=colors)
 
     def classify(self, x):
@@ -119,7 +99,7 @@ class GaussianMixtureModel(object):
         return np.array([self.components[y[i]].sample(1)[0] for i in range(n)])
 
     @staticmethod
-    def fit_em(x, n, max_iter=10, colors=None):
+    def fit_em(x, n, max_iter=10, colors=None, animate_interval=0):
         """
         Fit the model to the data using the EM algorithm:
 
@@ -146,15 +126,22 @@ class GaussianMixtureModel(object):
 
         :param x: the data, an M element array of real values
         :param n: the number of components to fit
-        :param colors:  list of n rgb colors, one for each component
+        :param colors:  list of n rgb colors, one for each component (or None for no plotting)
         :param max_iter: the maximum number of iterations to run
+        :param animate_interval: the number of iterations between plots (0 for no animation)
         :return: priors (an n-element array w/ the mixing ratios),
                  components (list of GaussianComponent objects)
         """
+        if colors is not None and animate_interval > 0:
+            fig, ax = plt.subplots(2, 1, sharex=True)
+            x_range = np.max(x) - np.min(x)
+            y_range = x_range/15
+            y = np.random.rand(x.shape[0]) * y_range
 
         priors = np.ones(n) / n  # p(y), updated by the M-step
         components = [GaussianComponent(np.random.rand(), 1.0)
                       for _ in range(n)]  # p(x|y), updated by the M-step
+        hist = Histogram(x, 50)
 
         def _get_log_probs():
             # return log(p(x|y) * p(y)) for each x and y
@@ -167,7 +154,7 @@ class GaussianMixtureModel(object):
         for iter in range(max_iter):
 
             # E-step (run in log-space to avoid numerical underflow)
-            log_probs = _get_log_probs() if log_probs is None else log_probs
+            log_probs = log_probs if log_probs is not None else _get_log_probs() 
             responsibilities = normalize_log_probs(log_probs)
 
             # M-step, priors
@@ -176,21 +163,40 @@ class GaussianMixtureModel(object):
 
             # M-step, components:
             for i in range(n):
-                # old_component = components[i]
                 components[i] = GaussianComponent.from_data(x, weights=responsibilities[:, i])
-                # if self._plot:
-                #       self.plot_m_step(old_component, self._components[i], i)
 
-            # Calculate the log likelihood & save for next iteration
+            # Calculate the log likelihood & save for next iteration's E-step
             log_probs = _get_log_probs()
             log_likelihood = np.sum(sum_log_probs(log_probs))
-            print("Iteration %d: log likelihood = %.2f" % (iter, log_likelihood))
-            # if self._plot:
-            #    self.plot_e_step(log_likelihood)
+            diff = log_likelihood - last_ll
+            rel_diff = diff / np.abs(log_likelihood)
+
+            report_str = "Iteration %d: - log likelihood = %.7f (+ %.2f %%)" % (iter, -log_likelihood, rel_diff * 100)
+            print(report_str)
+
+            if animate_interval > 0 and iter % animate_interval == 0:
+                # E-step, show new distributions of each component and resulting classification
+                # clear plots
+                ax[0].clear()
+                hist.plot(ax[0])
+                full_model = GaussianMixtureModel(priors, components)
+                plot_dist(ax[0], full_model, linestyle='--', n_pts=1000, label='Fit')
+                for i, component in enumerate(components):
+                    plot_dist(ax[0], component, n_pts=1000, weight=priors[i], color=colors[i], label='C-%d' % i)
+                ax[1].clear()
+                responsibilities = np.argmax(log_probs, axis=1)
+                plot_classification(ax[1], np.hstack([x.reshape(-1, 1), y.reshape(-1, 1)]),
+                                    responsibilities, colors)
+                # plt.show()
+                ax[0].legend(loc='upper right')
+                ax[0].set_title("Iteration %d: -LL = %.2f (+ %.2f %%)" % (iter, -log_likelihood, rel_diff * 100)
+                                )
+                ax[1].set_title("current classification")
+                plt.pause(0.1)
+                # import ipdb; ipdb.set_trace()
 
             # Check for convergence
-            if log_likelihood - last_ll < 1e-6:
-                # alt, check no label changes (i.e. responsibilities are stable)
+            if rel_diff < 1e-7:
                 converged = True
                 break
 
@@ -199,124 +205,23 @@ class GaussianMixtureModel(object):
         if not converged:
             print("Did not converge after %d iterations" % max_iter)
         else:
-            print("Converged after %d iterations" % i)
+            print("Converged after %d iterations" % iter)
         return priors, components
-
-
-def plot_classification(ax, points, classifier, colors, aspect=15.0, *args, **kwargs):
-    """
-    Plot the classification of points by a classifier.
-
-    points are 1-d so spread them out in a rectangle w/given aspect ratio
-
-    :param ax: the axis to plot on
-    :param points: N element array of x values
-    :param classifier: a function that takes a point and returns a class label
-    :param colors: a list of colors to use for each class
-    :param aspect: the aspect ratio of the plot
-    :param args & kwargs: additional arguments to pass to ax.plot
-    """
-
-    probs = classifier(points)
-    labels = np.argmax(probs, axis=1)
-    x_range = max(points) - min(points)
-    y_range = x_range / aspect
-    y = np.random.rand(len(points)) * y_range
-    for label in set(labels):
-        color = colors[label]
-        x_vals = points[labels == label]
-        y_vals = y[labels == label]
-        print(color, points.shape)
-        plt.plot(x_vals, y_vals, '.',
-                 color=color,
-                 label="Class %d" % label,
-                 *args, **kwargs)
-
-    ax.set_yticks([])
-    ax.set_xlabel("x")
-
-
-def plot_dist(ax, dist,  weight=1.0, n_pts=1000, *args, **kwargs):
-    """
-    Plot a distribution over the reals.  
-    (Use current axis limits)
-
-    :param ax: the axis to plot on
-    :param dist: something with a .pdf() method
-    :param n_pts: the number of sample points to plot
-    :param args & kwargs: additional arguments to pass to ax.plot
-    """
-    x_min, x_max = ax.get_xlim()
-    x = np.linspace(x_min, x_max, n_pts)
-    y = dist.pdf(x) * weight
-    ax.plot(x, y, *args, **kwargs)
-    ax.set_xlim(x_min, x_max)
-    ax.set_ylabel("p(x)")
-    ax.set_xlabel("x")
-
 
 
 def parse_args():
     """
-    Parse command line arguments
-    syntax> python demo_em.py n_comps_real n_comps_fit [spread]
-    spread = expected mean of components' standard deviations
+    syntax> python demo_em.py n_comps_real n_comps_fit [max_iter=100] [spread=1.0] [n_points=1000] 
     """
-    spread = 1.0
-    if len(sys.argv) < 3:
-        print("Syntax: python demo_em.py n_comps_real n_comps_fit [spread=1.0]")
-        sys.exit(1)
-    n_comps_real = int(sys.argv[1])
-    n_comps_fit = int(sys.argv[2])
-    if len(sys.argv) > 3:
-        spread = float(sys.argv[3])
-    return n_comps_real, n_comps_fit, spread
-
-
-def sum_log_probs(log_probs):
-    """
-    Return the log(sum(exp(log_probs))) for each row of log_probs.
-    Since adding extremely small numbers will be unstable, we use this fact:
-
-      log(a + b) = log(c * (a + b) / c) 
-                 = log(c * a + c * b) - log(c)
-
-    so as long as we pick a constant such that the argument to log() is reasonable,
-    the result will be stable.
-
-    Use c =  1 / max(a, b) so that the argument is in (1, 2].
-
-    :param log_probs: M x N matrix of log probabilities, log_probs[i,j] = log(p(x_i|y_j) * p(y_j))
-    :return: M element array of log(sum(exp(log_probs[i,:])))
-    """
-    log_c = 1.0 - np.max(log_probs, axis=1)
-    return np.log(np.sum(np.exp(log_probs + log_c[:, np.newaxis]), axis=1)) - log_c
-
-
-def test_sum_log_probs():
-    """
-    Test sum_log_probs()
-    """
-
-    def _run_test(probs):
-        t1 = sum_log_probs(np.log(probs))
-        c1 = np.log(np.sum(probs, axis=1))
-        for i in range(probs.shape[0]):
-            assert np.allclose(t1[i], c1[i]), "Expected %s, got %s" % (c1, t1)
-
-    probs1 = np.array([[0.1, 0.2, 0.3],
-                      [0.2, 0.3, 0.4]])
-    probs2 = np.random.rand(100, 10)
-    _run_test(probs1)
-    _run_test(probs2)
-    print("sum_log_probs() passed")
-
-
-def normalize_log_probs(log_probs):
-    """
-    Normalize the log probabilities.
-    """
-    return np.exp(log_probs - sum_log_probs(log_probs)[:, np.newaxis])
+    parser = ArgumentParser(description="Demonstrate EM for fitting mixtures of 1-D Gaussians")
+    parser.add_argument('-r', "--n_real", type=int, default=5, help="Number of components generating data.")
+    parser.add_argument('-f', "--n_fit", type=int, default=5, help="Number of components in the fit model")
+    parser.add_argument('-i', "--iter", type=int, default=300, help="Maximum number of iterations to run")
+    parser.add_argument('-s', "--spread", type=float, default=1.5, help="Spread of the true model")
+    parser.add_argument('-p', "--n_points", type=int, default=2000, help="Number of data points to generate")
+    parser.add_argument('-a', "--animate_frame", type=int, default=1, help="Animate every n-th frame (or 0 for no animation)")
+    args = parser.parse_args()
+    return args.n_real, args.n_fit, args.iter, args.spread, args.n_points, args.animate_frame
 
 
 def _test_plots():
@@ -342,30 +247,60 @@ def _test_plots():
     plt.show()
 
 
-def demo(n_comps_real, n_comps_fit, spread, plot=True, n_pts=1000):
+def demo(n_comps_real, n_comps_fit, max_iter, spread, n_pts=1000, ainmate_interval=1):
     """
     Demonstrate EM for fitting mixtures of 1-D Gaussians.
     """
     # Generate a random Gaussian mixture model
     model = GaussianMixtureModel.from_random(n_comps_real, spread)
-    print("True model: %s" % model)
+    model.colors = GaussianMixtureModel._rand_colors(n_comps_real)
     data = model.sample(n_pts)
 
     # Fit a Gaussian mixture model to the data
-    model_fit = GaussianMixtureModel.from_data(data, n_comps_fit, plot=plot, max_iter = 1000)
-    if plot:
-        fig, ax = plt.subplots(2,sharex=True)
-        hist = Histogram(data, 50)
-        hist.plot(ax[0])
-        plot_dist(ax[0], model, n_pts=n_pts, label='True')
-        plot_dist(ax[0], model_fit, n_pts=n_pts, label='Fit')
-        plot_classification(ax[1], data, model.classify,colors=model_fit.colors)
-        plt.legend()
-        plt.show()
+    plt.ion()
+
+    # show the data
+    n_pts = data.size
+    hist = Histogram(data, 50)
+    fig, ax = plt.subplots(2, sharex=True)
+    hist.plot(ax[0])
+    labels = np.zeros(n_pts, dtype=int)
+    y = np.random.rand(n_pts)
+    plot_classification(ax[1], np.hstack((data.reshape(-1, 1), y.reshape(-1, 1))), labels, colors=[[1, 1, 1]])
+    ax[0].set_ylabel("p(x)")
+    fig.suptitle("data + normalized histogram\n(click to start)")
+    fig.waitforbuttonpress()
+
+    # animate the fit
+    model_fit = GaussianMixtureModel.from_data(data, n_comps_fit, animate_interval=ainmate_interval, max_iter=max_iter)
+
+    # show true and fit models
+    fig, ax = plt.subplots(2, sharex=True, sharey=True)
+    ax[0].clear()
+    # plot mixture distrubtions:
+    hist.plot(ax[0], label=None)
+    def_blue = np.array((31, 119, 180))/255
+    def_orange = np.array((255, 127, 14))/255
+    plot_dist(ax[0], model, n_pts=n_pts, label='True', color=def_blue)
+    plot_dist(ax[0], model_fit, n_pts=n_pts, label='Fit', linestyle='--', color=def_orange)
+    ax[0].legend()
+    ax[0].set_xlabel(None)
+    ax[0].set_title("True & EM-fit mixture distributions - p(x)")
+    ax[1].clear()
+    # plot true and fit components
+    for i, component in enumerate(model.components):
+        plot_dist(ax[1], component, n_pts=n_pts, weight=model.priors[i], color=def_blue)
+
+    for i, component in enumerate(model_fit.components):
+        plot_dist(ax[1], component, n_pts=n_pts, weight=model.priors[i], linestyle='--', color=def_orange)
+    ax[1].set_title("True & EM-fit components' distributions - p(x|y)p(y)")
+    plt.show()
+    plt.pause(0)
+
 
 if __name__ == "__main__":
 
     plt.style.use('dark_background')
     # test_sum_log_probs()
-    n_comps_real, n_comps_fit, spread = parse_args()
-    demo(n_comps_real, n_comps_fit, spread)
+    n_comps_real, n_comps_fit, max_iter, spread, n_pts, animate_interval = parse_args()
+    demo(n_comps_real, n_comps_fit, max_iter, spread, n_pts, ainmate_interval=animate_interval)
