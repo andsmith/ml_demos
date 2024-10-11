@@ -9,9 +9,10 @@ from util import Histogram, plot_classification, plot_dist, normalize_log_probs,
 
 
 class GaussianComponent(object):
+    MIN_SD = 0.00001
     def __init__(self, mean, sd):
         self.mean = mean
-        self.sd = sd
+        self.sd = sd if sd > self.MIN_SD else self.MIN_SD
 
     def __str__(self):
         return "N(%.2f, %.2f)" % (self.mean, self.sd)
@@ -155,14 +156,15 @@ class GaussianMixtureModel(object):
 
             # E-step (run in log-space to avoid numerical underflow)
             log_probs = log_probs if log_probs is not None else _get_log_probs() 
-            responsibilities = normalize_log_probs(log_probs)
+            responsibilities = normalize_log_probs(log_probs)  # p(z|x)
 
             # M-step, priors
-            total_counts = np.sum(responsibilities, axis=0)
-            priors = total_counts / np.sum(total_counts)
+            total_counts = np.sum(responsibilities, axis=0) 
+            priors = total_counts / np.sum(total_counts)  # p(z)
 
             # M-step, components:
             for i in range(n):
+                # p(x|z)
                 components[i] = GaussianComponent.from_data(x, weights=responsibilities[:, i])
 
             # Calculate the log likelihood & save for next iteration's E-step
@@ -196,7 +198,7 @@ class GaussianMixtureModel(object):
                 # import ipdb; ipdb.set_trace()
 
             # Check for convergence
-            if rel_diff < 1e-7:
+            if rel_diff < 1e-8:
                 converged = True
                 break
 
