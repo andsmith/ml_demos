@@ -38,8 +38,9 @@ class EchoStateNetwork(object):
         :return: new state
         """
         # State feedback & input:
-        excitations=np.dot(self.W_res_res, state) + np.dot(self.W_in_res, np.append(x, [1]))
-            
+        #if x.shape[0]==1:
+        #      import ipdb; ipdb.set_trace()
+        excitations=np.dot(self.W_res_res, state) + np.dot(self.W_in_res, np.append(x, [1]))   
         activations=np.tanh(excitations)
         new_state=(self.lr) * state + (1.0-self.lr) * activations
 
@@ -55,11 +56,14 @@ class EchoStateNetwork(object):
         
         state=self._get_washed_state()
         states=[]
-        for ind, (x, y) in enumerate(zip(X, Y)):
+        n = X.shape[0]
+
+        for i in range(n):
+            x = X[i]
+
             state=self._update_reservoir(x, state)
             states.append(state)
-
-           
+            
         states=np.vstack(states[washout:])
         extended_states = np.concatenate((states, X[washout:,:], np.ones((X.shape[0]-washout, 1))), axis=1)
         self.W_out =np.dot(np.linalg.pinv(extended_states), Y[washout:,:]).T
@@ -81,9 +85,11 @@ class EchoStateNetwork(object):
         :return: n_samples x n_output array of output samples
         """
         state=self._get_washed_state()
-
+        n = X.shape[0]
         outputs=[]
-        for x in X:
+        for i in range(n):
+            x = X[i]
+
             state=self._update_reservoir(x, state)
             output=np.dot(self.W_out, np.concatenate((state, x, [1])))
             outputs.append(output)
