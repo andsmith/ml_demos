@@ -63,6 +63,6 @@ class EchoStateTester(object):
 
 
 if __name__ == "__main__":
-    t = EchoStateTester({'n_input': 1, 'n_reservoir': 30, 'n_output': 1, 'input_scale':1, 'feedback_scale': 0.5,
+    t = EchoStateTester({'n_input': 1, 'n_reservoir': 30, 'n_output': 1, 'input_scale':1, 'feedback_scale': .1,
                          'leak_rate': 0.0, 'spectral_radius': 0.98, 'n_wash': 200})
     t.plot_transduction()   
