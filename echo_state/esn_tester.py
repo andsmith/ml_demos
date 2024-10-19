@@ -11,7 +11,7 @@ class EchoStateTester(object):
     to reproduce them.
     """
 
-    def __init__(self, esn_params, n_train_samples=5000, n_test_samples=500, period=30):
+    def __init__(self, esn_params, n_train_samples=3000, n_test_samples=500, period=20):
         """
         Initialize & run all tests.
         """
@@ -46,7 +46,7 @@ class EchoStateTester(object):
         """
         Plot the test signals, training output in blue, and predicted output in orange.
         """
-        plot_prune = 300
+        plot_prune = 0
 
         for i,signal in enumerate(self.data_out.keys()):
             plt.subplot(len(self.data_out.keys()), 1, i+1) 
@@ -63,6 +63,6 @@ class EchoStateTester(object):
 
 
 if __name__ == "__main__":
-    t = EchoStateTester({'n_input': 1, 'n_reservoir': 30, 'n_output': 1, 'input_scale':1, 'feedback_scale': .1,
-                         'leak_rate': 0.0, 'spectral_radius': 0.98, 'n_wash': 200})
+    t = EchoStateTester({'n_input': 1, 'n_reservoir': 2, 'n_output': 1, 'input_scale':1, 'feedback_scale': .5,
+                         'leak_rate': 0.0, 'spectral_radius': 0.95, 'n_wash': 0})
     t.plot_transduction()   

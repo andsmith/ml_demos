@@ -57,14 +57,31 @@ class EchoStateNetwork(object):
         :param X: n_samples x n_input array of input samples
         :param Y: n_samples x n_output array of output samples
         """
+        #import ipdb; ipdb.set_trace()
+        washout = self.n_wash
         state=self._get_washed_state()
-        output=np.zeros(self.n_out)
         states=[]
-        for x, y in zip(X, Y):
+        outputs = []
+        for ind, (x, y) in enumerate(zip(X, Y)):
+            prev_y = np.zeros(self.n_out) if ind == 0 else Y[ind - 1]
             state, output=self._update_reservoir(x, state, y)
             states.append(state)
-        states=np.vstack(states)
-        self.W_out=np.dot(np.linalg.pinv(np.concatenate((states, X, np.ones((X.shape[0], 1))), axis=1)), Y).T
+            outputs.append(output)
+        states=np.vstack(states[washout:])
+        import matplotlib.pyplot as plt
+        outputs= np.vstack(outputs[washout:])
+        #plt.plot(outputs[:,0])
+        ##plt.plot(Y[washout:,0])
+        #   plt.show()
+        extended_states = np.concatenate((states, X[washout:,:], np.ones((X.shape[0]-washout, 1))), axis=1)
+        print(X[washout:,:].shape, states.shape, extended_states.shape, Y[washout:,:].shape)
+        self.W_out =np.dot(np.linalg.pinv(extended_states), Y[washout:,:]).T
+
+        y_hat = self.predict(X)
+
+        plt.plot(Y)
+        plt.plot(y_hat)
+        plt.show()
 
     def predict(self, X):
         """
