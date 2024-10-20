@@ -13,9 +13,10 @@ class InteractivePond(Pond):
     A Pond that can be interacted with in realtime.
     """
 
-    #def __init__(self, n_x=500, x_max=100, decay_factor=.98,wave_scale=3, a_max=30):
-    def __init__(self, n_x=WIN_WIDTH, x_max=100, decay_factor=.97,wave_scale=2., a_max=30, *args, **kwargs):
-        super(InteractivePond, self).__init__(n_x, x_max, decay_factor,wave_scale= wave_scale, speed_factor=1.0, *args, **kwargs)
+    # def __init__(self, n_x=500, x_max=100, decay_factor=.98,wave_scale=3, a_max=30):
+    def __init__(self, n_x=WIN_WIDTH, x_max=100, decay_factor=.97, wave_scale=2., a_max=30, *args, **kwargs):
+        super(InteractivePond, self).__init__(n_x, x_max, decay_factor,
+                                              wave_scale=wave_scale, speed_factor=1.0, *args, **kwargs)
         self._new_drops = []  # dropped since last frame
         self._win_size = LAYOUT['win_size']
         self._midline = int(LAYOUT['midline'] * self._win_size[1])
@@ -24,7 +25,7 @@ class InteractivePond(Pond):
         self._min_y_scale = 3*a_max
         self._n_underscaled_frames = 0
 
-        self._rain_rate = 0.
+        self._rain_rate = 0.0
 
         self._a_max = a_max
         self._n_hist_disp = self._win_size[1] - self._midline
@@ -112,12 +113,18 @@ class InteractivePond(Pond):
         img = (h * 255).astype(np.uint8) if np.max(h) > 0 else h.astype(np.uint8)
         return np.concatenate([img[:, :, np.newaxis]]*3, axis=2)
 
-    def _get_drops(self):
+    def _get_drops(self, dt):
         """
-        Returns the drops that have fallen since the last frame.
+        Returns the drops that have fallen since the last frame and any raindrops.
+        The number of raindrops is a poisson process with rate self._rain_rate.
         """
         drops = self._new_drops
         self._new_drops = []
+        if self._rain_rate > 0:
+            n_drops = np.random.poisson(self._rain_rate * dt)
+            raindrops = get_natural_raindrops(n_drops, self._max_x, self._a_max)
+            drops.extend(raindrops)
+            print("Raining %i drops." % n_drops)
         return drops
 
     def _add_h_hist(self, h):
@@ -132,15 +139,28 @@ class InteractivePond(Pond):
         """
         cv2.namedWindow(self._win_name)
         cv2.setMouseCallback(self._win_name, self._mouse)
-        print("Simulating live raindrops in x=[0, %.1f]." %(self._max_x,))
-      
+        print("Simulating live raindrops in x=[0, %.1f]." % (self._max_x,))
+
         while True:
-            dropping_now = self._get_drops()
+            dropping_now = self._get_drops(self._dt)
             self._waves, h, _ = self._step_sim(self._waves, dropping_now, self._dt)
+
+
             img = self.render(h)
             cv2.imshow('Pond', img)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            k = cv2.waitKey(1) & 0xFF
+            if k == ord('q'):
                 break
+            elif k == ord(' '):
+                self._waves = []
+                self._h_history = []
+                print("Resetting pond.")
+            elif k == ord('r'):
+                self._rain_rate = self._rain_rate * 2 if self._rain_rate > 0 else .01
+                print("Rain rate set to %.2f drops per second." % self._rain_rate)
+            elif k == ord('f'):
+                self._rain_rate = self._rain_rate / 2 if self._rain_rate > .01 else 0.
+                print("Rain rate set to %.2f drops per second." % self._rain_rate)
 
 
 if __name__ == "__main__":
