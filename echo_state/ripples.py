@@ -192,7 +192,7 @@ class Pond(object):
         self._max_x = x_max
         self._reflect = reflecting_edges
         self._max_waves = 1000
-
+        print("Created Pond w/params: n_x=%i, x_max=%.1f, decay=%.3f, speed=%.3f, scale=%.3f" % (n_x, x_max, decay_factor, speed_factor, wave_scale))
 
         self._x = np.linspace(0, self._max_x, n_x)
 

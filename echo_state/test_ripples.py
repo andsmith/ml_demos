@@ -14,7 +14,6 @@ def test_wave():
     x = np.linspace(0, x_max, n_pixels)
     for iter in range(n_steps):
         amps.append(wave.get_amplitudes(x))
-        print(wave)
         if not wave.tick(dt=1.0):
             break
     img = np.array(amps)
@@ -41,11 +40,11 @@ def plot_raindrop_size_dist():
     plt.show()
 
 
-def test_pond(n_drops=100):
+def test_pond(n_drops=20):
     n_iter = 1000
     decay = 0.995
     x_max = 500
-    pond = Pond(n_x=600, x_max=x_max, decay_factor=decay)
+    pond = Pond(n_x=600, x_max=x_max, decay_factor=decay,wave_scale=1/4.)
     pond_lo_res = Pond(n_x=100, x_max=x_max, decay_factor=decay)
     drops = get_natural_raindrops(n_drops, n_iter, x_max, amp_mean=10)
     waves,_ = pond.simulate(drops)
@@ -58,7 +57,6 @@ def test_pond(n_drops=100):
     titles = ["x_units = %i, t_steps = %i" % (img.shape[1], img.shape[0]) for img in imgs]
 
     a_0 = imgs[0].shape[1]/imgs[0].shape[0]
-    print("Aspect1: ", a_0)
 
     def _plt(img, i, title):
         plt.subplot(1, len(imgs), i+1)
@@ -67,7 +65,6 @@ def test_pond(n_drops=100):
         if i > 0:
             aspect = imgs[i].shape[1]/imgs[i].shape[0]
             scale = aspect / a_0
-            print("Aspect2: ", plt.gca().get_aspect())
             plt.gca().set_aspect(scale)\
 
         # plt.axis('square')
@@ -85,16 +82,9 @@ def test_esn_test_train(n_drops=5,xmax=50,t_max=500.):
     pond = Pond(n_x=500, x_max=xmax, decay_factor=.98,wave_scale=3)
     #drops = get_natural_raindrops(n_drops, t_max, xmax, amp_mean=10)
     drops = get_drips(t_max, xmax,period=150, amp=20)
-    print(drops)
     output, input = pond.simulate(drops,iter=int(t_max), t_max=t_max)
     img_out = np.array(output)
     img_in = np.array(input)
-    
-    input34 = [in_vec[34] for in_vec in input]
-    img34 = img_in[:,34]
-    plt.plot(input34)
-    plt.plot(img34)
-    plt.show()
 
     plt.subplot(1, 2,1)
     plt.imshow(img_out, cmap='hot', interpolation='nearest')
