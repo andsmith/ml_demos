@@ -112,7 +112,9 @@ class Wave(object):
         def move_and_bounce(w, x_max):
             x, v = w['x'], w['v']
             x += v * dt
-            amp = w['amp'] * self._decay_factor
+
+            # amp should decay by decay_factor in 1 second, so by decay_factor^dt in dt seconds.
+            amp = w['amp'] * (self._decay_factor ** dt)
             if x < 0 and self._reflect[0]:
 
                 x = -x
@@ -144,78 +146,147 @@ class Wave(object):
 
 def test_wave():
     n_steps = 300
-    wave = Wave(x_0=35, a=20.,  x_max=101., speed_factor=.1, decay_factor=.9995, amp_thresh=1,reflect=(True, True) )
+    n_pixels = 100 # discretize [0, x_max] into this many pixels
+    x_max = 100
+
+    wave = Wave(x_0=35, a=20.,  x_max=x_max, speed_factor=.1, decay_factor=.95, amp_thresh=1,reflect=(True, True) )
+
     amps=[]
-    x = np.linspace(0, 100, 101)
+    x = np.linspace(0, x_max, n_pixels)   
     for iter in range(n_steps):
         amps.append(wave.get_amplitudes(x))
         print(wave)
         if not wave.tick(dt=1.0):
             break
     img = np.array(amps)
-    plt.imshow(img.T, aspect='equal', cmap='hot', interpolation='nearest')
-    plt.xlabel('t');plt.ylabel('x')
+    plt.imshow(img, aspect='equal', cmap='hot', interpolation='nearest')
+    plt.xlabel('x');plt.ylabel('t')
     plt.title("Decayed to %.6f after %i iterations" % (np.min(img[-1,:]), iter))
     plt.axis('equal')
     plt.colorbar()
     plt.show()
 
 
+def get_natural_raindrops(n, t_max, x_max, a_max=10):
+    """
+    Assume raindrop sizes have a gamma distribution, k=2.0, theta = 3.0
+    """
+    k=2.0
+    theta=3.0
+    mean = k*theta
+    scale = a_max/mean
+
+    times = (np.random.rand(n)*t_max)
+    positions = (np.random.rand(n)*x_max)
+    sizes = np.random.gamma(k,theta, n) * scale + 1
+    return [{'t': t, 'x': p, 'mass': s} for t,p,s in zip(times, positions, sizes)]
+     
+
+def plot_raindrop_size_dist():
+    
+    n= 100000
+    raindrops = get_natural_raindrops(n, 100, 100, 10)
+    counts, bins = np.histogram(raindrops['mass'], bins=100, density=False)
+    bin_centers = (bins[:-1] + bins[1:]) / 2
+    plt.plot(bin_centers, counts,'o-')
+    plt.xlabel('Raindrop Mass')
+    plt.ylabel('Counts')
+    plt.title('Natural raindrop size distribution')
+    plt.show()
+
+
 class Pond(object):
-    def __init__(self, n_x, speed_factor, decay_factor, dx=1., dt=1., threshold=0.1):
+    def __init__(self, n_x,  x_max=100., decay_factor=0.95):
         """
         Initialize a rippling pond simulation with:
         :param n_x: number of positions in the x dimension (spatial discretization)
         :param speed_factor: Constant in speed calculation, see _get_wave_speed
         :param decay_factor: Exponential decay factor for wave amplitudes over time
-        :param dx: spatial discretization step size
-        :param dt: time discretization step size
         :param threshold: fraction of dx, minimum threshold for wave amplitudes
         """
         self._n_x = n_x
-        self._dx = dx
-        self._dt = dt
-        self._speed_factor = speed_factor
+        self._speed_factor = .1
         self._decay_factor = decay_factor
-        self._threshold = threshold
+        self._threshold = .1
+        self._max_x = x_max
 
-    def _get_wave_speed(self, a):
+        self._x = np.linspace(0, self._max_x, n_x)
+
+    def simulate(self, raindrops, t_max = 1000., iter = 1001):
         """
-        Calculate the wave speed for a wave of amplitude a.
+        Simulate the pond's evolution over time (until no drops are left, or max_iter is reached).
+        :param raindrops: A list of raindrops, each a dict with 'times','x','mass' keys.
         """
-        return self._speed_factor * np.sqrt(a)
+        print("Simulating %i raindrops in x=[0, %.1f], t=[0, %.1f] over %i iterations" % (len(raindrops), self._max_x, t_max, iter))
+        waves = []
+        heights = []
+        dt = t_max/(iter-1)
+        times = np.linspace(0, t_max, iter)
 
-    def _get_wave_amplitude(self, a, t):
-        """
-        Calculate the wave amplitude at time t for a wave of amplitude a.
-        """
-        return a * self._decay_factor ** t
+        # get time index for each drop
+        drop_schedule = np.array([int(np.floor(drop['t']/dt)) for drop in raindrops])
+        
 
-    # Methods for creating specific simulation scenaiors (droplet placements)
+        for i in range(iter):
+            # Upddate old waves, forgetting if they are no longer active,
+            waves = [w for w in waves if w.tick(dt)]
 
-    def make_it_trickle(self, n_steps, pos_rel=0.5, rate=10):
-        """
-        Simulate drops regularly falling in one position.
-        :param n_steps: number of timesteps to simulate
-        :param pos_rel: relative position of the droplet in the pond wrt endpoints.
-        :param rate: number of timesteps between drops.
-        :returns: list of (x_ind, a) tuples, where x_ind is the index of the droplet's position in 
-           the spatial discretization, and a is the amplitude of the droplet's wave.
-        """
-        self.h = np.zeros((self.n_x, 1))
-        self.droplets = [(int(self.n_x * pos_rel), 1.0)]
-        for i in range(n_steps):
-            if i % rate == 0:
-                self.droplets.append((int(self.n_x * pos_rel), 1.0))
-            self._step()
+            # add new waves,
+            dropping_now = [drop for d_i,drop in enumerate(raindrops) if drop_schedule[d_i] == i]
+            for drop in dropping_now:
+                w = Wave(x_0=drop['x'], a=drop['mass'], x_max=self._max_x, speed_factor=self._speed_factor,
+                         decay_factor=self._decay_factor, amp_thresh=self._threshold)
+                waves.append(w)
 
-    def make_it_rain(self, precipitation_level, n_steps):
-        """
+            # finally, update the pond's height.
+            h = np.zeros(self._n_x)
+            for w in waves:
+                h += w.get_amplitudes(self._x)
+                
+            heights.append(h)
 
-        """
+        return np.array(heights)
 
-        self.h = np.zeros((n_x, 1))
+def test_pond(n_drops=100):
+    n_iter = 1000
+    decay = 0.995
+    x_max=500
+    pond = Pond(n_x=600, x_max=x_max, decay_factor=decay)
+    pond_lo_res = Pond(n_x=100, x_max=x_max, decay_factor=decay)
+    drops = get_natural_raindrops(n_drops, n_iter, x_max, a_max=10)
+    waves = pond.simulate(drops)
+    waves_2 = pond_lo_res.simulate(drops)
+    waves_3 = pond_lo_res.simulate(drops, iter=500)
+    img1 = np.array(waves)
+    img2 = np.array(waves_2)
+    img3 = np.array(waves_3)
+    imgs = [img1, img2, img3]
+    titles = ["x_units = %i, t_steps = %i" % (img.shape[1], img.shape[0]) for img in imgs]
+
+    a_0 = imgs[0].shape[1]/imgs[0].shape[0]
+    print("Aspect1: ", a_0)
+
+    def _plt(img, i, title):
+        plt.subplot(1,len(imgs),i+1)
+        plt.imshow(img, cmap='hot', interpolation='nearest')
+
+        if i>0:
+            aspect = imgs[i].shape[1]/imgs[i].shape[0]
+            scale = aspect / a_0
+            print("Aspect2: ", plt.gca().get_aspect())
+            plt.gca().set_aspect(scale)\
+
+        #plt.axis('square')
+        plt.xlabel('x');plt.ylabel('t')
+        plt.title(title)
+            
+    plt.figure(figsize=(12,6))
+    for i in range(len(imgs)):
+        _plt(imgs[i], i,titles[i])
+        
+    plt.show()
 
 
-if __name__ == "__main__":
-    test_wave()
+
+if __name__ == "__main__":  
+    test_pond()
