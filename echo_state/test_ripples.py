@@ -112,9 +112,9 @@ def test_esn_test_train(n_drops=5,xmax=50,t_max=500.):
 
 
 if __name__ == "__main__":
-    plt.ion()
+    #plt.ion()
     test_wave()
-    #plot_raindrop_size_dist()
+    plot_raindrop_size_dist()
     test_pond()
-    #test_esn_test_train()
-    plt.waitforbuttonpress()
+    test_esn_test_train()
+    #plt.waitforbuttonpress()

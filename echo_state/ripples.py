@@ -42,7 +42,6 @@ OUTPUTS: The height of the water at each position x and time t.
 import numpy as np
 import cv2
 
-
 def _positive_part(x):
     return np.maximum(x, 0)
 
@@ -51,7 +50,6 @@ class Wave(object):
     """
     Class to represent a wave pair created by the impact of a drop on the surface of the pond.
     """
-
     def __init__(self, x_0, a, x_max, speed_factor, decay_factor=0.95, scale=1.0, reflect=(True, True), amp_thresh=0.01):
         """
         Initialize a wave pair.
@@ -86,7 +84,7 @@ class Wave(object):
     def is_active(self):
         if self._reflect[0] and self._reflect[1]:
             # enough to check amplitudes are both above threshold
-            return self._w1['amp'] * self._scale > self._thresh and self._w2['amp'] * self._scale > self._thresh
+            return self._w1['amp'] > self._thresh and self._w2['amp']  > self._thresh
         else:
             def _wave_visible(w):
                 """
@@ -104,7 +102,7 @@ class Wave(object):
                 return True
 
             return _wave_visible(self._w1) or _wave_visible(self._w2)
-
+        
     def tick(self, dt):
         """
         Update wave state by one timestep:
@@ -139,7 +137,7 @@ class Wave(object):
         """
         return the density of wave energy at each position
         """
-        return _positive_part(w['amp']-np.abs(x - w['x'])*self._scale)
+        return _positive_part(w['amp']-np.abs(x - w['x'])*self._scale*2)
 
     def _get_wave_shape(self, w, positions):
         """
@@ -147,14 +145,14 @@ class Wave(object):
         (Approximate w/max value of density function in each interval)
         """
         dx = positions[1] - positions[0]
-        bins = self._bins.get((float(w['x']), dx), {'left': positions - dx/2,
+        bins = self._bins.get((float(positions[0]), dx), {'left': positions - dx/2,
                                                     'right': positions + dx/2})
-        self._bins[(float(w['x']), dx)] = bins
-
+        self._bins[(float(positions[0]), dx)] = bins
+    
         # calculate left- and right-most bin containing the wave
-        left_most = int(np.floor((w['x'] - w['amp']/self._scale - bins['left'][0])/dx))
+        left_most = int(np.floor((w['x'] - w['amp']/self._scale*2 - bins['left'][0])/dx))
         left_most = np.clip(left_most, 0, len(positions)-1)
-        right_most = int(np.ceil((w['x'] + w['amp']/self._scale - bins['left'][0])/dx))
+        right_most = int(np.ceil((w['x'] + w['amp']/self._scale*2 - bins['left'][0])/dx))
         right_most = np.clip(right_most, 0, len(positions)-1)
         center = int((w['x'] - bins['left'][0])/dx)
 
@@ -177,7 +175,7 @@ class Wave(object):
 
 
 class Pond(object):
-    def __init__(self, n_x,  x_max=100., decay_factor=0.95, speed_factor=.1, wave_scale=1.0, reflecting_edges=(True, True)):
+    def __init__(self, n_x,  x_max=100., decay_factor=0.95, speed_factor=1., wave_scale=1.0, reflecting_edges=(True, True)):
         """
         Initialize a rippling pond simulation with:
         :param n_x: number of positions in the x dimension (spatial discretization)
@@ -193,6 +191,8 @@ class Pond(object):
         self._threshold = .1
         self._max_x = x_max
         self._reflect = reflecting_edges
+        self._max_waves = 1000
+
 
         self._x = np.linspace(0, self._max_x, n_x)
 
@@ -227,7 +227,7 @@ class Pond(object):
             interactions.append(stim)
 
         return np.array(heights), np.array(interactions)
-    
+
     def _step_sim(self, old_waves, new_wave_dicts, dt):
         # Upddate old waves, forgetting those no longer active:
 
