@@ -18,12 +18,11 @@ Simulation:
     surface at each timestep, i.e. zero if there are no droplets, else the sum of the wave functions W(x, a, x_d) for
     the forces at position x given a droplet of amplitude a at position x_d.
 
-        W(x, a, x_d) = a - p(x - x_d) - p(x_d - x),
+        W(x, a, x_d) = (a - p(x - x_d)/scale),
 
         where p(x) = x if x > 0, else 0 (the "positive part" function).
 
-    I.e., an impulse's forces create a triangular wave centered at x_d with amplitude a and a 90-degree
-    bend at the top/bottom (depending on the sign of a).
+    I.e., an impulse's forces create a triangular wave centered at x_d with amplitude a, width 2 * a / scale.
 
     Each droplet d_i creates two waves, one to the left and one to the right, propagating at a speed
     that is a function of the amplitude, (see _get_wave_speed method).  Waves disappear when no part
@@ -41,7 +40,7 @@ OUTPUTS: The height of the water at each position x and time t.
 """
 
 import numpy as np
-import matplotlib.pyplot as plt
+import cv2
 
 
 def _positive_part(x):
@@ -53,20 +52,24 @@ class Wave(object):
     Class to represent a wave pair created by the impact of a drop on the surface of the pond.
     """
 
-    def __init__(self, x_0, a, x_max, speed_factor, decay_factor=0.95, reflect=(True, True), amp_thresh=0.01):
+    def __init__(self, x_0, a, x_max, speed_factor, decay_factor=0.95, scale=1.0, reflect=(True, True), amp_thresh=0.01):
         """
         Initialize a wave pair.
         :param x_0: x-coordinate of the drop.
         :param a: amplitude of the wave.
         :param x_max: maximum x-coordinate of the pond.
         :param speed_factor: Constant in speed calculation, see _get_wave_speed
+        :param decay_factor: Exponential decay factor for wave amplitudes over time
+        :param amp_init: Amplitude factor 
         :param reflect: Tuple of booleans, whether the wave should reflect off the left and right edges.
         """
         self._x_max = x_max
-        self._speed_factor = speed_factor
-        self._decay_factor = decay_factor
+        self._speed = speed_factor
+        self._decay = decay_factor
+        self._scale = scale
         self._reflect = reflect
         self._thresh = amp_thresh
+        self._bins = {}  # hash of (x_0, dx), for memoizing get_wave_shape (Add discretization to this class to avoid this...)
 
         # wave states are
         self._w1 = {'x': x_0,
@@ -83,7 +86,7 @@ class Wave(object):
     def is_active(self):
         if self._reflect[0] and self._reflect[1]:
             # enough to check amplitudes are both above threshold
-            return self._w1['amp'] > self._thresh and self._w2['amp'] > self._thresh
+            return self._w1['amp'] * self._scale > self._thresh and self._w2['amp'] * self._scale > self._thresh
         else:
             def _wave_visible(w):
                 """
@@ -93,10 +96,10 @@ class Wave(object):
                 if self._reflect[0] and self._reflect[1]:
                     return True
                 if not self._reflect[0] and w['x'] < 0:
-                    v = Wave._get_wave_shape(w, 0)
+                    v = self._get_wave_density(w, 0)
                     return v > self._thresh
                 if not self._reflect[1] and w['x'] > self._x_max:
-                    v = Wave._get_wave_shape(w, self._x_max)
+                    v = self._get_wave_density(w, self._x_max)
                     return v > self._thresh
                 return True
 
@@ -109,12 +112,13 @@ class Wave(object):
             * Decay amplitude.
         returns: True if wave is still active
         """
+        # import ipdb; ipdb.set_trace()
         def move_and_bounce(w, x_max):
             x, v = w['x'], w['v']
             x += v * dt
 
             # amp should decay by decay_factor in 1 second, so by decay_factor^dt in dt seconds.
-            amp = w['amp'] * (self._decay_factor ** dt)
+            amp = w['amp'] * (self._decay ** dt)
             if x < 0 and self._reflect[0]:
                 x = -x
                 v = -v
@@ -129,50 +133,66 @@ class Wave(object):
 
     def _get_wave_speed(self, a):
         # speed is proportional to sqrt(a), according to some physics on wikipedia.
-        return self._speed_factor * np.sqrt(a)
+        return self._speed * np.sqrt(a)
 
-    @staticmethod
-    def _get_wave_shape(w, positions):
-        return _positive_part(w['amp']-np.abs(positions - w['x']))
+    def _get_wave_density(self, w, x):
+        """
+        return the density of wave energy at each position
+        """
+        return _positive_part(w['amp']-np.abs(x - w['x'])*self._scale)
+
+    def _get_wave_shape(self, w, positions):
+        """
+        return the sum of energy in a bin around each position.
+        (Approximate w/max value of density function in each interval)
+        """
+        dx = positions[1] - positions[0]
+        bins = self._bins.get((float(w['x']), dx), {'left': positions - dx/2,
+                                                    'right': positions + dx/2})
+        self._bins[(float(w['x']), dx)] = bins
+
+        # calculate left- and right-most bin containing the wave
+        left_most = int(np.floor((w['x'] - w['amp']/self._scale - bins['left'][0])/dx))
+        left_most = np.clip(left_most, 0, len(positions)-1)
+        right_most = int(np.ceil((w['x'] + w['amp']/self._scale - bins['left'][0])/dx))
+        right_most = np.clip(right_most, 0, len(positions)-1)
+        center = int((w['x'] - bins['left'][0])/dx)
+
+        vec = np.zeros_like(positions)
+
+        vec[left_most:center] = self._get_wave_density(w, positions[left_most:center])
+        vec[center+1:right_most] = self._get_wave_density(w, positions[center+1:right_most])
+
+        if 0<=center<len(positions):
+            vec[center] = w['amp']
+        return vec
 
     def get_amplitudes(self, x):
         """
         Calculate the impulse function due to this wave.
         """
-        i1 = Wave._get_wave_shape(self._w1, x)
-        i2 = Wave._get_wave_shape(self._w2, x)
+        i1 = self._get_wave_shape(self._w1, x)
+        i2 = self._get_wave_shape(self._w2, x)
         return i1 + i2
 
 
-def get_natural_raindrops(n, t_max, x_max, amp_mean=10):
-    """
-    Assume raindrop sizes have a gamma distribution, k=2.0, theta = 3.0.
-    """
-    k = 2.0
-    theta = 3.0
-    mean = k*theta
-    scale = amp_mean/mean
-
-    times = (np.random.rand(n)*t_max)
-    positions = (np.random.rand(n)*x_max)
-    sizes = np.random.gamma(k, theta, n) * scale + 1
-    return [{'t': t, 'x': p, 'mass': s} for t, p, s in zip(times, positions, sizes)]
-
-
 class Pond(object):
-    def __init__(self, n_x,  x_max=100., decay_factor=0.95):
+    def __init__(self, n_x,  x_max=100., decay_factor=0.95, speed_factor=.1, wave_scale=1.0, reflecting_edges=(True, True)):
         """
         Initialize a rippling pond simulation with:
         :param n_x: number of positions in the x dimension (spatial discretization)
         :param speed_factor: Constant in speed calculation, see _get_wave_speed
         :param decay_factor: Exponential decay factor for wave amplitudes over time
         :param threshold: fraction of dx, minimum threshold for wave amplitudes
+        :param wave_scale: higher means narrower waves
         """
         self._n_x = n_x
-        self._speed_factor = .1
-        self._decay_factor = decay_factor
+        self._speed = speed_factor
+        self._decay = decay_factor
+        self._scale = wave_scale
         self._threshold = .1
         self._max_x = x_max
+        self._reflect = reflecting_edges
 
         self._x = np.linspace(0, self._max_x, n_x)
 
@@ -196,28 +216,63 @@ class Pond(object):
         heights = []  # output, to be predicted by the ESN
         interactions = []  # input, to drive the ESN
         dt = t_max/(iter-1)
-        times = np.linspace(0, t_max, iter)
 
         # get time index for each drop
         drop_schedule = np.array([int(np.floor(drop['t']/dt)) for drop in raindrops])
 
         for i in range(iter):
-            # Upddate old waves, forgetting if they are no longer active,
-            waves = [w for w in waves if w.tick(dt)]
-
-            # add new waves,
             dropping_now = [drop for d_i, drop in enumerate(raindrops) if drop_schedule[d_i] == i]
-            new_waves = [Wave(x_0=drop['x'], a=drop['mass'], x_max=self._max_x, speed_factor=self._speed_factor,
-                         decay_factor=self._decay_factor, amp_thresh=self._threshold) for drop in dropping_now]
-            waves.extend(new_waves)
-            interactions.append(self.get_stimulus(new_waves))
-
-            # finally, update the pond's height.
-            h = np.zeros(self._n_x)
-            for w in waves:
-                h += w.get_amplitudes(self._x)
-
+            waves, h, stim = self._step_sim(waves, dropping_now, dt)
             heights.append(h)
+            interactions.append(stim)
 
-        return np.array(heights)
+        return np.array(heights), np.array(interactions)
+    
+    def _step_sim(self, old_waves, new_wave_dicts, dt):
+        # Upddate old waves, forgetting those no longer active:
 
+        waves = [w for w in old_waves if w.tick(dt)]
+
+        # Create and add new waves:        
+        new_waves = [Wave(x_0=drop['x'], a=drop['mass'], x_max=self._max_x, speed_factor=self._speed, scale=self._scale,
+                        decay_factor=self._decay, amp_thresh=self._threshold, reflect=self._reflect) for drop in new_wave_dicts]
+        waves.extend(new_waves)
+
+        # get the input stimulus
+        self.get_stimulus([w for w in new_waves])
+
+        # finally, update the pond's height.
+        h = np.zeros(self._n_x)
+        for w in waves:
+            h += w.get_amplitudes(self._x)
+        stim = self.get_stimulus([w for w in new_waves])
+        return waves, h, stim
+
+
+def sample_raindrop_sizes(n, mean):
+    """
+    Assume raindrop sizes have a gamma distribution, k=2.0, theta = 3.0.
+    """
+    k = 2.0
+    theta = 3.0
+    mean = k*theta
+    scale = mean/mean
+    return np.random.gamma(k, theta, n) * scale + 1
+
+def get_natural_raindrops(n, t_max, x_max, amp_mean=10):
+    """
+    Assume raindrop sizes have a gamma distribution, k=2.0, theta = 3.0.
+    """
+
+    times = (np.random.rand(n)*t_max)
+    positions = (np.random.rand(n)*x_max)
+    sizes = sample_raindrop_sizes(n, amp_mean)
+    return [{'t': t, 'x': p, 'mass': s} for t, p, s in zip(times, positions, sizes)]
+
+
+def get_drips(t_max, x_max, period=10., amp=20):
+    """
+    Create one drop every period seconds
+    """
+    n = int(t_max/period)
+    return [{'t': i*period, 'x': x_max/2, 'mass': amp} for i in range(n)]
