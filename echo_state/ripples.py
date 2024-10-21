@@ -221,6 +221,8 @@ class Pond(object):
         drop_schedule = np.array([int(np.floor(drop['t']/dt)) for drop in raindrops])
 
         for i in range(iter):
+            if i % 1000 == 0:
+                print("\tsim iteration %i/%i" % (i, iter))
             dropping_now = [drop for d_i, drop in enumerate(raindrops) if drop_schedule[d_i] == i]
             waves, h, stim = self._step_sim(waves, dropping_now, dt)
             heights.append(h)
@@ -270,9 +272,10 @@ def get_natural_raindrops(n, t_max, x_max, amp_mean=10):
     return [{'t': t, 'x': p, 'mass': s} for t, p, s in zip(times, positions, sizes)]
 
 
-def get_drips(t_max, x_max, period=10., amp=20):
+def get_drips(t_max, x_max, period=10., amp=20, x_var=0):
     """
     Create one drop every period seconds
     """
     n = int(t_max/period)
-    return [{'t': i*period, 'x': x_max/2, 'mass': amp} for i in range(n)]
+    x_vals = np.random.rand(n)*x_var + x_max/2. 
+    return [{'t': i*period, 'x': x_vals[i], 'mass': amp} for i in range(n)]
