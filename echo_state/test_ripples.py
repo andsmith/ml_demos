@@ -40,12 +40,13 @@ def plot_raindrop_size_dist():
     plt.show()
 
 
-def test_pond(n_drops=20):
+def test_pond(n_drops=100):
     n_iter = 1000
     decay = 0.995
     x_max = 500
-    pond = Pond(n_x=600, x_max=x_max, decay_factor=decay,wave_scale=1/4.)
-    pond_lo_res = Pond(n_x=100, x_max=x_max, decay_factor=decay)
+    speed_factor = 0.1
+    pond = Pond(n_x=300, x_max=x_max, decay_factor=decay,wave_scale=1., speed_factor=speed_factor)
+    pond_lo_res = Pond(n_x=100, x_max=x_max, decay_factor=decay,wave_scale=1., speed_factor=speed_factor)
     drops = get_natural_raindrops(n_drops, n_iter, x_max, amp_mean=10)
     waves,_ = pond.simulate(drops)
     waves_2,_ = pond_lo_res.simulate(drops)
@@ -54,7 +55,7 @@ def test_pond(n_drops=20):
     img2 = np.array(waves_2)
     img3 = np.array(waves_3)
     imgs = [img1, img2, img3]
-    titles = ["x_units = %i, t_steps = %i" % (img.shape[1], img.shape[0]) for img in imgs]
+    titles = ["x_units = %i, t_steps = %i, xmax=%.0f" % (img.shape[1], img.shape[0] ,x_max) for img in imgs]
 
     a_0 = imgs[0].shape[1]/imgs[0].shape[0]
 
@@ -65,7 +66,7 @@ def test_pond(n_drops=20):
         if i > 0:
             aspect = imgs[i].shape[1]/imgs[i].shape[0]
             scale = aspect / a_0
-            plt.gca().set_aspect(scale)\
+            plt.gca().set_aspect(scale)
 
         # plt.axis('square')
         plt.xlabel('x')
@@ -103,8 +104,8 @@ def test_esn_test_train(n_drops=5,xmax=50,t_max=500.):
 
 if __name__ == "__main__":
     #plt.ion()
-    test_wave()
-    plot_raindrop_size_dist()
+    #test_wave()
+    #plot_raindrop_size_dist()
     test_pond()
-    test_esn_test_train()
+    #test_esn_test_train()
     #plt.waitforbuttonpress()
