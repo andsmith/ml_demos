@@ -11,46 +11,8 @@ from esn import EchoStateNetwork as ESN
 import logging
 
 
-def center_test():
-    """
-    one drop falling in the middle
-    """
-    n_units = 100
-    t_max = 2000
-    x_max = 100
 
-    drips = get_drips(t_max, x_max, period=30, amp=20)
-    pond = Pond(n_x=n_units, x_max=x_max, decay_factor=.98, wave_scale=3)
-    output, input = pond.simulate(drips, iter=int(t_max), t_max=t_max)
-
-    img_out = np.array(output)
-    img_in = np.array(input)
-
-    plt.subplot(1, 2, 1)
-    plt.imshow(img_out, cmap='hot', interpolation='nearest')
-    plt.xlabel('x')
-    plt.ylabel('t')
-    plt.title("Output")
-
-    plt.subplot(1, 2, 2)
-    plt.imshow(img_in, cmap='hot', interpolation='nearest')
-    plt.xlabel('x')
-    plt.ylabel('t')
-    plt.title("Input")
-
-    plt.show()
-
-def interactive_test():
-    """
-    Create an interactive pond to find good params for generating a test/train set for the ESN.
-    """
-    pond_params = get_pond_params()
-    pond = InteractivePond(*pond_params)
-    pond.simulate_interactive()
-    return pond_params
-
-
-def _train(input, output, pond_params, n_reservoir=100, plot=True):
+def _train(input, output, pond_params, plot=True):
     """
     Train an ESN on the input/output data.
     """
@@ -59,7 +21,7 @@ def _train(input, output, pond_params, n_reservoir=100, plot=True):
 
     n_input = input.shape[1]
     n_output = output.shape[1]
-    esn = get_esn(n_input, n_reservoir, n_output)
+    esn = get_esn(n_input, n_output)
 
     def _plot(ax):
         ax[0].imshow(input[:n_plot, :].T, cmap='hot', interpolation='nearest', extent=extent)
@@ -90,25 +52,45 @@ def _train(input, output, pond_params, n_reservoir=100, plot=True):
     return esn
 
 
-def drip_training(x_var=0):
-    n_iter = 15000
+def drip_training(n_iter,x_var=0):
+    
     t_max = n_iter/10.
     dt = t_max/n_iter
     pond_params = get_pond_params()
     pond = Pond(**pond_params)
-    drops = get_drips(t_max=t_max, x_max=pond_params['x_max'], period=25*dt, amp=20, x_var=x_var)
+    drops = get_drips(t_max=t_max, x_max=pond_params['x_max'], period=40*dt, amp=20, x_var=x_var)
     output, input = pond.simulate(drops, iter=n_iter, t_max=t_max)
-    net = _train(input, output, pond_params, n_reservoir=200)
+    #output = np.clip(output/10, 0, 1) 
+    net = _train(input, output, pond_params)
 
+def rain_training(n_iter,n_drops):
+    t_max = n_iter/10.
+    pond_params = get_pond_params()
+    pond = Pond(**pond_params)
+    drops = get_natural_raindrops(n_drops, t_max, pond_params['x_max'], amp_mean=10)
+    output, input = pond.simulate(drops, iter=n_iter, t_max=t_max)
+    #output = np.clip(output/10, 0, 1) 
+    net = _train(input, output, pond_params)
+
+def interactive_test():
+    """
+    Create an interactive pond to find good params for generating a test/train set for the ESN.
+    """
+    pond_params = get_pond_params()
+    pond = InteractivePond(**pond_params)
+    pond.simulate_interactive()
+    return pond_params
 
 
 def get_pond_params():
-    return dict(n_x=50, decay_factor=.9, wave_scale=1., speed_factor=3, x_max=100.)
+    pp= dict(n_x=40, decay_factor=.8, wave_scale=8., speed_factor=3, x_max=100.)
+    return pp
 
-def get_esn(n_input, n_reservoir, n_output):
-    return ESN(n_input, n_reservoir, n_output, spectral_radius=0.9996, leak_rate=0.8)
+def get_esn(n_input, n_output):
+    return ESN(n_input, n_reservoir=200, n_output=n_output, spectral_radius=0.96, leak_rate=0.5)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # interactive_test()
-    drip_training(x_var=30)
+    #interactive_test()
+    rain_training(n_iter = 40000, n_drops = 2000)
+    #drip_training(n_iter=40000, x_var=95)

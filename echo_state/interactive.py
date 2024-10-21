@@ -253,5 +253,5 @@ class InteractivePond(Pond):
 
 
 if __name__ == "__main__":
-    pond = InteractivePond(speed_factor=.35)
-    pond.simulate_interactive()
+    pond = InteractivePond(speed_factor=1.)
+    pond.simulate_interactive(realtime=False)

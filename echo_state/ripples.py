@@ -38,7 +38,7 @@ INPUTS:   The input vector at time t is the sum of each force vector for every d
 
 OUTPUTS: The height of the water at each position x and time t.
 """
-
+import logging
 import numpy as np
 import cv2
 
@@ -110,7 +110,6 @@ class Wave(object):
             * Decay amplitude.
         returns: True if wave is still active
         """
-        # import ipdb; ipdb.set_trace()
         def move_and_bounce(w, x_max):
             x, v = w['x'], w['v']
             x += v * dt
@@ -192,7 +191,7 @@ class Pond(object):
         self._max_x = x_max
         self._reflect = reflecting_edges
         self._max_waves = 1000
-        print("Created Pond w/params: n_x=%i, x_max=%.1f, decay=%.3f, speed=%.3f, scale=%.3f" % (n_x, x_max, decay_factor, speed_factor, wave_scale))
+        logging.info("Created Pond w/params: n_x=%i, x_max=%.1f, decay=%.3f, speed=%.3f, scale=%.3f" % (n_x, x_max, decay_factor, speed_factor, wave_scale))
 
         self._x = np.linspace(0, self._max_x, n_x)
 
@@ -210,7 +209,7 @@ class Pond(object):
         Simulate the pond's evolution over time (until no drops are left, or max_iter is reached).
         :param raindrops: A list of raindrops, each a dict with 'times','x','mass' keys.
         """
-        print("Simulating %i raindrops in x=[0, %.1f], t=[0, %.1f] over %i iterations" %
+        logging.info("Simulating %i raindrops in x=[0, %.1f], t=[0, %.1f] over %i iterations" %
               (len(raindrops), self._max_x, t_max, iter))
         waves = []
         heights = []  # output, to be predicted by the ESN
@@ -222,7 +221,7 @@ class Pond(object):
 
         for i in range(iter):
             if i % 1000 == 0:
-                print("\tsim iteration %i/%i" % (i, iter))
+                logging.info("\tsim iteration %i/%i" % (i, iter))
             dropping_now = [drop for d_i, drop in enumerate(raindrops) if drop_schedule[d_i] == i]
             waves, h, stim = self._step_sim(waves, dropping_now, dt)
             heights.append(h)
@@ -277,5 +276,7 @@ def get_drips(t_max, x_max, period=10., amp=20, x_var=0):
     Create one drop every period seconds
     """
     n = int(t_max/period)
-    x_vals = np.random.rand(n)*x_var + x_max/2. 
+    
+    x_vals = np.random.rand(n)*x_var + x_max/2 - x_var/2
+
     return [{'t': i*period, 'x': x_vals[i], 'mass': amp} for i in range(n)]
