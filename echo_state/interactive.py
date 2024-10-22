@@ -1,10 +1,11 @@
+import logging
 from ripples import Pond, Wave, get_natural_raindrops
 import cv2
 import numpy as np
 import time
 LAYOUT = {'line_height': 300,
           'hist_height': 450,
-          'win_width': 500,
+          'min_win_width': 500,
           'win_name': 'Pond (space to reset, q to quit, r/f to adjust rain-rate)', }
 
 
@@ -13,9 +14,9 @@ class InteractivePond(Pond):
     A Pond that can be interacted with in realtime.
     """
 
-    def __init__(self, n_x=500, x_max=100, decay_factor=.95, wave_scale=20., a_max=30, dt=0.1, *args, **kwargs):
+    def __init__(self, n_x=500, x_max=100., a_max=30, dt=0.1, *args, **kwargs):
 
-        super(InteractivePond, self).__init__(n_x, x_max, decay_factor, wave_scale=wave_scale,*args, **kwargs)
+        super(InteractivePond, self).__init__(n_x, x_max, *args, **kwargs)
 
         self._new_drops = []  # dropped since last frame
         self._n_x = n_x
@@ -51,9 +52,14 @@ class InteractivePond(Pond):
         self._fps = 0
 
     def _init_layout(self, a_max):
+        if self._n_x > LAYOUT['min_win_width']:
+            width = self._n_x
+            self._px_size = 1  # size of each pixel
+        else:
+            width = LAYOUT['min_win_width']
+            self._px_size = int(width/self._n_x)  # size of each pixel
+            width = self._n_x * self._px_size
 
-        self._px_size = int(LAYOUT['win_width']/self._n_x)  # size of each pixel
-        width = self._px_size * self._n_x
         self._n_hist_disp = int(LAYOUT['hist_height']/self._px_size)
         hist_height = self._n_hist_disp * self._px_size
         self._midline = LAYOUT['line_height']
@@ -253,5 +259,9 @@ class InteractivePond(Pond):
 
 
 if __name__ == "__main__":
-    pond = InteractivePond(speed_factor=1.)
+    logging.basicConfig(level=logging.INFO)
+    dt = .10
+    #pond = InteractivePond(speed_factor=1.)
+    pond = InteractivePond(n_x=1000, x_max=100, dt=dt, speed_factor=.3, wave_scale=0.5)
+
     pond.simulate_interactive(realtime=False)

@@ -135,23 +135,33 @@ class Wave(object):
     def _get_wave_speed(self, a):
         # speed is proportional to sqrt(a), according to some physics on wikipedia.
         return self._speed * np.sqrt(a)
-
+    
     def _get_wave_density(self, w, x0,dx, n=1):
+        return self._get_wave_density_bump(w, x0, dx, n)
+
+    def _get_wave_density_bump(self, w, x0,dx, n=1):
         """
         return the wavelet density at each position: x0 + i * dx, for i in range(n)
 
-        The wave is the 2nd derivative of this "bump" function:
+        The wave is (optionally, the 2nd derivative of) this "bump" function: 
             f(x) =  e^(-(2x/scale)^2),
         which has max value at f(0) = 1 and f(-1), f(1) are both near 0.
 
-        So wave_density(x) = w['amp'] * f^2(x) /f^2(0)
+        Whether using f() or f''(), the amplitude is scaled to get the final density:
+            wave_density(x) = w['amp'] * f(x) /f(0)
 
         :param w: wave dict (X, amp, v)
-        :param x: positions array (assumed equidistant?)
+        :param x0: starting x position
+        :param dx: x step
+        :param n: number of steps
+        :return: array of wave densities at each position
+
         """
 
         def f0_wave(x):
             return np.exp(-(2*(x-w['x'])/(w['amp']*self._scale))**2)
+        
+
         x = x0 + np.arange(n) * dx
 
         shape_unscaled = f0_wave(x)
@@ -159,11 +169,16 @@ class Wave(object):
         return shape
         
 
-    def _get_wave_density_triangle(self, w, x):
+    def _get_wave_density_triangle(self, w, x0,dx, n=1):
         """
         return the density of wave energy at each position
         """
-        return _positive_part(w['amp']-np.abs(x - w['x'])*self._scale*2)
+        def func(w, x):
+            return _positive_part(w['amp']-np.abs(x - w['x'])*self._scale*2)
+        
+        x = x0 + np.arange(n) * dx
+        return func(w, x)
+    
     
     def _get_wave_shape(self, w, n=2 ):
         """
@@ -179,7 +194,15 @@ class Wave(object):
         dx = (self._x_right)/n
         d_left = self._get_wave_density(w, -dx/2, dx, n=n)
         d_right = self._get_wave_density(w, dx/2, dx, n=n)
-        return np.maximum(d_left, d_right)
+
+        bin_height = np.maximum(d_left, d_right)
+
+        # The bin with the peak in it will have a bad approximation, so fix here
+        peak_bin_index = int(w['x'] / dx)
+        if peak_bin_index >= 0 and peak_bin_index < n:
+            bin_height[peak_bin_index] = w['amp']
+
+        return bin_height
 
 
 

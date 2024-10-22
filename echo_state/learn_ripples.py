@@ -78,12 +78,12 @@ def interactive_test():
     """
     pond_params = get_pond_params()
     pond = InteractivePond(**pond_params)
-    pond.simulate_interactive()
+    pond.simulate_interactive(realtime=False)
     return pond_params
 
 
 def get_pond_params():
-    pp= dict(n_x=40, decay_factor=.8, wave_scale=8., speed_factor=3, x_max=100.)
+    pp= dict(n_x=40, decay_factor=.8, wave_scale=.6, speed_factor=3, x_max=100.)
     return pp
 
 def get_esn(n_input, n_output):
@@ -91,6 +91,6 @@ def get_esn(n_input, n_output):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    #interactive_test()
-    rain_training(n_iter = 40000, n_drops = 2000)
+    interactive_test()
+    #rain_training(n_iter = 40000, n_drops = 2000)
     #drip_training(n_iter=40000, x_var=95)
