@@ -11,10 +11,12 @@ class EchoStateTester(object):
     to reproduce them.
     """
 
-    def __init__(self, esn_params, n_train_samples=1000, n_test_samples=300, period=15,train_washout=0):
+    def __init__(self, esn_params, n_train_samples=10000, n_test_samples=300, period=15,train_washout=0):
         """
         Initialize & run all tests.
         """
+        print("Testing ESN with params: ", esn_params)
+        print("Training on %i samples, testing on %i samples" % (n_train_samples, n_test_samples))
         self._params = esn_params
         self._n_train = n_train_samples
         self._train_washout = train_washout
@@ -85,5 +87,5 @@ class EchoStateTester(object):
 if __name__ == "__main__":
 
     t = EchoStateTester({'n_input': 1, 'n_reservoir': 10    , 'n_output': 1, 'input_scale':1,
-                         'leak_rate': 0.0, 'spectral_radius': 0.95, 'n_wash': 100},n_test_samples=1000)
+                         'leak_rate': 0.0, 'spectral_radius': 0.95, 'n_wash': 100},n_test_samples=200)
     t.plot_transduction()   
