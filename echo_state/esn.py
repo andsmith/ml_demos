@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+from scipy.optimize import minimize
 
 
 class EchoStateNetwork(object):
@@ -62,7 +63,7 @@ class EchoStateNetwork(object):
         # i.e. instead of accumulating A and calculating inv(A'A)A'Y at the
         # end, accumulate A'A and A'Y which are D x D and D x n_out respectively (for each batch).
         ATA_cache = []
-        ATY_cache = [] 
+        ATY_cache = []
 
         n = X.shape[0]
 
@@ -91,13 +92,13 @@ class EchoStateNetwork(object):
                 logging.info("\tBatch %i / %i, %i states" % (1+batch_n, n_batches, n_states))
 
                 states = np.vstack(states)
-                extended_states = np.concatenate((states, X[batch_start_ind:batch_start_ind+n_states], np.ones((n_states, 1))), axis=1)
+                extended_states = np.concatenate(
+                    (states, X[batch_start_ind:batch_start_ind+n_states], np.ones((n_states, 1))), axis=1)
                 ATA_cache.append(np.dot(extended_states.T, extended_states))
                 ATY_cache.append(np.dot(extended_states.T, Y[batch_start_ind:batch_start_ind+n_states]))
                 states = []
                 batch_start_ind = i+1
                 batch_n += 1
-
 
         # calculate the pseudo-inverse of the A matrix
         ATA = np.sum(ATA_cache, axis=0)
@@ -141,7 +142,6 @@ def test_esn():
         assert np.allclose(w_mats[i], w_mats[0])
         assert np.allclose(w_out_mats[i], w_out_mats[0])
     logging.info("ESN batch size test passed.")
-    
 
 
 if __name__ == "__main__":

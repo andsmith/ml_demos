@@ -13,7 +13,7 @@ class InteractivePond(Pond):
     A Pond that can be interacted with in realtime.
     """
 
-    def __init__(self, n_x=500, x_max=100, decay_factor=.95, wave_scale=1., a_max=30, dt=0.1, *args, **kwargs):
+    def __init__(self, n_x=500, x_max=100, decay_factor=.95, wave_scale=20., a_max=30, dt=0.1, *args, **kwargs):
 
         super(InteractivePond, self).__init__(n_x, x_max, decay_factor, wave_scale=wave_scale,*args, **kwargs)
 
