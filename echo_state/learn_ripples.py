@@ -93,4 +93,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     interactive_test()
     #rain_training(n_iter = 40000, n_drops = 2000)
-    #drip_training(n_iter=40000, x_var=95)
+    drip_training(n_iter=4000, x_var=10)

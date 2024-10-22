@@ -83,7 +83,7 @@ class InteractivePond(Pond):
             self._mouse_pos = (x, y)  # remember for rendering
             if event == cv2.EVENT_LBUTTONDOWN:
                 self._new_drops.append({'x': drop_x, 'mass': drop_a})
-                print("New wave: %i at x=%i, a=%i" % (len(self._waves), drop_x, drop_a))
+                logging.info("New wave: %i at x=%i, a=%i" % (len(self._waves), drop_x, drop_a))
 
         else:
             self._mouse_pos = None
@@ -199,20 +199,20 @@ class InteractivePond(Pond):
         elif k == ord(' '):
             self._waves = []
             self._h_history = []
-            print("Resetting pond.")
+            logging.info("Resetting pond.")
         elif k == ord('r'):
             self._rain_rate = self._rain_rate * 2 if self._rain_rate > 0 else .01
-            print("Rain rate set to %.2f drops per second." % self._rain_rate)
+            logging.info("Rain rate set to %.2f drops per second." % self._rain_rate)
         elif k == ord('f'):
             self._rain_rate = self._rain_rate / 2 if self._rain_rate > .01 else 0.
-            print("Rain rate set to %.2f drops per second." % self._rain_rate)
+            logging.info("Rain rate set to %.2f drops per second." % self._rain_rate)
 
         self._n_frames += 1
         self._n_frames_total += 1
         if self._n_frames % 100 == 0:
             now = time.perf_counter()
             self._fps = self._n_frames / (now - self._t_start)
-            print("FPS:  %.3f,  current wave count: %i" % (self._fps, len(self._waves)))
+            logging.info("FPS:  %.3f,  current wave count: %i" % (self._fps, len(self._waves)))
             self._n_frames = 0
             self._t_start = now
         return True
@@ -227,7 +227,7 @@ class InteractivePond(Pond):
         cv2.namedWindow(self._win_name)
         cv2.resizeWindow(self._win_name, self._win_size[0], self._win_size[1])
         cv2.setMouseCallback(self._win_name, self._mouse)
-        print("Simulating live raindrops in x=[0, %.1f]." % (self._max_x,))
+        logging.info("Simulating live raindrops in x=[0, %.1f]." % (self._max_x,))
 
         delay = self._dt
         data = {'inputs': [], 'outputs': []}

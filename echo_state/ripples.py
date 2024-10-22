@@ -137,7 +137,8 @@ class Wave(object):
         return self._speed * np.sqrt(a)
     
     def _get_wave_density(self, w, x0,dx, n=1):
-        return self._get_wave_density_bump(w, x0, dx, n)
+        #return self._get_wave_density_bump(w, x0, dx, n)
+        return self._get_wave_density_triangle(w, x0, dx, n)
 
     def _get_wave_density_bump(self, w, x0,dx, n=1):
         """
