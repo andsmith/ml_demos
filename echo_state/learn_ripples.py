@@ -44,7 +44,7 @@ def _train(input, output, pond_params, plot=True):
     #_plot(ax)
     #plt.suptitle("ESN untrained (close to start training)")
     #plt.show()
-    esn.train(input, output, washout=50, batch_size=2000)
+    esn.train(input, output, washout=50, batch_size=5000)
     _plot(ax)
     plt.suptitle("ESN trained")
     plt.show()
@@ -63,6 +63,7 @@ def drip_training(n_iter,x_var=0):
     #output = np.clip(output/10, 0, 1) 
     net = _train(input, output, pond_params)
 
+
 def rain_training(n_iter,n_drops):
     t_max = n_iter/10.
     pond_params = get_pond_params()
@@ -72,25 +73,31 @@ def rain_training(n_iter,n_drops):
     #output = np.clip(output/10, 0, 1) 
     net = _train(input, output, pond_params)
 
-def interactive_test():
-    """
-    Create an interactive pond to find good params for generating a test/train set for the ESN.
-    """
+def _thread_proc():
     pond_params = get_pond_params()
     pond = InteractivePond(**pond_params)
     pond.simulate_interactive(realtime=False)
     return pond_params
-
+def interactive_test():
+    """
+    Create an interactive pond to find good params for generating a test/train set for the ESN.
+    """
+    from multiprocessing import Process
+    t = Process(target=_thread_proc)
+    t.start() 
+    return t
 
 def get_pond_params():
-    pp= dict(n_x=40, decay_factor=.8, wave_scale=.6, speed_factor=3, x_max=100.)
+    pp= dict(n_x=10, decay_factor=.8, wave_scale=.6, speed_factor=3, x_max=100.)
     return pp
 
 def get_esn(n_input, n_output):
-    return ESN(n_input, n_reservoir=200, n_output=n_output, spectral_radius=0.96, leak_rate=0.5)
+    return ESN(n_input, n_reservoir=500, n_output=n_output, spectral_radius=0.99, leak_rate=0.0, linear_out=True, input_scale=1, feedback_scale=0.0)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    interactive_test()
+
+    entertainment = interactive_test()
     #rain_training(n_iter = 40000, n_drops = 2000)
-    drip_training(n_iter=4000, x_var=10)
+    drip_training(n_iter=30000, x_var=20)
+    entertainment.join()

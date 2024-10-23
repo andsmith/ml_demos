@@ -30,11 +30,13 @@ def make_sine(period, n_samples):
     return np.array([np.sin(2 * np.pi * i / period) for i in range(n_samples)],dtype=np.float32)
 
 
-def make_complex(period_f, n_samples, n_harmonics):
+def make_complex(period_f, n_samples, n_harmonics=30, rnd_state=42):
     """
     Generate a complex wave.
     """
-    overtone_coeffs = np.random.rand(n_harmonics) * 1/ np.arange(1, n_harmonics + 1)
+    if rnd_state is not None:
+        rnd_state= np.random.RandomState(rnd_state)
+    overtone_coeffs = rnd_state.rand(n_harmonics) * 1/ np.arange(1, n_harmonics + 1)
     freq = 2 * np.pi / period_f
     t = np.arange(n_samples,dtype=np.float32)
     wave = np.zeros(n_samples,dtype=np.float32)

@@ -133,12 +133,9 @@ class InteractivePond(Pond):
                 else:
                     self._y_scale = self._min_y_scale
                 self._n_underscaled_frames = 0
-
-                # print("Scaled down to %.1f" % self._y_scale)
         elif highest > self._y_scale:
             while highest > self._y_scale:
                 self._y_scale *= 2
-            # print("Scaled up to %.1f" % self._y_scale)
 
         def _h_to_y(h):
             return (1 - (h/self._y_scale)) * self._midline
@@ -146,7 +143,8 @@ class InteractivePond(Pond):
 
         line_xy = np.vstack([np.arange(self._n_x), y]).T
 
-        line_xy[:, 0] *= self._px_size
+        line_xy[:, 0] = line_xy[:, 0] * self._px_size - self._px_size/2
+        
 
         cv2.polylines(img, [(line_xy*2**6).astype(np.int32)], isClosed=False, color=(
             255, 255, 255), thickness=2, lineType=cv2.LINE_AA, shift=6)
