@@ -1,13 +1,13 @@
 import logging
-from ripples import Pond, Wave, get_natural_raindrops
+from ripples import Pond, Wave, get_natural_raindrops, SIGNED_WAVES
 import cv2
 import numpy as np
 import time
+
 LAYOUT = {'line_height': 300,
           'hist_height': 450,
           'min_win_width': 500,
           'win_name': 'Pond (space to reset, q to quit, r/f to adjust rain-rate)', }
-
 
 class InteractivePond(Pond):
     """
@@ -25,6 +25,7 @@ class InteractivePond(Pond):
         self._init_layout(a_max)
 
         # animation
+        self._t_sim = 0.0
         self._dt = dt  # time step in seconds
         self._mouse_pos = None
         self._blank_row = np.zeros(self._n_x)
@@ -40,7 +41,7 @@ class InteractivePond(Pond):
         self._heights = []  # outputs, to be predicted by the ESN / plotted
         self._h_history = []  # history of height vectors
         self._n_drops = 0
-        self._rain_rate = 0.0
+        self._rain_rate = 0
 
         # for performance monitoring
         self._n_frames_total = 0
@@ -80,9 +81,10 @@ class InteractivePond(Pond):
     def _mouse(self, event, x, y, flags, param):
         drop_x, drop_a = self._mouse_pos_to_xa(x, y)
         if drop_x is not None:
-            self._mouse_pos = (x, y)  # remember for rendering
+            self._mouse_pos = (x, y)  # remember for rendering cursor
             if event == cv2.EVENT_LBUTTONDOWN:
-                self._new_drops.append({'x': drop_x, 'mass': drop_a})
+                sign = 1  # if np.random.rand(1)>0.5 else -1
+                self._new_drops.append({'x': drop_x, 'mass': drop_a*sign})
                 logging.info("New wave: %i at x=%i, a=%i" % (len(self._waves), drop_x, drop_a))
 
         else:
@@ -124,7 +126,10 @@ class InteractivePond(Pond):
         """
         img = np.zeros((self._midline, self._n_x*self._px_size, 3), dtype=np.uint8)
         h = state_vec
-        highest = np.max(h)
+        highest= np.max(np.abs(h))
+        
+
+
         if highest < self._y_scale/2:
             self._n_underscaled_frames += 1
             if self._n_underscaled_frames > 30:
@@ -138,13 +143,21 @@ class InteractivePond(Pond):
                 self._y_scale *= 2
 
         def _h_to_y(h):
-            return (1 - (h/self._y_scale)) * self._midline
+            y=  (1 - (h/self._y_scale)) * self._midline
+            if not SIGNED_WAVES:
+                return y
+            else:
+                return y/2 
+
+
+            
+        # if self._t_sim >5.0:
+        #    import ipdb; ipdb.set_trace()
         y = _h_to_y(h)
 
         line_xy = np.vstack([np.arange(self._n_x), y]).T
 
-        line_xy[:, 0] = line_xy[:, 0] * self._px_size - self._px_size/2
-        
+        line_xy[:, 0] = line_xy[:, 0] * self._px_size + self._px_size/2
 
         cv2.polylines(img, [(line_xy*2**6).astype(np.int32)], isClosed=False, color=(
             255, 255, 255), thickness=2, lineType=cv2.LINE_AA, shift=6)
@@ -229,15 +242,15 @@ class InteractivePond(Pond):
 
         delay = self._dt
         data = {'inputs': [], 'outputs': []}
-        sim_time = 0
+        self._t_sim = 0
         drops = []
         while True:
             if realtime:
                 time.sleep(delay)
             t_0 = time.perf_counter()
-            sim_time += self._dt
+            self._t_sim += self._dt
 
-            dropping_now = self._get_drops(self._dt, sim_time)
+            dropping_now = self._get_drops(self._dt, self._t_sim)
             self._waves, h, input = self._step_sim(self._waves, dropping_now, self._dt)
 
             img = self.render(h)
@@ -259,7 +272,7 @@ class InteractivePond(Pond):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     dt = .10
-    #pond = InteractivePond(speed_factor=1.)
-    pond = InteractivePond(n_x=1000, x_max=100, dt=dt, speed_factor=.3, wave_scale=0.5)
+    # pond = InteractivePond(speed_factor=1.)
+    pond = InteractivePond(n_x=1000, x_max=100,decay_factor=1., dt=dt, speed_factor=.3, wave_scale=0.5)
 
     pond.simulate_interactive(realtime=False)

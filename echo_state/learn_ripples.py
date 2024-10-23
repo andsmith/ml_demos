@@ -44,7 +44,8 @@ def _train(input, output, pond_params, plot=True):
     #_plot(ax)
     #plt.suptitle("ESN untrained (close to start training)")
     #plt.show()
-    esn.train(input, output, washout=50, batch_size=5000)
+    esn.train_sequence(input, output,washout=30)
+    esn.finish_training()
     _plot(ax)
     plt.suptitle("ESN trained")
     plt.show()
@@ -58,9 +59,11 @@ def drip_training(n_iter,x_var=0):
     dt = t_max/n_iter
     pond_params = get_pond_params()
     pond = Pond(**pond_params)
-    drops = get_drips(t_max=t_max, x_max=pond_params['x_max'], period=40*dt, amp=20, x_var=x_var)
+    drops = get_drips(t_max=t_max, x_max=pond_params['x_max'], period=10*dt, amp=20, x_var=x_var)
     output, input = pond.simulate(drops, iter=n_iter, t_max=t_max)
-    #output = np.clip(output/10, 0, 1) 
+    #output = np.clip(output/10, 0, 1)
+    #import pickle
+    #pickle.dump((input, output), open('drip_data.pkl', 'wb')) 
     net = _train(input, output, pond_params)
 
 
@@ -70,14 +73,14 @@ def rain_training(n_iter,n_drops):
     pond = Pond(**pond_params)
     drops = get_natural_raindrops(n_drops, t_max, pond_params['x_max'], amp_mean=10)
     output, input = pond.simulate(drops, iter=n_iter, t_max=t_max)
-    #output = np.clip(output/10, 0, 1) 
     net = _train(input, output, pond_params)
 
 def _thread_proc():
     pond_params = get_pond_params()
     pond = InteractivePond(**pond_params)
-    pond.simulate_interactive(realtime=False)
+    pond.simulate_interactive(realtime=True)
     return pond_params
+
 def interactive_test():
     """
     Create an interactive pond to find good params for generating a test/train set for the ESN.
@@ -88,16 +91,18 @@ def interactive_test():
     return t
 
 def get_pond_params():
-    pp= dict(n_x=10, decay_factor=.8, wave_scale=.6, speed_factor=3, x_max=100.)
+    pp= dict(n_x=25, decay_factor=1, wave_scale=1.0, speed_factor=3, x_max=100., max_wave_age=0)
     return pp
 
 def get_esn(n_input, n_output):
-    return ESN(n_input, n_reservoir=500, n_output=n_output, spectral_radius=0.99, leak_rate=0.0, linear_out=True, input_scale=1, feedback_scale=0.0)
+    return ESN(n_input, n_reservoir=200, n_output=n_output, spectral_radius=0.99, leak_rate=0.0, linear_out=True, input_scale=1, feedback_scale=0.0)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    entertainment = interactive_test()
+    #entertainment = interactive_test()
     #rain_training(n_iter = 40000, n_drops = 2000)
-    drip_training(n_iter=30000, x_var=20)
-    entertainment.join()
+    #drip_training(n_iter=100000, x_var=20)
+    #entertainment.join()
+
+    _thread_proc()

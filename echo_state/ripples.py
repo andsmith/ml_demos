@@ -18,9 +18,10 @@ Simulation:
     surface at each timestep, i.e. zero if there are no droplets, else the sum of the wave functions W(x, a, x_d) for
     the forces at position x given a droplet of amplitude a at position x_d.
 
-        W(x, a, x_d) = (a - p(x - x_d)/scale),
+        W(x, a, x_d) = (a - pp(x - x_d)/scale),   triangle
+        W(x, a, x_d) = a * e^(-(2(x-x_d)/scale)^2),  bump
 
-        where p(x) = x if x > 0, else 0 (the "positive part" function).
+            where pp(x) = x if x > 0, else 0 (the "positive part" function).
 
     I.e., an impulse's forces create a triangular (or wavelet) wave centered at x_d with amplitude a, width 2 * a / scale.
 
@@ -40,11 +41,12 @@ OUTPUTS: The height of the water at each position x and time t.
 """
 import logging
 import numpy as np
-import cv2
+import matplotlib.pyplot as plt
 from findiff import FinDiff
 
 def _positive_part(x):
     return np.maximum(x, 0)
+SIGNED_WAVES = True
 
 
 class Wave(object):
@@ -52,7 +54,7 @@ class Wave(object):
     Class to represent a wave pair created by the impact of a drop on the surface of the pond.
     """
 
-    def __init__(self, x_0, a, x_right, speed_factor, decay_factor=0.95, scale=1.0, reflect=(True, True), amp_thresh=0.01):
+    def __init__(self, x_0, a, x_right, speed_factor, decay_factor=0.95, scale=1.0, reflect=(True, True), amp_thresh=0.01, max_age=0):
         """
         Initialize a wave pair.
         :param x_0: x-coordinate of the drop.
@@ -68,10 +70,14 @@ class Wave(object):
         self._decay = decay_factor
         self._scale = scale
         self._reflect = reflect
+        self._max_age = max_age  # seconds
         self._thresh = amp_thresh
-        # hash of (x_0, dx), for memoizing get_wave_shape (Add discretization to this class to avoid this...)
-        self._bins = {}
-
+        self._t = 0
+        n=1000
+        x=np.linspace(0,x_right,n)
+        y = self._get_wave_density_gauss({'x':50,'amp':10},0.0,.1,n)
+        plt.plot(x,y)
+        plt.show()
 
         # wave states are
         self._w1 = {'x': x_0,
@@ -86,9 +92,11 @@ class Wave(object):
         return "Wave: x1=%s, x2=%s, a1=%s, a2=%s" % (self._w1['x'], self._w2['x'], self._w1['amp'], self._w2['amp'])
 
     def is_active(self):
+        if self._max_age>0 and self._t > self._max_age:
+            return False
         if self._reflect[0] and self._reflect[1]:
             # enough to check amplitudes are both above threshold
-            return self._w1['amp'] > self._thresh and self._w2['amp'] > self._thresh
+            return np.abs(self._w1['amp'] )> self._thresh and np.abs(self._w2['amp']) > self._thresh
         else:
             def _wave_visible(w):
                 """
@@ -98,10 +106,10 @@ class Wave(object):
                 if self._reflect[0] and self._reflect[1]:
                     return True
                 if not self._reflect[0] and w['x'] < 0:
-                    v = self._get_wave_density(w, 0)
+                    v = np.abs(self._get_wave_density(w, 0))
                     return v > self._thresh
                 if not self._reflect[1] and w['x'] > self._x_right:
-                    v = self._get_wave_density(w, self._x_right)
+                    v = np.abs(self._get_wave_density(w, self._x_right))
                     return v > self._thresh
                 return True
 
@@ -114,6 +122,8 @@ class Wave(object):
             * Decay amplitude.
         returns: True if wave is still active
         """
+        self._t += dt
+
         def move_and_bounce(w):
             x, v = w['x'], w['v']
             x += v * dt
@@ -130,6 +140,7 @@ class Wave(object):
 
         self._w1 = move_and_bounce(self._w1)
         self._w2 = move_and_bounce(self._w2)
+
         return self.is_active()
 
     def _get_wave_speed(self, a):
@@ -137,8 +148,37 @@ class Wave(object):
         return self._speed * np.sqrt(a)
     
     def _get_wave_density(self, w, x0,dx, n=1):
-        return self._get_wave_density_bump(w, x0, dx, n)
+        return self._get_wave_density_gauss(w, x0, dx, n)
+        #return self._get_wave_density_bump(w, x0, dx, n)
         #return self._get_wave_density_triangle(w, x0, dx, n)
+        #return self._get_wave_density_spike(w, x0, dx, n)
+
+    def _get_wave_density_gauss(self, w, x0, dx, n=1):
+        """
+        return the density of wave energy at each position.
+        Use the second derivative of the gaussian:
+            f= (-s^2+x^2) / (s^4) * p(x), scaled so that f(0) = 1.
+        """
+        def gauss_hat(x, sigma):
+            return (-sigma**2 + x**2) / (sigma**4) * np.exp(-x**2/(2*sigma**2)) / np.sqrt(2*np.pi*sigma**2)
+        
+        def func(w, x): 
+            return gauss_hat((x-w['x'])/w['amp']/self._scale*9,1  )
+        
+        print(w['amp']*self._scale)
+        x = x0 + np.arange(n) * dx
+        return func(w, x)
+
+    def _get_wave_density_spike(self, w, x0, dx, n=1):
+        """
+        All bins are zero except the one with the peak in it, which is equal to the amplitude.
+        """
+        x = x0 + np.arange(n) * dx
+        shape = np.zeros(n)
+        peak_bin_index = int(w['x'] / dx)
+        if peak_bin_index >= 0 and peak_bin_index < n:
+            shape[peak_bin_index] = w['amp']
+        return shape
 
     def _get_wave_density_bump(self, w, x0,dx, n=1):
         """
@@ -196,7 +236,11 @@ class Wave(object):
         d_left = self._get_wave_density(w, -dx/2, dx, n=n)
         d_right = self._get_wave_density(w, dx/2, dx, n=n)
 
+        #if not SIGNED_WAVES:
         bin_height = np.maximum(d_left, d_right)
+        #else:
+        #    which = np.abs(d_left) > np.abs(d_right)
+
 
         # The bin with the peak in it will have a bad approximation, so fix here
         peak_bin_index = int(w['x'] / dx)
@@ -220,7 +264,7 @@ class Wave(object):
 
 
 class Pond(object):
-    def __init__(self, n_x,  x_max=100., decay_factor=0.95, speed_factor=1., wave_scale=1.0, reflecting_edges=(True, True)):
+    def __init__(self, n_x,  x_max=100., decay_factor=0.95, speed_factor=1., wave_scale=1.0, reflecting_edges=(True, True), max_wave_age=0):
         """
         Initialize a rippling pond simulation with:
         :param n_x: number of positions in the x dimension (spatial discretization)
@@ -236,7 +280,8 @@ class Pond(object):
         self._threshold = .1
         self._max_x = x_max
         self._reflect = reflecting_edges
-        self._max_waves = 1000
+        self._max_wave_age = max_wave_age
+
         logging.info("Created Pond w/params: n_x=%i, x_max=%.1f, decay=%.3f, speed=%.3f, scale=%.3f" %
                      (n_x, x_max, decay_factor, speed_factor, wave_scale))
 
@@ -283,7 +328,8 @@ class Pond(object):
 
         # Create and add new waves:
         new_waves = [Wave(x_0=drop['x'], a=drop['mass'], x_right=self._max_x, speed_factor=self._speed, scale=self._scale,
-                          decay_factor=self._decay, amp_thresh=self._threshold, reflect=self._reflect) for drop in new_wave_dicts]
+                          decay_factor=self._decay, amp_thresh=self._threshold, reflect=self._reflect, max_age=self._max_wave_age)
+                    for drop in new_wave_dicts]
         waves.extend(new_waves)
 
         # get the input stimulus
@@ -328,3 +374,7 @@ def get_drips(t_max, x_max, period=10., amp=20, x_var=0):
     x_vals = np.random.rand(n)*x_var + x_max/2 - x_var/2
 
     return [{'t': i*period, 'x': x_vals[i], 'mass': amp} for i in range(n)]
+
+
+if __name__=="__main__":
+    w = Wave(50, 10, 100, 1)
