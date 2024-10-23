@@ -8,7 +8,7 @@ class EquilibriumExplorer(object):
 
     def __init__(self, n_reps=200,
                  spectral_radii=(.5, .6, .7, .8, .9, .95, .975, 0.99, 1.0, 1.1, 1.3,1.5),
-                 res_sizes=(10, 20, 40, 80,160),
+                 res_sizes=(10, 20, 40, 80,160,320),
                  n_cpu=0):
 
         self._max_iter = 1000
@@ -70,16 +70,16 @@ class EquilibriumExplorer(object):
                                    color=colormap(i/len(self._res_sizes)), alpha=0.3)
             n_diverged[i] = [np.sum(np.isnan(eq_times[i, j])) for j in range(len(self._spec_rads))]
 
-        time_plot.set_xlabel('Spectral radius')
-        time_plot.set_ylabel('Mean Equilibrium Time')
-        time_plot.set_title('Mean Time vs Spectral Radius')
+        time_plot.set_xlabel('spectral radius')
+        time_plot.set_ylabel('mean convergence time')
+        time_plot.set_title('mean time vs spectral radius')
         time_plot.legend()
 
         def _show_img(ax, data, title):
             im = ax.imshow(data.T, interpolation=None, cmap=colormap)
             fig.colorbar(im, ax=ax)
-            ax.set_ylabel('Spectral Radius')
-            ax.set_xlabel('Reservoir Size')
+            ax.set_ylabel('spectral radius')
+            ax.set_xlabel('reservoir size')
             ax.set_title(title)
             ax.set_yticks(np.arange(len(self._spec_rads)), self._spec_rads)
             ax.set_xticks(np.arange(len(self._res_sizes)), self._res_sizes)
@@ -92,8 +92,8 @@ class EquilibriumExplorer(object):
             ax.axhline(y=line_y, color='blue', linestyle='--')
             
 
-        _show_img(time_img, mean_times, 'Mean Equilibrium Time')
-        _show_img(converged_plot, n_diverged, 'Number of Diverged Runs')
+        _show_img(time_img, mean_times, 'mean convergence time')
+        _show_img(converged_plot, n_diverged, 'number of diverged runs')
 
         time_plot.set_ylim([0, 200])
         time_plot.set_xlim([np.min(self._spec_rads), np.max(self._spec_rads)])
@@ -101,7 +101,7 @@ class EquilibriumExplorer(object):
         # converged_plot.show()
         plt.tight_layout()
         plt.subplots_adjust(top=0.85)
-        plt.suptitle('Mean time to fixed point on zero inputs\n(n=%i for each trial)' % (self._n,))
+        plt.suptitle('Mean time to fixed point on zero inputs\n(max_iter=%i, n=%i)' % (self._max_iter,self._n,))
         plt.show()
 
 
