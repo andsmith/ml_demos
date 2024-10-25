@@ -30,8 +30,9 @@ class EchoStateNetwork(object):
 
     def _reset_training(self):
         # self._train_info['states'] = []
-        # self._train_info['inputs'] = []
+        #self._train_info['inputs'] = []
         # self._train_info['targets'] = []
+        #print("Resetting training info.")   
 
         # Batch version:
         self._train_info['ATA_terms'] = []
@@ -90,6 +91,9 @@ class EchoStateNetwork(object):
             prev_state = state
         logging.warning("Failed to find equilib state in %i iterations." % self.max_eq_iter)
         return state, self.max_eq_iter
+    
+    def get_training_state_range(self):
+        return self._train_info['state_min_max']
 
     def train_sequence(self, X, Y, washout=0, batch_size=50000):
         """
@@ -136,9 +140,8 @@ class EchoStateNetwork(object):
         ATA = np.sum(self._train_info['ATA_terms'], axis=0) - np.eye(self.n_res + self.n_in + 1) * .1  # regularization
         ATY = np.sum(self._train_info['ATY_terms'], axis=0)
         self.W_res_out = np.dot(np.linalg.inv(ATA), ATY).T
-
         self._reset_training()
-
+    
     def _update_batch(self, states, inputs, targets):
         n_states = len(states)
         states = np.vstack(states)

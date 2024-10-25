@@ -73,11 +73,11 @@ class Wave(object):
         self._max_age = max_age  # seconds
         self._thresh = amp_thresh
         self._t = 0
-        n=1000
-        x=np.linspace(0,x_right,n)
-        y = self._get_wave_density_gauss({'x':50,'amp':10},0.0,.1,n)
-        plt.plot(x,y)
-        plt.show()
+        #n=1000
+        ##x=np.linspace(0,x_right,n)
+        #y = self._get_wave_density_gauss({'x':50,'amp':10},0.0,.1,n)
+        #plt.plot(x,y)
+        #plt.show()
 
         # wave states are
         self._w1 = {'x': x_0,
@@ -148,8 +148,8 @@ class Wave(object):
         return self._speed * np.sqrt(a)
     
     def _get_wave_density(self, w, x0,dx, n=1):
-        return self._get_wave_density_gauss(w, x0, dx, n)
-        #return self._get_wave_density_bump(w, x0, dx, n)
+        #return self._get_wave_density_gauss(w, x0, dx, n)
+        return self._get_wave_density_bump(w, x0, dx, n)
         #return self._get_wave_density_triangle(w, x0, dx, n)
         #return self._get_wave_density_spike(w, x0, dx, n)
 
@@ -165,7 +165,6 @@ class Wave(object):
         def func(w, x): 
             return gauss_hat((x-w['x'])/w['amp']/self._scale*9,1  )
         
-        print(w['amp']*self._scale)
         x = x0 + np.arange(n) * dx
         return func(w, x)
 

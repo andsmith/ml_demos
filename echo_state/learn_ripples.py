@@ -46,9 +46,9 @@ def _train(input, output, pond_params, plot=True):
     #plt.show()
     esn.train_sequence(input, output,washout=30)
     esn.finish_training()
-    _plot(ax)
+    #_plot(ax)
     plt.suptitle("ESN trained")
-    plt.show()
+    #plt.show()
 
     return esn
 
@@ -100,9 +100,9 @@ def get_esn(n_input, n_output):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
-    #entertainment = interactive_test()
+    entertainment = interactive_test()
     #rain_training(n_iter = 40000, n_drops = 2000)
-    #drip_training(n_iter=100000, x_var=20)
+    drip_training(n_iter=100000, x_var=20)
     #entertainment.join()
 
-    _thread_proc()
+    #_thread_proc()

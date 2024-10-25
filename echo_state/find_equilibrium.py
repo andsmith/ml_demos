@@ -8,10 +8,10 @@ class EquilibriumExplorer(object):
 
     def __init__(self, n_reps=200,
                  spectral_radii=(.5, .6, .7, .8, .9, .95, .975, 0.99, 1.0, 1.1, 1.3,1.5),
-                 res_sizes=(10, 20, 40, 80,160,320),
+                 res_sizes=(10, 20, 40, 80,160),
                  n_cpu=0):
 
-        self._max_iter = 1000
+        self._max_iter = 3000
         self._n_cpu = n_cpu if n_cpu > 0 else cpu_count()-1
         print("Running on %i cores" % (self._n_cpu,))
         self._n = n_reps
@@ -71,8 +71,8 @@ class EquilibriumExplorer(object):
             n_diverged[i] = [np.sum(np.isnan(eq_times[i, j])) for j in range(len(self._spec_rads))]
 
         time_plot.set_xlabel('spectral radius')
-        time_plot.set_ylabel('mean convergence time')
-        time_plot.set_title('mean time vs spectral radius')
+        time_plot.set_ylabel('mean iterations to convergence')
+        time_plot.set_title('mean iterations vs spectral radius')
         time_plot.legend()
 
         def _show_img(ax, data, title):
@@ -92,7 +92,7 @@ class EquilibriumExplorer(object):
             ax.axhline(y=line_y, color='blue', linestyle='--')
             
 
-        _show_img(time_img, mean_times, 'mean convergence time')
+        _show_img(time_img, mean_times, 'iterations to convergence')
         _show_img(converged_plot, n_diverged, 'number of diverged runs')
 
         time_plot.set_ylim([0, 200])
