@@ -5,7 +5,9 @@ import logging
 
 
 class EchoStateNetwork(object):
-    def __init__(self, n_input, n_reservoir, n_output, spectral_radius=0.9, leak_rate=0.0,  input_scale=1.0, feedback_scale=0., linear_out=False, max_eq_iter=1000):
+    def __init__(self, n_input, n_reservoir, n_output, spectral_radius=0.9, leak_rate=0.0, 
+                  input_scale=1.0, feedback_scale=0., linear_out=False, max_eq_iter=1000,
+                  state_noise=0.0, sparsity=0.0):
 
         # shape:
         self.n_in = n_input
@@ -19,6 +21,8 @@ class EchoStateNetwork(object):
         self.input_scale = input_scale
         self.feedback_scale = feedback_scale
         self.max_eq_iter = max_eq_iter
+        self.state_noise = state_noise
+        self.sparsity = sparsity
 
         # Accumulate here each time train_sequence is called, then call finish_training to update weights.
         self._train_info = {}
@@ -44,8 +48,15 @@ class EchoStateNetwork(object):
         self.W_res_out = np.random.normal(0, 1, (self.n_out, self.n_res + self.n_in + 1))
         self.W_out_res = np.random.normal(0, 1, (self.n_res, self.n_out)) if self.feedback_scale > 0 else None
         self.W_res_res = np.random.normal(0, 1, (self.n_res, self.n_res))
+        # enforce sparsity:
+        mask = np.random.rand(self.n_res, self.n_res) > self.sparsity
+        self.W_res_res *= mask
         # enforce spectral radius:
-        self.W_res_res *= 1.0 / np.max(np.abs(np.linalg.eigvals(self.W_res_res))) * self.sr
+        s_rad = np.max(np.abs(np.linalg.eigvals(self.W_res_res)))
+        if s_rad > 0:
+            self.W_res_res *= 1.0 / s_rad * self.sr
+        else:
+            logging.warning("Failed to enforce spectral radius, is matrix very small and sparse?")
 
     def _update_reservoir(self, x, state, last_output=None):
         """
@@ -85,11 +96,11 @@ class EchoStateNetwork(object):
             state, _ = self._update_reservoir(z_input, state, z_output)
 
             if n_iter == 0 and np.max(np.abs(state - prev_state)) < tol:
-                logging.info("Found equilib state in %i iterations." % iter)
+                #logging.info("Found equilib state in %i iterations." % iter)
                 return state, iter
 
             prev_state = state
-        logging.warning("Failed to find equilib state in %i iterations." % self.max_eq_iter)
+        #logging.warning("Failed to find equilib state in %i iterations." % self.max_eq_iter)
         return state, self.max_eq_iter
     
     def get_training_state_range(self):
@@ -126,7 +137,7 @@ class EchoStateNetwork(object):
                 inputs = X[batch_start_ind:batch_start_ind+len(states)]
                 targets = Y[batch_start_ind:batch_start_ind+len(states)]
 
-                print("\tBatch %i, %i states" % (len(self._train_info['ATA_terms']), len(states)))
+                logging.info("\tBatch %i, %i states" % (len(self._train_info['ATA_terms']), len(states)))
                 self._update_batch(states,
                                    np.array(inputs),
                                    np.array(targets))
@@ -144,7 +155,7 @@ class EchoStateNetwork(object):
     
     def _update_batch(self, states, inputs, targets):
         n_states = len(states)
-        states = np.vstack(states)
+        states = np.vstack(states) + np.random.normal(0, self.state_noise, (n_states, self.n_res))
         extended_states = np.concatenate((states, inputs, np.ones((n_states, 1))), axis=1)
         self._train_info['ATA_terms'].append(np.dot(extended_states.T, extended_states))
         self._train_info['ATY_terms'].append(np.dot(extended_states.T, targets))

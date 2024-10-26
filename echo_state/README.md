@@ -44,9 +44,24 @@ TODO:  Experiment with frequency generalization as well as phase.
 
 ## How long does it take an ESN(n) to settle?
 
-To ensure $S(0)$ is the same at the start of every input sequence, it is first run with input=0 until it converges (which is guaranteed by the "echo state property").  What isn't clear is how long this will take.  To explore this, run `> python find_equilibrium.py` to generate the following plot:
+To ensure $S(0)$ is the same at the start of every input sequence, it is first run with input=0 until it converges (which is guaranteed by the "echo state property").  What isn't clear is how long this will take.  
+
+#### As a function of reservoir-size and spectral-radius
+
+To explore this, run `> python find_equilibrium.py` to generate the following plot:
 
 
-![fixed_points](/echo_state/assets/fixed_points.png)
+![fixed_points](/echo_state/assets/fixed_points_b.png)
 
-This shows `spectral_radius < 1` means the network always converges, and that the average settling time when running the network with a vector of zeros as the input is more a property of spectral radius than the reservoir size.
+
+This shows `spectral_radius < 1` means the network always converges (tested out to `max_iter`), and that the average settling time when running the network with a vector of zeros as the input is more a property of spectral radius than the reservoir size.  Increasing reservoir sizes seems to decrease the variance on settling time.
+
+#### As a function of sparsity:
+
+The script will also show the mean settling time for different sized networks with different sparsity parameters, $s  \in [0,1)$, representing the fraction of internal (Res-res) weights that are set to zero after initializing.
+
+![sparsity](/echo_state/assets/sparsity_and_convergence.png)
+
+This creates n=50 random ESNs of the different sizes and sparsity constraints, then computes their settling time (Run with zero inputs until state variables don't change more than 1e-7, or similar.)
+
+The mean settling time appears constant wrt. reservoir size and sparsity, however increasing sparsity seems to increase the variance.

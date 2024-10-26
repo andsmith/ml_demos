@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from esn import EchoStateNetwork
 from signals import make_square, make_sawtooth, make_triangle, make_sine, make_complex
 import sys
-
+import logging
 
 class EchoStateTester(object):
     """
@@ -25,8 +25,8 @@ class EchoStateTester(object):
         truth_out = .8
 
         # (period, phase_shift)
-        self._train_sig_pars = ((16, 0),)
-        self._test_sig_pars = ((16, 4), (16, 8))
+        self._train_sig_pars = ((16, 0),(16, 4),)
+        self._test_sig_pars = ((16,8), (20,0))
 
         def _mk_train_test(signal_func):
             return {'train': [np.roll(signal_func(period, n_train), - phase).reshape(-1, 1)*truth_out
@@ -142,7 +142,7 @@ def _plot_sample_waves():
 
 if __name__ == "__main__":
     # np.random.seed(3)
-
+    logging.basicConfig(level=logging.INFO)
     if len(sys.argv) < 2:
         n_res = 10
     else:
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                   'n_output': 1,
                   'input_scale': 1., 'feedback_scale': 0.0,
                   'leak_rate': 0.0, 'spectral_radius': 0.98,
-                  'linear_out': False}
+                  'linear_out': False, 'state_noise': 0.00, 'sparsity': 0.0}
     # _plot_sample_waves()
-    t = EchoStateTester(esn_params, n_train=50000, n_test=1000, train_washout=20)
+    t = EchoStateTester(esn_params, n_train=100000, n_test=1000, train_washout=20)
     t.plot_transduction()
