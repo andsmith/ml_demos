@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('-a', "--animate_frame", type=int, default=1, help="Animate every n-th frame (or 0 for no animation)")
     parser.add_argument('-u', "--uniform",action='store_true', help="Initialize data w/o clusters (ignore -g, -l, -s).")
     args = parser.parse_args()
+    print("Data from %i gaussians and %i laplacians, fitting with %i gaussians and %i laplacians." % (args.n_gaussian, args.n_laplacian, args.n_gauss_fit, args.n_laplace_fit))
     return args
 
 
@@ -45,14 +46,15 @@ def demo(cmd_args):
     n_real = ng_real + nl_real
     n_fit= ng_fit + nl_fit
     
-
+    
     priors = np.random.rand(n_real)
     priors /= np.sum(priors)
     
-    component_types = [GaussianDist] * ng_real + [LaplaceDist] * nl_real
+    data_component_types = [GaussianDist] * ng_real + [LaplaceDist] * nl_real
+
     if not uniform_init:
         print("Initializing data from %i Gaussians and %i Laplacians." % (ng_real, nl_real))
-        model = MixtureModel([component_type.from_random(spread) for component_type in component_types], priors)
+        model = MixtureModel([component_type.from_random(spread) for component_type in data_component_types], priors)
         data = model.sample(n_pts)
     else:
         print("Initializing uniform random data.")
@@ -73,7 +75,8 @@ def demo(cmd_args):
     fig.waitforbuttonpress()
 
     # animate the fit
-    model_fit = MixtureModel.from_data(component_types,data, animate_interval=ainmate_interval, max_iter=max_iter)
+    model_component_types = [GaussianDist] * ng_fit + [LaplaceDist] * nl_fit
+    model_fit = MixtureModel.from_data(model_component_types,data, animate_interval=ainmate_interval, max_iter=max_iter)
 
     # show true and fit models
     fig, ax = plt.subplots(2, sharex=True, sharey=True)
@@ -106,11 +109,12 @@ def demo(cmd_args):
 
     # print priors for true and fit models (for both kinds of components)
     # for each component type, print the priors in descending order
-    for component_type in [GaussianDist, LaplaceDist]:
-        priors_true = [model.priors[i] for i, component in enumerate(model.components) if isinstance(component, component_type)]
-        priors_fit = [model_fit.priors[i] for i, component in enumerate(model_fit.components) if isinstance(component, component_type)]
-        print("True %s priors: %s" % (component_type.__name__, ", ".join(["%.3f"%(pr,) for pr in sorted(priors_true, reverse=True)])))
-        print("Fit %s priors: %s" % (component_type.__name__, ",".join(["%.3f"%(pr,) for pr in sorted(priors_fit,reverse=True)])))
+    if not uniform_init:
+        for component_type in [GaussianDist, LaplaceDist]:
+            priors_true = [model.priors[i] for i, component in enumerate(model.components) if isinstance(component, component_type)]
+            priors_fit = [model_fit.priors[i] for i, component in enumerate(model_fit.components) if isinstance(component, component_type)]
+            print("True %s priors: %s" % (component_type.__name__, ", ".join(["%.3f"%(pr,) for pr in sorted(priors_true, reverse=True)])))
+            print("Fit %s priors: %s" % (component_type.__name__, ",".join(["%.3f"%(pr,) for pr in sorted(priors_fit,reverse=True)])))
         
 
 
