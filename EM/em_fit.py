@@ -94,13 +94,14 @@ class MixtureModel(object):
         return normalize_log_probs(log_probs)
 
     @staticmethod
-    def from_data(component_type, x, n, max_iter=100, animate_interval=0):
+    def from_data(component_types, x, max_iter=100, animate_interval=0):
+        n = len(component_types)
         colors = random_colors(n)
-        priors, components = fit_em(component_type, x, n, max_iter, colors, animate_interval)
+        priors, components = fit_em(component_types, x, n, max_iter, colors, animate_interval)
         return MixtureModel(components, priors, colors=colors)
 
 
-def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
+def fit_em(component_types, x, n, max_iter=10, colors=None, animate_interval=0):
     """
     Fit a 1-d mixture model to the data using the EM algorithm:
 
@@ -125,7 +126,8 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
         * plot each M-step (show the weights, the previous component's distribution and the updated version)
         * plot the E-step (show the responsibilities as different colors)
 
-    :param component_type: the class of the components to fit (subclass of ProbDist)
+    :param component_types: single class type (a subclass of ProbDist): fit a model with n of these components,
+       otherwise list of n classes, one for each component.
     :param x: the data, an M element array of real values
     :param n: the number of components to fit
     :param colors:  list of n rgb colors, one for each component (or None for no plotting)
@@ -143,8 +145,11 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
 
     # start with uniform priors and random components
     priors = np.ones(n) / n  # p(y)
-    components = [component_type(np.random.rand(), 1.0)
-                  for _ in range(n)]  # p(x|y)
+    if not isinstance(component_types, list):
+        component_types = [component_types] * n
+
+    components = [component_types[i](np.random.rand(), 1.0)
+                  for i in range(n)]  # p(x|y)
 
     def _get_log_probs():
         # return log(p(x|y) * p(y)) for each x and y
@@ -167,7 +172,7 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
         # M-step, components:
         for i in range(n):
             # p(x|z)
-            components[i] = component_type.from_data(x, weights=responsibilities[:, i])
+            components[i] = component_types[i].from_data(x, weights=responsibilities[:, i])
 
         # Calculate the log likelihood & save for next iteration's E-step
         log_probs = _get_log_probs()
@@ -176,8 +181,7 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
         rel_diff = diff / np.abs(log_likelihood)
 
         report_str = "Iteration %d: - log likelihood = %.7f (+ %.2f %%)" % (iter, -log_likelihood, rel_diff * 100)
-        if animate_interval == 0 or animate_interval > 0 and iter % 10 == 0:
-            print(report_str)
+        print(report_str)
 
         if animate_interval > 0 and iter % animate_interval == 0:
             # E-step, show new distributions of each component and resulting classification
@@ -187,7 +191,8 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
             full_model = MixtureModel(components, priors, colors=colors)
             plot_dist(ax[0], full_model, linestyle='--', n_pts=1000, label='Fit')
             for i, component in enumerate(components):
-                plot_dist(ax[0], component, n_pts=1000, weight=priors[i], color=colors[i], label='C-%d' % i)
+                name = component.__class__.__name__[:1]
+                plot_dist(ax[0], component, n_pts=1000, weight=priors[i], color=colors[i], label='%s-%d' % (name,i))
             ax[1].clear()
             responsibilities = np.argmax(log_probs, axis=1)
             plot_classification(ax[1], np.hstack([x.reshape(-1, 1), y.reshape(-1, 1)]),
@@ -201,10 +206,13 @@ def fit_em(component_type, x, n, max_iter=10, colors=None, animate_interval=0):
             # import ipdb; ipdb.set_trace()
 
         # Check for convergence
-        if rel_diff < 1e-10:
+        if rel_diff <0 :
+            print("WARNING:  Log likelihood decreased by %.6f!" % (-rel_diff,))
+
+        if np.abs(rel_diff) < 1e-10:
             converged = True
             break
-
+            
         last_ll = log_likelihood
 
     if not converged:

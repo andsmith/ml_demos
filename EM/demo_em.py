@@ -6,44 +6,58 @@ import matplotlib.pyplot as plt
 import sys
 from argparse import ArgumentParser
 from util import Histogram, plot_classification, plot_dist
-from prob_dists import GaussianDist
+from prob_dists import GaussianDist, LaplaceDist
 from em_fit import MixtureModel
 
 
 
-
 def parse_args():
-    """
-    syntax> python demo_em.py n_comps_real n_comps_fit [max_iter=100] [spread=1.0] [n_points=1000] 
-    """
-    parser = ArgumentParser(description="Demonstrate EM for fitting mixtures of 1-D Gaussians")
-    parser.add_argument('-r', "--n_real", type=int, default=5, help="Number of components generating data.")
-    parser.add_argument('-f', "--n_fit", type=int, default=5, help="Number of components in the fit model")
+    parser = ArgumentParser(description="Demonstrate EM for fitting mixtures of 1-D data using Gaussian and Laplacian components.")
+    parser.add_argument('-g', "--n_gaussian", type=int, default=5, help="Number of Gaussian components generating data.")
+    parser.add_argument('-l', "--n_laplacian", type=int, default=0, help="Number of Laplacian components generating data.")
+    parser.add_argument('-gf', "--n_gauss_fit", type=int, default=5, help="Number of Gaussian components in the fit model")
+    parser.add_argument('-lf', "--n_laplace_fit", type=int, default=0, help="Number of Laplacian components in the fit model")
     parser.add_argument('-i', "--iter", type=int, default=300, help="Maximum number of iterations to run")
     parser.add_argument('-s', "--spread", type=float, default=1.5, help="Spread of the true model")
     parser.add_argument('-p', "--n_points", type=int, default=2000, help="Number of data points to generate")
     parser.add_argument('-a', "--animate_frame", type=int, default=1, help="Animate every n-th frame (or 0 for no animation)")
-    parser.add_argument('-u', "--uniform",action='store_true', help="Initialize data w/o clusters.")
+    parser.add_argument('-u', "--uniform",action='store_true', help="Initialize data w/o clusters (ignore -g, -l, -s).")
     args = parser.parse_args()
-    return args.n_real, args.n_fit, args.iter, args.spread, args.n_points, args.animate_frame, args.uniform
+    return args
 
 
 
-def demo(n_comps_real, n_comps_fit, max_iter, spread, n_pts=1000, ainmate_interval=1, uniform_init = False):
+def demo(cmd_args):
     """
     Demonstrate EM for fitting mixtures of 1-D Gaussians.
+    :param n_comps_real: tuple(n_gaussian, n_laplacian), the number of components in the true model 
+    :param n_comps_fit: tuple(n_gaussian, n_laplacian), the number of components in the fit model
+    :param max_iter: the maximum number of iterations to run
     """
-    # Generate a random Gaussian mixture model
-    priors = np.random.rand(n_comps_real)
+    ng_real, nl_real = (cmd_args.n_gaussian, cmd_args.n_laplacian)
+    ng_fit, nl_fit = (cmd_args.n_gauss_fit, cmd_args.n_laplace_fit)
+    max_iter = cmd_args.iter
+    spread = cmd_args.spread
+    n_pts = cmd_args.n_points
+    ainmate_interval = cmd_args.animate_frame
+    uniform_init = cmd_args.uniform
+    
+    n_real = ng_real + nl_real
+    n_fit= ng_fit + nl_fit
+    
+
+    priors = np.random.rand(n_real)
     priors /= np.sum(priors)
+    
+    component_types = [GaussianDist] * ng_real + [LaplaceDist] * nl_real
     if not uniform_init:
-        model = MixtureModel([GaussianDist.from_random(spread) for _ in range(n_comps_real)],
-                            priors)
+        print("Initializing data from %i Gaussians and %i Laplacians." % (ng_real, nl_real))
+        model = MixtureModel([component_type.from_random(spread) for component_type in component_types], priors)
         data = model.sample(n_pts)
     else:
+        print("Initializing uniform random data.")
         data = np.random.rand(n_pts) 
 
-    # Fit a Gaussian mixture model to the data
     plt.ion()
 
     # show the data
@@ -59,7 +73,7 @@ def demo(n_comps_real, n_comps_fit, max_iter, spread, n_pts=1000, ainmate_interv
     fig.waitforbuttonpress()
 
     # animate the fit
-    model_fit = MixtureModel.from_data(GaussianDist,data, n_comps_fit, animate_interval=ainmate_interval, max_iter=max_iter)
+    model_fit = MixtureModel.from_data(component_types,data, animate_interval=ainmate_interval, max_iter=max_iter)
 
     # show true and fit models
     fig, ax = plt.subplots(2, sharex=True, sharey=True)
@@ -89,6 +103,17 @@ def demo(n_comps_real, n_comps_fit, max_iter, spread, n_pts=1000, ainmate_interv
 
     for i, component in enumerate(model_fit.components):
         plot_dist(ax[1], component, n_pts=n_pts, weight=model_fit.priors[i], linestyle='--', color=def_orange)
+
+    # print priors for true and fit models (for both kinds of components)
+    # for each component type, print the priors in descending order
+    for component_type in [GaussianDist, LaplaceDist]:
+        priors_true = [model.priors[i] for i, component in enumerate(model.components) if isinstance(component, component_type)]
+        priors_fit = [model_fit.priors[i] for i, component in enumerate(model_fit.components) if isinstance(component, component_type)]
+        print("True %s priors: %s" % (component_type.__name__, ", ".join(["%.3f"%(pr,) for pr in sorted(priors_true, reverse=True)])))
+        print("Fit %s priors: %s" % (component_type.__name__, ",".join(["%.3f"%(pr,) for pr in sorted(priors_fit,reverse=True)])))
+        
+
+
     plt.show()
     plt.pause(0)
 
@@ -97,6 +122,4 @@ if __name__ == "__main__":
 
     plt.style.use('dark_background')
     # test_sum_log_probs()
-    n_comps_real, n_comps_fit, max_iter, spread, n_pts, animate_interval, unif = parse_args()
-    demo(n_comps_real, n_comps_fit, max_iter, spread,
-         n_pts, ainmate_interval=animate_interval, uniform_init=unif)
+    demo(parse_args())

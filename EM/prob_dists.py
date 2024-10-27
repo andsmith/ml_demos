@@ -80,7 +80,7 @@ DISTRIBUTIONS = [GaussianDist, LaplaceDist]
 
 def test_plot_dist():
     """
-    Test plot_dist by plotting a Gaussian and a Cauchy distribution.
+    Test plot_dist by plotting a Gaussian and a Laplace distribution.
     """
     n_pts=5000
     x_lim=7
