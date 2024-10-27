@@ -114,3 +114,10 @@ def normalize_log_probs(log_probs):
     Normalize the log probabilities.
     """
     return np.exp(log_probs - sum_log_probs(log_probs)[:, np.newaxis])
+
+
+def random_colors(n):
+    """
+    Generate n random colors.
+    """
+    return np.random.rand(n, 3) 
