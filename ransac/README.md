@@ -96,7 +96,7 @@ The following can be set by changing the value of the `animate_pause_sec` parame
 
 How do you align two images, given that one is a noisy, warped, and translated copy of the other?   To estimate the transform from one image to the other we need at least three points in each image that correspond, i.e. are of the same spot.  And if we have more, we can get a better estimate.  The perfect setup for RANSAC!
 
-![synth_img](/assets/synth_img_cropped.png)
+![synth_img](/ransac/assets/synth_img_cropped.png)
 
 ###### RANSAC image alignment algorithm outline:
 
@@ -127,7 +127,8 @@ The second image is created from the first through this process:
   * A random small rotation, translation, and scaling are used to transform the image (preserving width & height)
   * Some fraction of the pixels are randomly switched to a different color:
 
-![alt text](/assets/noise.png)
+![alt text](/ransac/assets/noise.png)
+
 (10% of the pixels are changed to a random color)
 
 ### Tuning the corner detector:
@@ -142,19 +143,22 @@ To automatically determine the best settings, we can define a score for the dete
 
 For a single image, the only criteria are detecting enough corners but not too many false positives.  To ensure the number is in the correct range for this category of images, we use this function to score the detector on the first image:
 
-![detector_func](/assets/detection_func_single.png)
+![detector_func](/ransac/assets/detection_func_single.png)
+
 (run `> python test_detection_tuner.py` to generate)
 
 #### Scoring the detector on the second (and both) images
 To score the second image, transform the corners detected from the first image using the same affine transformation that created the second image.  Call these the "true" corners and calculate the accuracy of the detector in the second image (num correct / num detections).  The "combined" score for this set of parameters is the product of the two scores:
 
-![detector_func](/assets/detection_tuner_score.png)
+![detector_func](/ransac/assets/detection_tuner_score.png)
+
 (The red dots are the detected corners in both image, the blue + symbols are the corners detected in the first image transformed to the second image's coordinates using the same affine matrix that created the second image from the first.)
 
 
 To iterate through many combinations of paramers use `tune_corner_detector.py`.  This script samples the parameter space and scores each set of parameters on multiple test images, displaying mean value as the color of a pixel on a grid:
 
-![detector_tuning](/assets/tune_corner_detect.png)
+![detector_tuning](/ransac/assets/tune_corner_detect.png)
+
 As the image shows, as long as the blocksize is >= 4 and the kSize parameter (size of the Sobel kernel) is sufficiently large to average out noise, there is a good range of values that should work. 
 
 
@@ -167,7 +171,7 @@ The descriptors are simple color histograms, a vector of how many times each dis
 
 To explore the effects of changing the descriptor parameters and comparison function, run `tune_corner_matching.py`.  This will create a test pair and run the corner matching algorithm with a desired set of parameters, displaying a few corners from image 1 and a few of the best and worst matching corners from image 2:
 
-![matcher tuning](/assets/corner_matcher.png)
+![matcher tuning](/ransac/assets/corner_matcher.png)
 
 
 Next to each image patch is a histogram of the amount of each color in it (a visualization of the corner descriptors).   The numerical comperison is in `image_util.compare_descriptors()`.  Note, the first and fourth corners from image 1 (columns) did not match any corners in image 2 with low distance and correspondingly the smallest score is much higher than the best matches in the other examples.
@@ -178,18 +182,20 @@ A cutoff of 0.4 is used for the demo.
 ### Image matching demo:
 Run: `> python demo_match_images.py` to start the demo.  This will show the first plot window with two rows:
 
-![demo start](/assets/match_demo_start.png)
+![demo start](/ransac/assets/match_demo_start.png)
+
 The upper row shows the input images to align (image 2 being a transformation of image 1) and the corners detected in both images.  The lower row shows lines from each corner in image 1 to every corner in image 2 it matches above threshold.
 
 A click/keypress on the plot starts the demo, showing the current and best RANSAC iterations in separate windows (updated as the algorithm runs).
 
-![demo run](/assets/match_demo_iter.png)
+![demo run](/ransac/assets/match_demo_iter.png)
+
 This shows the current iteration window, in the upper row shows the minimum sample, the three possible matching pairs of corners  (a subset of the lower row in the previous plot).   These three are used to estimate the parameters of the affine transformation (2x3 matrix) that might map one image to the other (as well as it's inverse transformation).  
 
 The lower two windows show how the corners line up under this transformation.  Each image shows its own detected corners as green dots and the other image's corners transformed to its image space as circles, blue if they ended up near a detected corner after the transformation, or red otherwise.   In the lower, left plot, an estimated bounding box of image 2 is shown in image 1.
 
  A separate window shows a similar plot for the best iteration so far.  After 2000 iterations, the final model is displayed, showing all inlier features in the upper row, and the corners & bounding boxes, warped by the transformation estimated from the full inlier set.
 
- ![demo final](/assets/match_demo_final.png)
+ ![demo final](/ransac/assets/match_demo_final.png)
 
 (Demo parameters are mostly in `demo_match_images.py` and `util_affine.py`.)
