@@ -203,7 +203,6 @@ def fit_em(component_types, x, n, max_iter=10, colors=None, animate_interval=0):
                             )
             ax[1].set_title("current classification")
             plt.pause(0.1)
-            # import ipdb; ipdb.set_trace()
 
         # Check for convergence
         if rel_diff <0 :

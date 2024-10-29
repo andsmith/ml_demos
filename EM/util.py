@@ -60,7 +60,6 @@ def plot_dist(ax, dist,  weight=1.0, n_pts=1000, *args, **kwargs):
     :param n_pts: the number of sample points to plot
     :param args & kwargs: additional arguments to pass to ax.plot
     """
-    # import ipdb; ipdb.set_trace()
     x_min, x_max = ax.get_xlim()
     x = np.linspace(x_min, x_max, n_pts)
     y = dist.pdf(x) * weight
