@@ -5,6 +5,6 @@ Demos for Machine Learning Reading Group
 
 * [Echo State Networks.](/echo_state/)
 
-* [RANSAC - Line fitting](/ransac/README.md#line-fitting-demo)
+* [RANSAC - Line fitting](/ransac/README.md)
 
 * [RANSAC - Image alignment](/ransac/README.md#image-transformation-estimation-demo)
