@@ -69,7 +69,7 @@ Run: `> python demo_fit_line.py` to start the RANSAC line fitter demo.  The demo
     * the final model (estimated from that largest set), and
     * the least-squares fit to the data, obviously not fit the line in a way that is robust to the outliers:
 
-![ransac_line_final](/assets/ransac_line_final.png)
+![ransac_line_final](/ransac/assets/ransac_line_final.png)
 
 The output shows the parameters used to generate the line data, and the parameters as estimated by RANSAC, which should be close (up to sign):
 
