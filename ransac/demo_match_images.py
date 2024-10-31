@@ -32,21 +32,29 @@ def demo(**ransac_args):
     ransac_data = RansacImageData(data, harris_kwargs=args, matcher_threshold=matcher_threshold)
 
     # Plot initial data
-    fig = plt.figure(figsize=(5,5.5))
-    ax = fig.subplots(2,1)
+    fig = plt.figure(figsize=(5, 5.5))
+    ax = fig.subplots(2, 1)
     ransac_data.plot_features(ax[1])
+    fig.text(.077, .60, "Corner Detector", fontsize=10, color='black', rotation=90)
     ax[0].axis('off')
-    #Ax[0].set_title("All detected corners & candidate matches\n(close to run RANSAC)")
-    ax = fig.subplots(2,2)
-    img1.plot(ax[0][0],which='rgb')
-    img2.plot(ax[0][1],which='rgb')
-    ax[0][0].set_title("Image 1")
-    ax[0][1].set_title("Image 2")
+    # Ax[0].set_title("All detected corners & candidate matches\n(close to run RANSAC)")
+    ax = fig.subplots(2, 2)
+    img1.plot(ax[0][0], which='rgb')
+    img2.plot(ax[0][1], which='rgb')
+    ax[0][0].set_title("Image 1", fontsize=10)
+    ax[0][1].set_title("Image 2", fontsize=10)
+    ax[0][0].axis('off')
+    ax[0][1].axis('off')
     ax[1][0].axis('off')
     ax[1][1].axis('off')
+
+    # Add labels since axes are off
+
+    fig.text(.077, .20, "Corner Matcher", fontsize=10, color='black', rotation=90)
+
     # plot corners
-    ax[0][0].plot(ransac_data.corners_1[:, 0], ransac_data.corners_1[:, 1], '.', color=NEON_GREEN, markersize=DOT_SIZE)  
-    ax[0][1].plot(ransac_data.corners_2[:, 0], ransac_data.corners_2[:, 1], '.', color=NEON_GREEN, markersize=DOT_SIZE)  
+    ax[0][0].plot(ransac_data.corners_1[:, 0], ransac_data.corners_1[:, 1], '.', color=NEON_GREEN, markersize=DOT_SIZE)
+    ax[0][1].plot(ransac_data.corners_2[:, 0], ransac_data.corners_2[:, 1], '.', color=NEON_GREEN, markersize=DOT_SIZE)
     plt.suptitle("Image alignment using RANSAC\n(click to start)")
     plt.waitforbuttonpress()
 
@@ -61,9 +69,9 @@ def demo(**ransac_args):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     plt.ion()
-    ransac_args = dict(max_error=5.0, # pixel distance defining inliers
+    ransac_args = dict(max_error=5.0,  # pixel distance defining inliers
                        max_iter=1000,
-                       animate_pause_sec=.01 , # 0 to pause between iterations, None to disable plotting
+                       animate_pause_sec=.01,  # 0 to pause between iterations, None to disable plotting
                        animate_interval=10,
                        )
     demo(**ransac_args)

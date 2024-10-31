@@ -341,15 +341,16 @@ class RansacAffine(RansacModel):
             # plot the current model
             self._plot_model(data, self, RansacModel._AXES['current'], which=which,
                              title_prefix="")
+            plt.suptitle("RANSAC iteration %i / %i" % (self.iter+1, max_iter))
             if RansacModel._FIG['best_iter'] in [-1, self.iter]:
                 self._plot_model(data, best_model, RansacModel._AXES['best'], which=which,
                                  title_prefix='Best iteration (%i) had' % best_model.iter)
-                plt.suptitle("RANSAC iteration %i / %i" % (self.iter+1, max_iter))
                 plt.show()
         else:
             # plot the final model
             self._plot_model(data, self,  RansacModel._AXES['current'],
                              title_prefix='Final model using all', which=which)
+            plt.suptitle("RANSAC completed %i iterations." % (self.iter,))
             plt.show()
 
     @staticmethod

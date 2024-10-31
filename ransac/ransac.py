@@ -206,7 +206,7 @@ def solve_ransac(data, model_type, max_error, max_iter=100, animate_pause_sec=No
     result = {'best': best_so_far, 'final': model}
 
     if animate_pause_sec is not None:
-        model.plot_iteration(data, best_so_far, is_final=True)
+        model.plot_iteration(data, best_so_far, is_final=True, max_iter=max_iter)
         plt.pause(0)
 
     return result
