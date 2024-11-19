@@ -191,9 +191,9 @@ class MLPClass(object):
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     X, y, boundary = make_spiral_data(50, 1.25, 1)
-    tests = [[LRClass(), DTClass(max_depth=4), DTClass(max_depth=8)],]
-             #[MLPClass(n_hidden=5, n_reps=50), MLPClass(n_hidden=10, n_reps=40), MLPClass(n_hidden=20, n_reps=25),],
-             #[MLPClass(n_hidden=50), MLPClass(n_hidden=100), MLPClass(n_hidden=150)]]
+    tests = [[LRClass(), DTClass(max_depth=4), DTClass(max_depth=8)],
+             [MLPClass(n_hidden=5, n_reps=50), MLPClass(n_hidden=10, n_reps=40), MLPClass(n_hidden=20, n_reps=25),],
+             [MLPClass(n_hidden=50), MLPClass(n_hidden=100), MLPClass(n_hidden=150)]]
     tester = ClassifierTester((X, y), tests)
     tester.plot(X, y, boundary)
     plt.show()

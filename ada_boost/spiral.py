@@ -53,11 +53,12 @@ def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
 
 
 def test_spiral():
-    X, y,line = make_spiral_data(4000, turns=2)
+    X, y,line = make_spiral_data(40000, turns=5, random=True)
     plt.style.use('dark_background')
     c1 = np.where(y == 0)[0]
-    plt.plot(X[y, 0], X[y, 1], 'r.', label='class 0', markersize=2)
-    plt.plot(X[~y, 0], X[~y, 1], 'b.', label='class 1', markersize=2)
+    plt.plot(X[y, 0], X[y, 1], 'r.', label='class 0', markersize=4, alpha=.3)
+    plt.plot(X[~y, 0], X[~y, 1], 'b.', label='class 1', markersize=4, alpha=.3)
+    line = np.vstack([line, line[0]])   
     plt.plot(line[:, 0], line[:, 1], 'w-', label='decision boundary')
     plt.legend()
     plt.show()
