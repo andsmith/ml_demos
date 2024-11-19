@@ -5,9 +5,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+import logging
 
-
-def spiral(n_points, turns=10.0, ecc=1.0, margin=0.01):
+def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04):
     """
     Create two classes separated by a spiraling
     decision boundary.  
@@ -16,6 +16,7 @@ def spiral(n_points, turns=10.0, ecc=1.0, margin=0.01):
     :param ecc: squish or stretch the spiral
     :returns: points, labels
     """
+    logging.info("Making spiral classification dataset with %i points and %.2f turns." % (n_points, turns))
     n_samples = int(100*turns*2)
 
     # make the boundary flat
@@ -33,25 +34,25 @@ def spiral(n_points, turns=10.0, ecc=1.0, margin=0.01):
         # rotate points i, n_samples-i
         boundary[i] = np.dot(r_mat, boundary[i])
         boundary[n_samples-i-1] = np.dot(r_mat, boundary[n_samples-i-1])
-    boundary = np.vstack([(-1, -1),
-                          (-1.0, boundary[0, 1]),
-                          boundary,
-                          (1.0, boundary[-1, 1]),
-                          (1, -1)])
-    poly = Polygon(boundary)
+    square_boundary = np.vstack([(-1, -1),
+                                 (-1.0, boundary[0, 1]),
+                                 boundary,
+                                 (1.0, boundary[-1, 1]),
+                                 (1, -1)])
+    poly = Polygon(square_boundary)
     points = np.random.rand(n_points, 2)*2 - 1
     test_points = [Point(p) for p in points]
     labels = np.array([poly.contains(p) for p in test_points])
-    print(labels)
-    return points, labels
+    return points, labels, square_boundary
 
 
 def test_spiral():
-    X, y = spiral(4000, turns=2)
+    X, y,line = make_spiral_data(4000, turns=2)
     plt.style.use('dark_background')
     c1 = np.where(y == 0)[0]
     plt.plot(X[y, 0], X[y, 1], 'r.', label='class 0', markersize=2)
     plt.plot(X[~y, 0], X[~y, 1], 'b.', label='class 1', markersize=2)
+    plt.plot(line[:, 0], line[:, 1], 'w-', label='decision boundary')
     plt.legend()
     plt.show()
 
