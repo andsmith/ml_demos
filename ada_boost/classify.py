@@ -33,6 +33,7 @@ class ClassifierTester(object):
         self._run_test()
 
     def _run_test(self):
+        logging.info("Running %i tests:" % (self._n[0] * self._n[1]))
         for row in self._classif:
             for classif in row:
                 logging.info("Fitting %s" % classif)
@@ -40,7 +41,7 @@ class ClassifierTester(object):
                 score = classif._model.score(self._x, self._y)
                 logging.info("\tScore: %f" % score)
 
-    def plot_result(self, ax, model, boundary, res=500):
+    def plot_result(self, ax, model, boundary, res=500, invert_incorrect_colors=False):
         # plot samples (different symbols?)
         plot_dataset(ax, self._x, self._y)
 
@@ -49,8 +50,12 @@ class ClassifierTester(object):
         false_pos = np.where((y_hat == 1) & (self._y == 0))[0]
         false_neg = np.where((y_hat == 0) & (self._y == 1))[0]
         # draw a circle around the false positives & negatives
-        ax.scatter(self._x[false_pos, 0], self._x[false_pos, 1], s=20, facecolors='none', edgecolors=(.5, .5, 1, 1))
-        ax.scatter(self._x[false_neg, 0], self._x[false_neg, 1], s=20, facecolors='none', edgecolors=(.5, 1, .5, 1))
+        fp_color = (.5, 1, .5, 1)
+        fn_color = (.5, .65, 1, 1)
+        if invert_incorrect_colors:
+            fp_color, fn_color = fn_color, fp_color
+        ax.scatter(self._x[false_pos, 0], self._x[false_pos, 1], s=20, facecolors='none', edgecolors=fp_color)
+        ax.scatter(self._x[false_neg, 0], self._x[false_neg, 1], s=20, facecolors='none', edgecolors=fn_color)
 
         incorrect = np.concatenate([false_pos, false_neg])
 
@@ -185,10 +190,10 @@ class MLPClass(object):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    X, y, boundary = make_spiral_data(5000, 1.25, 1)
-    tests = [[LRClass(), DTClass(max_depth=4), DTClass(max_depth=8)],
-             [MLPClass(n_hidden=10, n_reps=30), MLPClass(n_hidden=20, n_reps=40), MLPClass(n_hidden=40, n_reps=30),],
-             [MLPClass(n_hidden=80, n_reps=20), MLPClass(n_hidden=120, n_reps=10), MLPClass(n_hidden=10, n_reps=200)]]
+    X, y, boundary = make_spiral_data(50, 1.25, 1)
+    tests = [[LRClass(), DTClass(max_depth=4), DTClass(max_depth=8)],]
+             #[MLPClass(n_hidden=5, n_reps=50), MLPClass(n_hidden=10, n_reps=40), MLPClass(n_hidden=20, n_reps=25),],
+             #[MLPClass(n_hidden=50), MLPClass(n_hidden=100), MLPClass(n_hidden=150)]]
     tester = ClassifierTester((X, y), tests)
     tester.plot(X, y, boundary)
     plt.show()

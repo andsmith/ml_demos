@@ -7,7 +7,7 @@ from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
 import logging
 
-def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04):
+def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
     """
     Create two classes separated by a spiraling
     decision boundary.  
@@ -40,7 +40,13 @@ def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04):
                                  (1.0, boundary[-1, 1]),
                                  (1, -1)])
     poly = Polygon(square_boundary)
-    points = np.random.rand(n_points, 2)*2 - 1
+    if random:
+        points = np.random.rand(n_points, 2)*2 - 1
+    else:
+        n_points = np.ceil((n_points)).astype(int)
+        points = np.linspace(-1, 1, n_points+2)[1:-1]
+        points = np.vstack(np.meshgrid(points, points)).reshape(2, -1).T
+
     test_points = [Point(p) for p in points]
     labels = np.array([poly.contains(p) for p in test_points])
     return points, labels, square_boundary
