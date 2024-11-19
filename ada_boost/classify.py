@@ -12,6 +12,12 @@ from sklearn.utils._testing import ignore_warnings
 from sklearn.exceptions import ConvergenceWarning
 import warnings
 
+
+def plot_dataset(ax, x, y):
+    ax.plot(x[y, 0], x[y, 1], '.', color='green',  markersize=1)
+    ax.plot(x[~y, 0], x[~y, 1], '.', color='blue', markersize=1)
+
+
 class ClassifierTester(object):
     def __init__(self, dataset, classifiers):
         """
@@ -36,16 +42,18 @@ class ClassifierTester(object):
 
     def plot_result(self, ax, model, boundary, res=500):
         # plot samples (different symbols?)
-        ax.plot(self._x[self._y, 0], self._x[self._y, 1], '.', color='gray',  markersize=1)
-        ax.plot(self._x[~self._y, 0], self._x[~self._y, 1], '.', color='gray', markersize=1)
-
-        # show true boundary
-        ax.plot(boundary[1:-1, 0], boundary[1:-1, 1], 'w:')
+        plot_dataset(ax, self._x, self._y)
 
         # mark incorrect symbols, calc accuracy
         y_hat = model.eval(self._x)
-        incorrect = np.where(y_hat != self._y)[0]
-        ax.plot(self._x[incorrect, 0], self._x[incorrect, 1], 'rx', label='incorrect', markersize=4)
+        false_pos = np.where((y_hat == 1) & (self._y == 0))[0]
+        false_neg = np.where((y_hat == 0) & (self._y == 1))[0]
+        # draw a circle around the false positives & negatives
+        ax.scatter(self._x[false_pos, 0], self._x[false_pos, 1], s=20, facecolors='none', edgecolors=(.5, .5, 1, 1))
+        ax.scatter(self._x[false_neg, 0], self._x[false_neg, 1], s=20, facecolors='none', edgecolors=(.5, 1, .5, 1))
+
+        incorrect = np.concatenate([false_pos, false_neg])
+
         accuracy = 1 - len(incorrect) / len(self._y)
         x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
 
@@ -58,14 +66,24 @@ class ClassifierTester(object):
 
         # display = DecisionBoundaryDisplay.from_estimator(model._model, X, ax=ax)
         # display.plot(ax=ax, xticks=[], yticks=[])
-        ax.contour(xx, yy, p, alpha=0.9, colors='w', levels=[0.5])
+        ax.contour(xx, yy, p, alpha=0.5, colors='w', levels=[0.5])
+        # ax.imshow(p, extent=(x_lim[0], x_lim[1], y_lim[0], y_lim[1]), origin='lower', cmap='coolwarm', alpha=0.3)
+
+        # show true boundary
+        # ax.plot(boundary[1:-1, 0], boundary[1:-1, 1], 'r-')
+        ax.set_aspect('equal')
+        ax.yaxis.set_visible(False)
+        ax.xaxis.set_visible(False)
         return accuracy
 
     def plot(self, X, y, boundary):
         plt.style.use('dark_background')
         fig, axs = plt.subplots(*self._n)
         if self._n[0] == 1:
-            axs = axs[np.newaxis, :]
+            if self._n[1] == 1:
+                axs = np.array([[axs]])
+            else:
+                axs = axs[np.newaxis, :]
 
         for i, row in enumerate(self._classif):
             for j, classifier in enumerate(row):
@@ -118,15 +136,16 @@ class NBClass(object):
     def eval(self, X):
         return self._model.predict(X)
 
+
 @ignore_warnings(category=ConvergenceWarning)
 def fit_mlp(x, y, n_hidden, net_args):
     net = MLPClassifier(hidden_layer_sizes=(n_hidden,), **net_args)
-    
+
     converged = net.n_iter_no_change < net.max_iter
     net.fit(x, y)
     score = net.score(x, y)
     convergence_str = " (not converged)" if not converged else ""
-    print("\t\t\tscore: %f %s" % (score,convergence_str))
+    print("\t\t\tscore: %f %s" % (score, convergence_str))
     return net, score
 
 
@@ -140,13 +159,13 @@ class MLPClass(object):
         if net_args is not None:
             self._net_args.update(net_args)
 
-        self._n_cpus =  cpu_count() -2
+        self._n_cpus = cpu_count() - 1
 
     def __str__(self):
         return 'n_hidden=%i' % self._n_hidden
 
     def fit(self, X, y):
-        logging.info("Fitting NNet(%s), %i times, with %i cores:" % (self, self._n_reps, self._n_cpus)) 
+        logging.info("Fitting NNet(%s), %i times, with %i cores:" % (self, self._n_reps, self._n_cpus))
         work = [(X, y, self._n_hidden, self._net_args) for _ in range(self._n_reps)]
 
         if self._n_cpus == 1:
@@ -166,10 +185,10 @@ class MLPClass(object):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    X, y, boundary = make_spiral_data(6000, 1.25, 1)
-    tests = [[LRClass(), MLPClass(n_reps=100), MLPClass(n_hidden=100)],
-             [DTClass(max_depth=4), DTClass(max_depth=6), DTClass(max_depth=10)],
-             [MLPClass(n_hidden=15, n_reps=100), MLPClass(n_hidden=25, n_reps=25), MLPClass(n_reps=50,n_hidden=20)]]
+    X, y, boundary = make_spiral_data(5000, 1.25, 1)
+    tests = [[LRClass(), DTClass(max_depth=4), DTClass(max_depth=8)],
+             [MLPClass(n_hidden=10, n_reps=30), MLPClass(n_hidden=20, n_reps=40), MLPClass(n_hidden=40, n_reps=30),],
+             [MLPClass(n_hidden=80, n_reps=20), MLPClass(n_hidden=120, n_reps=10), MLPClass(n_hidden=10, n_reps=200)]]
     tester = ClassifierTester((X, y), tests)
     tester.plot(X, y, boundary)
     plt.show()
