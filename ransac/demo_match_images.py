@@ -71,7 +71,7 @@ if __name__ == '__main__':
     plt.ion()
     ransac_args = dict(max_error=5.0,  # pixel distance defining inliers
                        max_iter=1000,
-                       animate_pause_sec=.01,  # 0 to pause between iterations, None to disable plotting
+                       animate_pause_sec=0.6,  # 0 to pause between iterations, None to disable plotting
                        animate_interval=10,
                        )
     demo(**ransac_args)

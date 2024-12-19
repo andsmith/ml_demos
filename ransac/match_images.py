@@ -265,8 +265,8 @@ class RansacAffine(RansacModel):
         showing the detected corners in each image and the corresponding corners induced by the 
         (inverse) transformation.
         """
-        best_fig = plt.figure(figsize=(5, 5.5))
-        current_fig = plt.figure(figsize=(5, 5.5))
+        best_fig = plt.figure(figsize=(6, 5.5))
+        current_fig = plt.figure(figsize=(6, 5.5))
         best_gs = best_fig.add_gridspec(2, 2)
         current_gs = current_fig.add_gridspec(2, 2)
         RansacModel._FIG = {'best': best_fig, 'current': current_fig, 'best_iter': -1}
