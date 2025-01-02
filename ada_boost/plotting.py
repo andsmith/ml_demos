@@ -8,7 +8,8 @@ CIRCLE_SIZE = 100
 def plot_dataset(ax, x, y, *args, **kwargs):
     labels = np.unique(y)
     if len(labels) > 2:
-        raise ValueError("Can only plot binary classification.")
+
+        raise ValueError("Can only plot binary classification, got labels %s." % (labels,))
     
     for label in labels:
         ax.plot(x[y==label, 0], x[y==label, 1], '.', color=LABEL_COLORS[label], **kwargs)

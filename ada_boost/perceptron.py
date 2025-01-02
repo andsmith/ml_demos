@@ -63,7 +63,7 @@ class DecisionStump(object):
                         self._dim = dim
                         self._thresh = thresh
                         self._sign = sign
-                        print("New best stump: dim %i, thresh %.3f, sign %i, error %.3f" % (dim, thresh, sign, error))
+                        #print("New best stump: dim %i, thresh %.3f, sign %i, error %.3f" % (dim, thresh, sign, error))
         return self
     
     def predict_proba(self, X):

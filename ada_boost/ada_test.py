@@ -12,8 +12,8 @@ import logging
 
 def ada_test():
     X, y = make_minimal_data()
-    clf = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), n_estimators=3, algorithm='SAMME')
-    import ipdb; ipdb.set_trace()
+    clf = AdaBoostClassifier(DecisionTreeClassifier(max_depth=1), n_estimators=8, algorithm='SAMME')
+
     clf.fit(X, y)
     y_pred = clf.predict(X)
     print("Iterations(estimators):", clf.n_estimators) # number of estimators actually trained
@@ -29,7 +29,6 @@ def ada_test():
         # print axis and threshold of decision stump
         print('Estimator', i, 'axis:', est.tree_.feature[0], 'threshold:', est.tree_.threshold[0])
         # draw the line and label it with the iteration number
-        #import ipdb; ipdb.set_trace()
         if est.tree_.feature[0] == 1:
             plt.plot(ax.get_xlim(), [est.tree_.threshold[0], est.tree_.threshold[0]], 'k--') 
             plt.text(ax.get_xlim()[1], est.tree_.threshold[0], str(i), verticalalignment='top')

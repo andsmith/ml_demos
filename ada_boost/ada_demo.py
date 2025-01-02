@@ -116,13 +116,13 @@ class AdaDemo(object):
         y = np.linspace(y_min, y_max, n_pts)
         xx, yy = np.meshgrid(x, y)
         points = np.vstack([xx.ravel(), yy.ravel()]).T
-        preds = self.eval_ensenble(points, sign=False)
+        preds = self.eval_ensenble(points, sign=True)
         preds = preds.reshape(n_pts, n_pts)
         #ax.contourf(xx, yy, preds, cmap=plt.cm.RdBu, alpha=0.8)
         # show predictions as an image, with the color indicating the prediction
         image = ax.imshow(preds, extent=(x_min, x_max, y_min, y_max), origin='lower', cmap='RdBu', alpha=.5)
         
-        plt.colorbar(mappable=image, cax=None, ax=ax)
+        #plt.colorbar(mappable=image, cax=None, ax=ax)
         image.set_zorder(-1)
         ax.set_aspect('equal')
 
@@ -147,17 +147,17 @@ class AdaDemo(object):
     def _run(self):
 
         # plot dataset in it's own window before running
-        plt.figure()
-        self._plot_dataset(plt.gca())
-        #plt.show()
-        plt.waitforbuttonpress()
+        #plt.figure()
+        #self._plot_dataset(plt.gca())
+        ##plt.show()
+        #plt.waitforbuttonpress()
 
 
         while True:
             # show weights first
             self._plot_weights(self._weights, self._next_row, self._iter)
             
-
+            logging.info("Iteration %i training w/weights:  %s" % (self._iter, self._weights))
             new_model = DecisionStump()  #
             new_model.fit(self._points, self._labels, sample_weight=self._weights)
 
@@ -166,32 +166,39 @@ class AdaDemo(object):
             misclassified = new_predictions != self._labels
             weighted_loss = np.sum(self._weights[misclassified])
 
+            # stop if weighted loss is too high (> .5)
+            if weighted_loss > .5:
+                logging.info("Stopping, weighted loss too high: %.3f" % weighted_loss)
+                break
+
             # Show new model, its weighted loss.
 
             self._plot_weak(new_model, weighted_loss, self._next_row, self._iter)
             # calculate alpha
-            alpha = .5 * np.log((1 - weighted_loss) / weighted_loss)
+            alpha =  np.log((1 - weighted_loss) / weighted_loss)
 
             # update weights
-            indicators = np.ones(self._n_pts)
-            indicators[misclassified] = -1
-            exponent = -alpha * indicators
-            self._weights *= np.exp(exponent)
+            weights2 = np.exp(np.log(self._weights) + alpha * misclassified * (self._weights > 0))
+            self._weights *= np.exp(alpha * misclassified)            
             self._weights /= np.sum(self._weights)
 
             # update ensemble & evaluate
             self._models.append(new_model)
             self._alphas.append(alpha)
             self._error_rates.append(weighted_loss)
-            new_loss = self._get_global_loss()
-            self._loss.append(new_loss)            
-            logging.info('Iteration {}: w_loss = {}, loss = {}, alpha = {}'.format(self._iter, weighted_loss, self._loss[-1] ,alpha))
+            new_acc = self._get_ensemble_acc()
+            self._loss.append(1.0-new_acc)            
+            logging.info('Iteration {}: w_loss = {}, loss = {}, alpha = {}\n'.format(self._iter, weighted_loss, self._loss[-1] ,alpha))
 
             # show ensemble so far
             self._plot_ensemble( self._next_row, self._iter)
-            plt.show()
+            if new_acc == 1.0:
+                logging.info("Perfect accuracy achieved, stopping.")
+                plt.show()            
+                plt.waitforbuttonpress()
+                break
+            plt.show()            
             plt.waitforbuttonpress()
-
             self._iter += 1
             self._next_row += 1
             if self._next_row >= self._n_rows:
@@ -200,12 +207,10 @@ class AdaDemo(object):
                 self._axs = np.atleast_2d(self._axs)
                 self._next_row = 0
 
-    def _get_global_loss(self):
+    def _get_ensemble_acc(self):
         predictions = self.eval_ensenble()
-        misclassified = predictions != self._labels
-        indicators = np.ones(self._n_pts)
-        indicators[misclassified] = -1 
-        return np.mean(np.exp(-indicators))
+        accuracy = np.mean(predictions == self._labels)
+        return accuracy
 
 def test_draw():
     points, labels = make_bump(20, .25,.2,.4, noise_frac=.01)
