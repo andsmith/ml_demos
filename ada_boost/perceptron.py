@@ -13,27 +13,57 @@ class DecisionStump(object):
         self._thresh = None
         self._sign = None
 
+    @staticmethod
+    def _eval_thresh( X, dim, thresh, sign):
+        """
+        Evaluate the stump on the given data.
+        :param X: data to evaluate (N x 2)
+        :param dim: dimension to split on (0 or 1)
+        :param thresh: threshold to split on
+        :param sign: sign of the split (1 or -1)
+        :returns: predicted labels (N x 1) in {-1, 1}
+        """
+        exceeding = (X[:,dim] > thresh).astype(np.int32)*2-1
+        return sign * exceeding
+
+
+
     def fit(self, X, y, sample_weight=None):
         """
         Fit the model using the training data.
         :param X: training data (N x d)
-        :param y: labels (N x 1), 0 or 1
+        :param y: labels (N x 1), -1 or 1
         :param sample_weight: weights for each sample (N x 1) 
         """
         X = np.array(X)
         N, d = X.shape
         if sample_weight is None:
-            sample_weight = np.ones(N).astype(np.float64) 
+            sample_weight = np.ones(N).astype(np.float64)  / N
         best_error = np.inf
+
         for dim in range(d):
-            for thresh in np.linspace(X[:,dim].min(), X[:,dim].max(), 100):
+            low, high = X[:,dim].min(), X[:,dim].max()
+            # Check midpoint between each pair of points if there are < 100 unique values, otherwise
+            # check 100 points between the min and max
+            if len(np.unique(X[:,dim])) < 100:
+                values = np.unique(X[:,dim])
+                # pad with min and max + epsilon
+                values = np.hstack([low-.01, values, high + .01])
+                threshes =  (values[1:] + values[:-1]) / 2
+            else:
+                threshes = np.linspace(low, high, 100)
+
+            for thresh in threshes:
                 for sign in [-1, 1]:
-                    error = np.sum(sample_weight[y != (X[:,dim] > thresh) * sign])
+                    
+                    y_hat = self._eval_thresh(X, dim, thresh, sign)
+                    error = np.sum(sample_weight[y != y_hat])
                     if error < best_error:
                         best_error = error
                         self._dim = dim
                         self._thresh = thresh
                         self._sign = sign
+                        print("New best stump: dim %i, thresh %.3f, sign %i, error %.3f" % (dim, thresh, sign, error))
         return self
     
     def predict_proba(self, X):
@@ -45,7 +75,10 @@ class DecisionStump(object):
         :param X: data to predict (N x d)
         :return: predicted labels (N x 1)
         """
-        return (X[:,self._dim] > self._thresh) * self._sign
+        exceeding = (X[:,self._dim] > self._thresh) * 2 - 1  # -1 or 1 if exceeding threshold
+        matching = self._sign * exceeding
+        return matching
+    
     def score(self, X, y):
         """
         Return the accuracy of the model on the data.
@@ -60,15 +93,18 @@ class DecisionStump(object):
         Plot the decision boundary of the model on the given axis.
         :param axis: axis to plot on
         """
+        #print("Plotting stump on dim %i, thresh %.3f" % (self._dim, self._thresh))
         if self._dim is None:
             return
         if self._dim == 0:
-            p0 = np.array([self._thresh, 0])
-            p1 = np.array([self._thresh, 1])
+            lims = axis.get_ylim()
+            p0 = np.array([self._thresh, lims[0]])
+            p1 = np.array([self._thresh, lims[1]])
         else:
-            p0 = np.array([0, self._thresh])
-            p1 = np.array([1, self._thresh])
-        axis.plot([p0[0], p1[0]], [p0[1], p1[1]], color='black', *args, **kwargs)
+            lims = axis.get_xlim()
+            p0 = np.array([lims[0], self._thresh])
+            p1 = np.array([lims[1], self._thresh])
+        axis.plot([p0[0], p1[0]], [p0[1], p1[1]],':' ,color='black', *args, **kwargs)
 
 
 class Perceptron(object):
@@ -146,15 +182,17 @@ class Perceptron(object):
 def test_and_plot_stump():
     fig, ax = plt.subplots(2, 2)
     X, y = make_bump(20, 0.3, 0.5, 0.0, 0.0, random=False, separable=True)
-    y = np.int32(y)
+
     # plot data
-    ax[0,0].plot(X[y==0, 0], X[y==0, 1], '.', color='red',  markersize=2)
+    ax[0,0].plot(X[y==-1, 0], X[y==-1, 1], '.', color='red',  markersize=2)
     ax[0,0].plot(X[y==1, 0], X[y==1, 1], '.', color='blue', markersize=2)
     ax[0,0].set_title('Bump dataset (0=red, 1=blue)')
     ax[0,0].set_aspect('equal')
     ax[0,0].yaxis.set_visible(False)
     ax[0,0].xaxis.set_visible(False)
-    
+
+
+
     clf = DecisionStump()
     clf.fit(X, y)
 
@@ -168,16 +206,16 @@ def test_and_plot_stump():
     clf2 = DecisionStump()
     # set weights of "bump" to 1% original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==0 ) & (X[:,1] >= 0.5)] *= 0.01
+    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 0.01
     clf2.fit(X, y, sample_weight=w)
     plot_classifier(ax[1,0], X, y, clf2,None, markersize=2)
 
     ax[1,0].set_title('D-Stump, \n(bump wt. x .01)')
     
     clf3 = DecisionStump()
-    # set weights of "bump" to 10% original
+    # set weights of "bump" to 100x original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==0 ) & (X[:,1] >= 0.5)] *= 100
+    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 100
     clf3.fit(X, y, sample_weight=w)
     
     plot_classifier(ax[1,1], X, y, clf3,None, markersize=2)
@@ -210,7 +248,7 @@ def test_and_plot_perceptron():
     clf2 = Perceptron()
     # set weights of "bump" to 1% original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==0 ) & (X[:,1] >= 0.5)] *= 0.01
+    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 0.01
     clf2.fit(X, y, sample_weight=w)
     plot_classifier(ax[1,0], X, y, clf2,None, markersize=2)
 
@@ -220,7 +258,7 @@ def test_and_plot_perceptron():
     clf3 = Perceptron()
     # set weights of "bump" to 10% original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==0 ) & (X[:,1] >= 0.5)] *= 100
+    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 100
     clf3.fit(X, y, sample_weight=w)
     
     plot_classifier(ax[1,1], X, y, clf3,None, markersize=2)

@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
+from plotting import plot_dataset, plot_classifier, LABEL_COLORS
 import logging
 
 
@@ -91,20 +92,54 @@ def make_bump(n_points, h=.1, w=.1, x_left=0.0, noise_frac=0.000, random=False, 
     # move positive samples down by dy * 1.5 so classes overlap
     if not separable:
         points[labels, 1] -= dy * 1.5
+
+    # make labels in {-1, 1}
+    labels = 2 * labels - 1
     
-
-
     return points, labels
 
 
+def make_minimal_data():
+    """
+    Create a dataset with two classes, arranged like:
+       +  +
+     -    
+             +
+       -  - 
+    I.e. so an axis-aligned, linear decision boundary can only achieve 5/6 accuracy.
+    :returns: points (xy), labels (-1,1)
+    """
+    points = np.array([[0, 0], # -
+                       [1, 0],# -
+                       [2, 1.25], # +
+                       [-1, 1.75], # -
+                       [1, 3], # +
+                       [0, 3]]) # +
+    labels = np.array([-1, -1, 1, -1, 1, 1], dtype=np.float64)
+    return points, labels
+    
+
+def test_minimal():
+    points, labels = make_minimal_data()
+    plt.plot(points[labels==-1, 0], points[labels==-1, 1], '.',color=LABEL_COLORS[-1], label='class -1', markersize=10)
+    plt.plot(points[labels==1, 0], points[labels==1, 1], '.',color=LABEL_COLORS[1], label='class 1', markersize=10)
+    plt.legend()
+    plt.show()
+
+    from perceptron import DecisionStump
+    clf = DecisionStump()
+    clf.fit(points, labels)
+    plot_classifier(plt.gca(), points, labels, clf, boundary=None)
+    plt.show()
+    
+
 def test_bump():
     points, labels = make_bump(200)
-    #plt.style.use('dark_background')
+    # plt.style.use('dark_background')
     plt.plot(points[labels, 0], points[labels, 1], '.', label='class 0', markersize=2)
     plt.plot(points[~labels, 0], points[~labels, 1], '.', label='class 1', markersize=2)
     plt.legend()
     plt.show()
-
 
 
 def test_spiral():
@@ -121,4 +156,5 @@ def test_spiral():
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    test_bump()
+    #test_bump()
+    test_minimal()
