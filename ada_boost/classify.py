@@ -1,4 +1,4 @@
-from spiral import make_spiral_data, make_bump
+from make_data import make_spiral_data, make_bump
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LogisticRegression

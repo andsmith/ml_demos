@@ -13,11 +13,12 @@ def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
     """
     Create two classes separated by a spiraling
     decision boundary.  
-    :param n_points: total number of points to generate
+    :param n_points: sqrt(number of points to generate) (i.e. side length if random=False)
     :param turns: how many times the boundary is twisted
     :param ecc: squish or stretch the spiral
     :returns: points, labels
     """
+
     logging.info("Making spiral classification dataset with %i points and %.2f turns." % (n_points, turns))
     n_samples = int(100*turns*2)
 
@@ -43,7 +44,7 @@ def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
                                  (1, -1)])
     poly = Polygon(square_boundary)
     if random:
-        points = np.random.rand(n_points, 2)*2 - 1
+        points = np.random.rand(n_points**2, 2)*2 - 1
     else:
         n_points = np.ceil((n_points)).astype(int)
         points = np.linspace(-1, 1, n_points+2)[1:-1]
@@ -51,10 +52,11 @@ def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
 
     test_points = [Point(p) for p in points]
     labels = np.array([poly.contains(p) for p in test_points])
+    labels = 2 * labels - 1
     return points, labels, square_boundary
 
 
-def make_bump(n_points, h=.1, w=.1, x_left=0.0, noise_frac=0.000, random=False, separable=False):
+def make_bump(n_points, h=.1, w=.1, x_left=0.0, noise_frac=0.000, random=False, separable=True):
     """
     Create a dataset separable by a horizontal line,except for a rectangular bump at the specified location.
     :param n_points: number of points on one side of the grid (in the unit square) to generate (if random = false, else total number of points)
@@ -95,9 +97,22 @@ def make_bump(n_points, h=.1, w=.1, x_left=0.0, noise_frac=0.000, random=False, 
 
     # make labels in {-1, 1}
     labels = 2 * labels - 1
-    
-    return points, labels
 
+    return points, labels
+def make_checker_data(n_pts=20, clip_cols=0):
+    
+    X0, X1 = np.meshgrid(np.linspace(-1, 1,n_pts), np.linspace(-1,1,n_pts))
+    Y_in = (X0 > 0 ) ^ (X1 > 0)
+    if clip_cols>0:
+        X = np.hstack([X0[:,:-clip_cols].reshape(-1,1),X1[:,:-clip_cols].reshape(-1,1)])
+        y = np.ones(X.shape[0])
+        y[~Y_in[:,:-clip_cols].reshape(-1)] = -1
+    else:
+        X = np.hstack([X0.reshape(-1,1),X1.reshape(-1,1)])
+        y = np.ones(X.shape[0])
+        y[~Y_in.reshape(-1)] = -1
+
+    return X, y
 
 def make_minimal_data():
     """
@@ -152,9 +167,23 @@ def test_spiral():
     plt.plot(line[:, 0], line[:, 1], 'w-', label='decision boundary')
     plt.legend()
     plt.show()
+def test_checker():
+    n_pts=20
+    X, y = make_checker_data(n_pts=n_pts, clip_cols=0)
+    plt.subplot(1,2,1)
+    plt.plot(X[y==1, 0], X[y==1, 1], '.', label='class 1', markersize=2)
+    plt.plot(X[y==-1, 0], X[y==-1, 1], '.', label='class -1', markersize=2)
+    plt.title('Checkerboard dataset, %s x %s points' % (n_pts, n_pts))
+    X, y = make_checker_data(n_pts=n_pts, clip_cols=1)
+    plt.subplot(1,2,2)
+    plt.plot(X[y==1, 0], X[y==1, 1], '.', label='class 1', markersize=2)
+    plt.plot(X[y==-1, 0], X[y==-1, 1], '.', label='class -1', markersize=2)
+    plt.title('Checkerboard dataset, %s x %s points' % (n_pts, n_pts-1))
 
+    plt.show()
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     #test_bump()
     test_minimal()
+    test_checker()

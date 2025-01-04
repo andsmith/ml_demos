@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 import matplotlib.pyplot as plt
-from spiral import make_bump
+from make_data import make_bump
 from classify import plot_classifier
 from scipy.optimize import minimize
 
