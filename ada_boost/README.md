@@ -22,4 +22,21 @@ I.e. a linear combination of the weak-learner classifiers.  AdaBoost learns each
 
 Run `> python ada_demo.py -h` to see the options, most notably `--kind`, determining the dataset used. There are four options:
  * `minimal`: A small dataset with only 6 points to illustrate the algorithm clearly.
- * `bump`: 
+ * `bump`: Two classes separable by a line except for a small "bump" in the decision boundary.
+ * `checker`:  classic XOR problem
+ * `spiral`:  A spiral shaped decision boundary, tough for any classifier using straight lines.
+ 
+![datasets](/ada_boost/assets/datasets.png)
+
+Running `> python ada_demo.py --kind minimal` demonstrates each iteration, using decision stumps as weak learners:
+![demo](/ada_boost/assets/demo_minimal.png)
+The left-most column shows the weights given to each sample, all equal in iteration 0.  The second column shows the distribution of those weights (sorted values). The third column shows the weak learner added at each iteartion given the weighted data, its misclassified points (outlined in the correct class color), and its weighted loss (y-axis label).  The fourth column shows the decision boundary of the ensemble after adding each weak learner, with misclassified points highlighted.
+
+### compare with Scikit-learn:
+
+Run `> python ada_test.py bump -n 3 -p 15` to run `sklearn.ensemble.AdaBoostClassifier` on the 'bump' dataset:
+![scikit_bump](/ada_boost/assets/scikit_adaboost_bump.png)
+
+
+### Compare decision boundaries of different classifiers
+*coming soon...*

@@ -8,3 +8,5 @@ Demos for Machine Learning Reading Group
 * [RANSAC - Line fitting](/ransac/README.md)
 
 * [RANSAC - Image alignment](/ransac/README.md#image-transformation-estimation-demo)
+
+* [AdaBoost - Build a strong learner from an ensemble of weak learners](/ada_boost/README.MD)

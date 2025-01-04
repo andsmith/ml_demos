@@ -61,9 +61,10 @@ def ada_test(X, y, n_estimators=100):
     plt.xlim(x_lim)
     plt.ylim(y_lim)
     # plt.axis('equal')
-    plt.legend(['classified 0', 'classified 1', 'misclassified 1', 'misclassified 0', 'decision boundary $n$'])
+    plt.legend(['class 0 hit', 'class 1 hit', 'class 1 miss', 'class 0 miss', 'stump $n$'] ,loc='lower right')
     plt.title("Final classification of AdaBoost with (%i) decision stumps\nAccuracy: %.2f" %
               (clf.n_estimators, accuracy_score(y, y_pred)))
+    plt.tight_layout()
     plt.show()
 
 

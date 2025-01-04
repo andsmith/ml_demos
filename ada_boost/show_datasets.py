@@ -24,7 +24,7 @@ def show_datasets():
         ax.set_aspect('equal')
         ax.yaxis.set_visible(False)
         ax.xaxis.set_visible(False)
-    plt.tight_layout()
+    #plt.tight_layout()
     plt.show()
 
 
