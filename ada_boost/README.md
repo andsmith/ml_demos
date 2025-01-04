@@ -11,11 +11,15 @@ $$
 where
 
 $$
-\text{Sign}(v) =  \begin{cases}
--1 & \text{if } v < 0 \\
-1 & \text{otherwise.}\\
-\end{cases}
+\text{Sign}(v) =\left\{
+\begin{array}{ll}
+-1 &\text{if } v < 0 \\
+1 &\text{otherwise.}\\
+\end{array}
+\right
 $$
+
+
 I.e. a linear combination of the weak-learner classifiers.  AdaBoost learns each term sequentially: 
 * each new weak learner $f_{j+1}(x)$ is trained input that has been re-weighted to focus more on samples that the combined efforts of the previous learners ($1$ through $j$) continue to misclassify.  
 * The boosting weight $\alpha_{j+1}$ is then chosen to optimize the output of the ensemble $F(x)$ over the dataset.
