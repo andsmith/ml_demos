@@ -1,13 +1,15 @@
 # AdaBoost
 
-Boosting algorithms build an accurate ensemble classifer from $N$ "weak learners", i.e. classifiers that do little better than guessing.  Let $X$ be the set of $I$ input points, and $Y$ be the set of their labels,  $y_i \in \\{-1, 1\\}$.  Let each weak learner, $f_j(x_i)$, output its classification of $x_i$ also as a value in $\{-1, 1\}$. 
+Boosting algorithms build an accurate ensemble classifer from $N$ "weak learners", i.e. classifiers that do little better than guessing.  Let $X$ be the set of $I$ input points, and $Y$ be the set of their labels,  $y_i \in \\{-1, 1\\}$.  Let each weak learner, $f_j(x_i)$, output its classification of $x_i$ also as a value in $\\{-1, 1\\}$. 
 
 Then the goal of [AdaBoost](https://en.wikipedia.org/wiki/AdaBoost) is to learn an ensemble classifier of the form
 
 $$
 F(x_i) = \text{Sign}\left(\sum_{ja=1}^N \alpha_j f_j(x_i) \right) 
 $$
+
 where
+
 $$
 \text{Sign}(v) =  \begin{cases}
 -1 & \text{if } v < 0 \\
