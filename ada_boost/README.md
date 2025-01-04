@@ -11,20 +11,11 @@ $$
 where
 
 $$
-\text{Sign}(v) =\left\{
-\begin{array}{ll}
--1 &\text{if } v < 0 \\
-1 &\text{otherwise.}\\
-\end{array}
-\right
-$$
-or 
-$$
 \begin{equation}
-(p, y) = 
+\text{Sign}(v)  = 
 \begin{cases}
-    -\log(p) & \text{if }~~ y = 1 \\
-    -\log(1-p) & \text{otherwise.}
+    -1 & \text{if }~~ v < 0 \\
+    1 & \text{otherwise.}
 \end{cases}
 \end{equation}
 $$
