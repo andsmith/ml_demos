@@ -115,9 +115,9 @@ class AdaDemo(object):
         self._plot_boundary(ax)
         accuracy = np.mean(y_hat == self._labels)
         if row == 0:
-            ax.set_title('Ensemble accuracy')
+            ax.set_title('Ensemble')
 
-        ax.set_ylabel('%.3f' % (accuracy,))
+        ax.set_ylabel('Acc: %.3f' % (accuracy,))
         ax.set_yticklabels([])
         ax.set_yticks([])
         ax.yaxis.set_visible(True)
@@ -168,8 +168,8 @@ class AdaDemo(object):
 
         new_model.plot(ax)
         if row == 0:
-            ax.set_title('Weighted loss')
-        ax.set_ylabel('%.3f' % (w_loss,))
+            ax.set_title('Weak learner')
+        ax.set_ylabel('w-loss: %.3f' % (w_loss,))
         ax.set_yticklabels([])
         ax.set_yticks([])
         ax.yaxis.set_visible(True)
@@ -270,7 +270,7 @@ class AdaDemo(object):
         plot_classifier(ax, self._points, self._labels, model=y_hat, boundary=None)
         self._plot_boundary(ax)
         accuracy = np.mean(y_hat == self._labels)
-        ax.set_title('Ensemble accuracy\n%% %.3f' % (100 * accuracy,))
+        ax.set_title('Ensemble\n%% %.3f' % (100 * accuracy,))
         ax.yaxis.set_visible(False)
         ax.xaxis.set_visible(False)
         #plt.tight_layout()

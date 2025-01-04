@@ -1,13 +1,13 @@
 # AdaBoost
 
-Boosting algorithms build an accurate ensemble classifer from $N$ "weak learners", i.e. classifiers that do little better than guessing.  Let $X$ be the set of $I$ input points, and $Y$ be the set of their labels,  $y_i \in \{-1, 1\}$.  Let each weak learner, $f_j(x_i)$, output its classification of $x_i$ also as a value in $\{-1, 1\}$. 
+Boosting algorithms build an accurate ensemble classifer from $N$ "weak learners", i.e. classifiers that do little better than guessing.  Let $X$ be the set of $I$ input points, and $Y$ be the set of their labels,  $y_i \in \\{-1, 1\\}$.  Let each weak learner, $f_j(x_i)$, output its classification of $x_i$ also as a value in $\{-1, 1\}$. 
 
 Then the goal of [AdaBoost](https://en.wikipedia.org/wiki/AdaBoost) is to learn an ensemble classifier of the form
 
 $$
-F(x_i) = \text{Sign}\left(\sum_{ja=1}^N \alpha_j f_j(x_i) \right) \text{   where}
+F(x_i) = \text{Sign}\left(\sum_{ja=1}^N \alpha_j f_j(x_i) \right) 
 $$
-
+where
 $$
 \text{Sign}(v) =  \begin{cases}
 -1 & \text{if } v < 0 \\
@@ -30,6 +30,7 @@ Run `> python ada_demo.py -h` to see the options, most notably `--kind`, determi
 
 Running `> python ada_demo.py --kind minimal` demonstrates each iteration, using decision stumps as weak learners:
 ![demo](/ada_boost/assets/demo_minimal.png)
+
 The left-most column shows the weights given to each sample, all equal in iteration 0.  The second column shows the distribution of those weights (sorted values). The third column shows the weak learner added at each iteartion given the weighted data, its misclassified points (outlined in the correct class color), and its weighted loss (y-axis label).  The fourth column shows the decision boundary of the ensemble after adding each weak learner, with misclassified points highlighted.
 
 ### compare with Scikit-learn:
