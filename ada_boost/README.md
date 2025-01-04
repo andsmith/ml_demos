@@ -18,7 +18,16 @@ $$
 \end{array}
 \right
 $$
-
+or 
+$$
+\begin{equation}
+(p, y) = 
+\begin{cases}
+    -\log(p) & \text{if }~~ y = 1 \\
+    -\log(1-p) & \text{otherwise.}
+\end{cases}
+\end{equation}
+$$
 
 I.e. a linear combination of the weak-learner classifiers.  AdaBoost learns each term sequentially: 
 * each new weak learner $f_{j+1}(x)$ is trained input that has been re-weighted to focus more on samples that the combined efforts of the previous learners ($1$ through $j$) continue to misclassify.  
