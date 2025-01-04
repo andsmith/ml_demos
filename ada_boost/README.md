@@ -5,10 +5,9 @@ Boosting algorithms build an accurate ensemble classifer from $N$ "weak learners
 Then the goal of [AdaBoost](https://en.wikipedia.org/wiki/AdaBoost) is to learn an ensemble classifier of the form
 
 $$
-F(x_i) = \text{Sign}\left(\sum_{ja=1}^N \alpha_j f_j(x_i) \right) 
+F(x_i) = \text{Sign}\left(\sum_{ja=1}^N \alpha_j f_j(x_i) \right) \text{where,}
 $$
 
-where
 
 $$
 \begin{equation}
