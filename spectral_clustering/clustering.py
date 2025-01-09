@@ -34,6 +34,8 @@ def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_p
     :param pt_size: size of points (pt_size x pt_size boxes)
     """
     points_scaled = (points * img.shape[1::-1]).astype(int)
+    if cluster_ids is None:
+        cluster_ids = np.zeros(points.shape[0],dtype=np.int32)
 
     if clip_unit:
         valid = (points_scaled[:, 0] >= margin_px) & (points_scaled[:, 0] < img.shape[1] - margin_px) & \
@@ -57,6 +59,18 @@ class KMeansAlgorithm(ClusteringAlgorithm):
 
     def cluster(self, x):
         return self._kmeans.fit_predict(x)
+    
+class SpectralAlgorithm(ClusteringAlgorithm):
+    def __init__(self, k, n_nearest, kind):
+        super().__init__('Spectral', k)
+        self._n_nearest = n_nearest
+        self._kind = kind
+
+    def cluster(self, x):
+        # x fit
+        
+        # x predict
+        return np.random.randint(0, self._k, x.shape[0])
 
 
 def test_render_clustering():

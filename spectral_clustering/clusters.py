@@ -70,7 +70,6 @@ class Cluster(ABC):
         Mouse moved to (x,y), is it over one of our control points?
         if so, set mousover state and return True.
         """
-        print("UPDATE MOUSE POS", x, y)
         #import ipdb; ipdb.set_trace()
         tol_px_sq = tol_px**2
         for ctrl in CTRL_ORDER:
@@ -116,7 +115,6 @@ class Cluster(ABC):
                 new_r1 = np.linalg.norm(np.array([x, y]) - self._ctrl[CtrlPt.center])
                 old_theta1 = np.arctan2(self._ctrl[CtrlPt.p1][1] - self._ctrl[CtrlPt.center][1],
                                         self._ctrl[CtrlPt.p1][0] - self._ctrl[CtrlPt.center][0])
-                print("OLD THETA",np.rad2deg( old_theta1))
                 self._ctrl[CtrlPt.p1] = self._ctrl[CtrlPt.center] + np.array([new_r1 * np.cos(old_theta1),
                                                                             new_r1 * np.sin(old_theta1)])   
             else:

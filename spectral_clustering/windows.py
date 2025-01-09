@@ -4,7 +4,7 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox
+from util import scale_bbox, image_from_floats
 import logging
 from tools import RadioButtons, Slider, Button
 from clustering import render_clustering, KMeansAlgorithm
@@ -143,7 +143,6 @@ class UiWindow(Window):
         points = []
         for cluster in self._clusters:
             points.append(cluster.get_points(n_per_cluster))
-
         """
         # for now, random
         for _ in range(2):  # three test clusters
@@ -201,7 +200,6 @@ class UiWindow(Window):
             self._clusters[-1].update_mouse_pos(x, y)
             self._clusters[-1].start_adjusting()
 
-            print("M-state", self._clusters[-1]._ctrl_mouse_over, self._clusters[-1]._ctrl_held)
             self._adjusting_ind = len(self._clusters) - 1
             return True
 
@@ -217,7 +215,6 @@ class UiWindow(Window):
         Un-hold it.
         """
         if self._adjusting_ind is not None:
-            print("Un-clicking cluster", self._adjusting_ind)
             if self._clusters[self._adjusting_ind].stop_adjusting(self.bbox):
                 # if the cluster wants to be removed
                 del self._clusters[self._adjusting_ind]
@@ -239,7 +236,6 @@ class UiWindow(Window):
         """
         Lookup current params, create a cluster with them.
         """
-        print("Creating cluster at", x, y)
         c_name = self.app.windows['tools'].get_value('kind')
         cluster = CLUSTER_TYPES[c_name](x, y, self.bbox)
         return cluster
@@ -266,17 +262,17 @@ class ToolsWindow(UiWindow):
                       'alg_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['alg_radio'], indented_bbox),
                                                 'Algorithm',
                                                 ['Unnormalized', 'Normalized', 'K-means'],
-                                                default_selection=2),
+                                                default_selection=0),
                       'sim_graph_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['sim_graph_radio'], indented_bbox),
                                                       'Sim Graph',
-                                                      ['Epsilon', 'K-NN', 'Full'],
-                                                      default_selection=1),
+                                                      ['epsilon', 'K-nn', 'full'],
+                                                      default_selection=0),
                       'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], indented_bbox),
                                                  'N-Nearest:',
                                                  [3, 20], 5, format_str="=%i"),
                       'epsilon_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['epsilon_slider'], indented_bbox),
                                                'e (dist)',
-                                               [1., 50], 5, format_str="=%.2f"),
+                                               [1., 50], 25, format_str="=%.2f"),
 
                       'n_pts_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], indented_bbox),
                                              'Num Pts',
@@ -333,6 +329,10 @@ class ToolsWindow(UiWindow):
             return int(self.tools['n_nearest_slider'].get_value())
         elif param == 'n_pts':
             return int(self.tools['n_pts_slider'].get_value())
+        elif param == 'epsilon':
+            return self.tools['epsilon_slider'].get_value()
+        elif param == 'sim_graph':
+            return self.tools['sim_graph_radio'].get_value()
         elif param == 'k':
             return int(self.tools['k_slider'].get_value())
         else:
@@ -367,7 +367,6 @@ class ClustersWindow(UiWindow):
         """
         self._frame = self._blank.copy()
         render_clustering(self._frame, points, cluster_ids, colors, margin_px=self.margin_px)
-        print("Regenerated cluster window")
 
     def clear(self):
         self._frame = self._blank.copy()
@@ -378,4 +377,56 @@ class ClustersWindow(UiWindow):
 
 
 class EigenvectorsWindow(SpectrumWindow):
+    pass
+
+
+class SimMatrixWindow(SpectrumWindow):
+    def __init__(self, name, win_size, app):
+        super().__init__(name, win_size, app)
+        self._w = (self.bbox['x'][1] - self.bbox['x'][0])
+        self._h = (self.bbox['y'][1] - self.bbox['y'][0])
+        self._s =int( np.min((self._w, self._h)))
+        self._pad_x = self._w > self._h
+        self._m = None
+        self._image_rgb_resized = None
+
+    def set_graph(self, sim_mat):
+        """
+        Set to display on next render.
+        :param sim_mat: spectral.SimilarityGraph instance
+        """
+        self._m = sim_mat.get_matrix()     
+        img_full = image_from_floats(self._m)
+        img_resized = cv2.resize(img_full, (self._s, self._s))
+        #import ipdb; ipdb.set_trace()
+        self._image_rgb_resized = cv2.merge((img_resized, img_resized, img_resized))
+        print("Image created: shape %s, mean %.4f" % (self._image_rgb_resized.shape, np.mean(self._image_rgb_resized)))
+        cv2.imwrite('sim_matrix_resized.png', self._image_rgb_resized)
+        cv2.imwrite('sim_matrix_full.png', img_full)
+
+    def clear(self):
+        self._m = None
+        self._image_rgb_resized = None
+
+    def render(self, img, active=False):
+
+        """
+        Render the window onto the image.
+        For now grayscale, min_value=(0,0,0), max_value=(255,255,255)
+        """
+        if self._image_rgb_resized is None:
+            # bbox and title
+            super().render(img, active=active)
+        else:
+            if self._pad_x:
+                padding = self._w - self._h
+                pad_left = padding // 2
+                #img = np.zeros((self._h, self._w, 3), np.uint8) + LAYOUT['colors']['bkg']
+                img[self.bbox['y'][0]:self.bbox['y'][0]+self._s, pad_left:pad_left+self._s] = self._image_rgb_resized
+                cv2.imwrite("taco.png", img)
+            else:
+                raise NotImplementedError()
+
+
+class GraphStatsWindow(SpectrumWindow):
     pass

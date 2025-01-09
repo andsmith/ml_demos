@@ -8,25 +8,27 @@ Windows are laid out rougly:
 |  (click to add points)          |-----------------|
 |                                 |  eigenvectors   |
 |---------------------------------|-----------------|       
-|  sim_matrix    graph_stats      |  clustering     |
+|  sim_matrix  | graph_stats      |  clustering     |
 |---------------------------------------------------|
 | toolbar                                           |
 |---------------------------------------------------| 
 """
 
 
-
-
-LAYOUT = {"windows": {'ui': {'x': (0, .666),  # scale from unit square to window size
-                             'y': (0, .666)},
-                      'tools': {'x': (0, .666),
-                                'y': (.667, 1)},
+LAYOUT = {"windows": {'ui': {'x': (0, .667),  # scale from unit square to window size
+                             'y': (0, .5)},
+                      'tools': {'x': (0, .667),
+                                'y': (.75, 1)},
+                      'spectrum': {'x': (.667, 1),
+                                   'y': (0, .333)},
                       'eigenvectors': {'x': (.667, 1),
                                        'y': (.333, .667)},
+                      'sim_matrix': {'x': (0, .25),
+                                     'y': (.5, .75)},
+                      'graph_stats': {'x': (.25, .666),
+                                      'y': (.5, .75)},
                       'clusters': {'x': (.667, 1),
-                                   'y': (.667, 1)},
-                      'spectrum': {'x': (.667, 1),
-                                   'y': (0, .333)}},
+                                   'y': (.667, 1)}},
           'colors': {'bkg': COLORS['white'],
                      'border': COLORS['gray'],
                      'active_border': COLORS['black'],
@@ -64,9 +66,9 @@ Toolbar layout roughly:
 TOOLBAR_LAYOUT = {'kind_radio': {'x': (0, .3), 'y': (0, .67)},
                   'alg_radio': {'x': (.3, .6), 'y': (0, .67)},
                   'sim_graph_radio': {'x': (.6, 8), 'y': (0, .67)},
-                  'k_slider': {'x': (.8, 1), 'y': (.17, .43)},
-                  'n_nearest_slider': {'x': (.8, 1), 'y': (.43, .67)},
-                  'epsilon_slider': {'x': (.8, 1), 'y': (.67, .90)},
+                  'k_slider': {'x': (.8, 1), 'y': (.0, .3)},
+                  'n_nearest_slider': {'x': (.8, 1), 'y': (.3, .6)},
+                  'epsilon_slider': {'x': (.8, 1), 'y': (.6, .90)},
                   'n_pts_slider': {'x': (.33, 1), 'y': (.67, 1)},
                   'run_button': {'x': (0, .33/2), 'y': (.67, 1)},
                   'clear_button': {'x': (.33/2, .33), 'y': (.67, 1)}}

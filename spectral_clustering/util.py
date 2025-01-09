@@ -1,6 +1,15 @@
 import numpy as np
 import cv2
 
+def image_from_floats(floats):
+    small, big = floats.min(), floats.max()
+    values = (floats - small) / (big - small) * 255
+    return values.astype(np.uint8)
+
+def test_image_from_floats():
+    image = np.random.randn(100, 100)
+    image_uint8 = image_from_floats(image)
+    cv2.imwrite('test_image_from_floats.png', image_uint8)
 
 def scale_bbox(bbox_rel, bbox_abs):
     """
@@ -143,5 +152,5 @@ def sample_ellipse(center, p0, p1, n, random_state):
     return points
 
 if __name__ == '__main__':
-    test_bbox_scaling()
+    test_image_from_floats()
     print("All tests passed!")

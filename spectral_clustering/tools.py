@@ -25,7 +25,7 @@ class Tool(ABC):
     def __init__(self, bbox, name):
         self._bbox = bbox
         self._name = name
-        self._spacing_px = 7
+        self._spacing_px = 4
 
     @abstractmethod
     def render(self, img):
