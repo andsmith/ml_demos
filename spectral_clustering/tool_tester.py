@@ -79,6 +79,6 @@ def test_slider():
 
 
 if __name__ == "__main__":
-    # test_radio()
-    #test_button()
+    test_radio()
+    test_button()
     test_slider()

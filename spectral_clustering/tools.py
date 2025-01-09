@@ -77,6 +77,7 @@ class Slider(Tool):
         self._range = range
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
+
         self._calc_dims()
 
         self._moused_over = False
@@ -99,7 +100,7 @@ class Slider(Tool):
                            'y': [self._bbox['y'][0]+self._spacing_px, self._y_midline-self._spacing_px]}
 
         # test font size with random value
-        test_val = 50.  # self._range[0] + (self._range[1] - self._range[0]) * np.random.rand()
+        test_val =self._range[1] 
         test_str = self._name + self._format_str.format(test_val)
 
         self._font_size, _ = calc_font_size([test_str], self._text_bbox, self._font, 0)
@@ -123,12 +124,15 @@ class Slider(Tool):
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
         # bbox
-        #cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+        cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
         # title
         val = self.get_value()
         slider_str = self._name + self._format_str.format(val)
         cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
+        # text bbox
 
+        cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
+                      (self._text_bbox['x'][1], self._text_bbox['y'][1]), COLORS['red'].tolist(), 1)
         # slider bar
         slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
         cv2.line(img, (self._s_left, slider_y), (self._s_right, slider_y), self._colors['idle'], 1)
@@ -184,8 +188,10 @@ class Button(Tool):
         self._text = text
         self._callback = callback
         self._font = cv2.FONT_HERSHEY_SIMPLEX
-
-        self._font_size, _ = calc_font_size([text], bbox, self._font, self._spacing_px)
+        self._text_bbox = {'x': (bbox['x'][0] + self._spacing_px, bbox['x'][1] - self._spacing_px),
+                           'y': (bbox['y'][0] + self._spacing_px, bbox['y'][1] - self._spacing_px)}
+    
+        self._font_size, _ = calc_font_size([text], self._text_bbox, self._font, 0)
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
         self._calc_dims()
         self._moused_over = False

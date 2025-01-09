@@ -31,7 +31,6 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
         total_width = max(title_width, max(text_widths))
         item_height = text_heights[0]
         if total_height < text_area_height and total_width < text_area_width:
-            #print("Found font size", font_size)
             return font_size, int(item_height/2)
     #print("Failed to find good font size, using smallest.")
     return np.min(font_sizes), np.min(font_sizes)//2
