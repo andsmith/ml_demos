@@ -157,8 +157,9 @@ class UiWindow(Window):
         # draw points
         # render cluster metadata
         #print("Rendering %i clusters" % len(self._clusters))
+        n_points = self.app.windows['tools'].get_value('n_pts')
         for cluster in self._clusters:
-            cluster.render(img)
+            cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
 
         status = "N clusters: %i" % len(self._clusters)
         text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][1] - self.margin_px)

@@ -47,6 +47,7 @@ class ClusterCreator(object):
         self._mouse_pos = None
         self._cluster_colors = None  # update only when K changes
         self._clicked_pos = None
+        self.show_cluster_ctrls = True
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
@@ -111,6 +112,9 @@ class ClusterCreator(object):
             k = cv2.waitKey(1) & 0xFF
             if k & 0xFF == 27 or k == ord('q'):
                 break
+            elif k == ord(' '):
+                self.show_cluster_ctrls = not self.show_cluster_ctrls
+                print("Show cluster controls: %s" % self.show_cluster_ctrls)
             elif self._active_window_name is not None:
                 self.windows[self._active_window_name].keypress(k)
 

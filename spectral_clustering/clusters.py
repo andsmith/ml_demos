@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 import cv2
 from colors import COLORS
-from util import bbox_contains,get_ellipse_points
+from util import bbox_contains,get_ellipse_points,sample_ellipse
 class CtrlPt(IntEnum):
     """
     Enum for the control points of the cluster.
@@ -138,7 +138,7 @@ class Cluster(ABC):
         """
         pass
 
-    def render(self, img):
+    def render(self, img, n_pts, show_ctrls):
         """
         Render the cluster on the image.
         Draw center and points p0, p1, all the appropriate color.
@@ -149,35 +149,49 @@ class Cluster(ABC):
         #print("HOLD STATE", self._ctrl_held)
         #print("\n")
         
-        # draw major/minor axes on BOTH sides of center
-        # major
-
-        def _draw_symm_line(center, p, color):
-            cv2.line(img, (int(center[0]), int(center[1])),
-                    (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
-            cv2.line(img, (int(center[0]), int(center[1])),
-                    (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
+        if show_ctrls:
+            def _draw_symm_line(center, p, color):
+                    cv2.line(img, (int(center[0]), int(center[1])),
+                            (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
+                    cv2.line(img, (int(center[0]), int(center[1])),
+                            (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
+                # draw axes
+            _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
+            _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
             
-        # draw ellipse
-        pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
-        cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)  
-
-        _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
-        _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
-        
-        # draw control points, in this order:
-        draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
-
-        for ctrl in draw_pts:
-            pos = self._ctrl[ctrl]
-            color = self._colors['ctrl_idle']
-            if ctrl == self._ctrl_mouse_over:
-                color = self._colors['ctrl_mouse_over']
-            elif ctrl == self._ctrl_held:
-                color = self._colors['ctrl_held']
+            # draw ellipse
+            pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
+            cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)  
             
-            pos_screen = int(pos[0]), int(pos[1])
-            cv2.circle(img,pos_screen, DRAW_PT_SIZE, color, -1, cv2.LINE_AA)
+        # draw sample points
+        pts = self.get_points(n_pts)
+        pts_size = 1
+        if pts.shape[0] < 1000:
+            pts_size = 2
+        if pts.shape[0] < 100:
+            pts_size = 3
+        for pt in pts:
+            px, py = int(pt[0]), int(pt[1])
+            if pts_size==1:
+                img[py,px] = self._color
+            else:
+                img[py:py+pts_size,px:px+pts_size] = self._color
+            
+
+        if show_ctrls:
+            # draw control points, in this order:
+            draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
+
+            for ctrl in draw_pts:
+                pos = self._ctrl[ctrl]
+                color = self._colors['ctrl_idle']
+                if ctrl == self._ctrl_mouse_over:
+                    color = self._colors['ctrl_mouse_over']
+                elif ctrl == self._ctrl_held:
+                    color = self._colors['ctrl_held']
+                
+                pos_screen = int(pos[0]), int(pos[1])
+                cv2.circle(img,pos_screen, DRAW_PT_SIZE, color, -1, cv2.LINE_AA)
 
 
 class EllipseCluster(Cluster):
@@ -186,23 +200,10 @@ class EllipseCluster(Cluster):
 
     def get_points(self, n):
         self._random_state = np.random.RandomState(self._rnd_seed)
-        # for now generate N random points in a .1x .1 square about the center
-        # then rotate and scale them to the ellipse
-        pts = np.random.rand(n, 2) * .1 - .05
-
-        # rotate and scale
-        # rotate by angle theta
-        theta = np.arctan2(self._ctrl[CtrlPt.p1][1] - self._ctrl[CtrlPt.center][1],
-                           self._ctrl[CtrlPt.p1][0] - self._ctrl[CtrlPt.center][0])
-        c, s = np.cos(theta), np.sin(theta)
-        R = np.array([[c, -s], [s, c]])
-        # scale by lengths of principal axes
-        pts = np.dot(pts, R.T)
-        pts[:, 0] *= np.linalg.norm(self._ctrl[CtrlPt.p0] - self._ctrl[CtrlPt.center])
-        pts[:, 1] *= np.linalg.norm(self._ctrl[CtrlPt.p1] - self._ctrl[CtrlPt.center])
-        # translate to center
-        pts += self._ctrl[CtrlPt.center]
-        return pts
+        points = sample_ellipse(self._ctrl[CtrlPt.center],
+                                 self._ctrl[CtrlPt.p0], 
+                                 self._ctrl[CtrlPt.p1], n, self._random_state)
+        return points
 
 
 CLUSTER_TYPES = {'Ellipse': EllipseCluster}

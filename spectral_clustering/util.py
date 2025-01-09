@@ -92,3 +92,22 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
 
 def bbox_contains(box, x, y):
     return box['x'][0] <= x <= box['x'][1] and box['y'][0] <= y <= box['y'][1]
+
+
+
+def sample_ellipse(center, p0, p1, n, random_state):
+    """
+    Generate N random points inside the ellipse.
+    """
+    # get the major and minor axes
+    major_axis = np.linalg.norm(p0 - center)
+    minor_axis = np.linalg.norm(p1 - center)
+    # get the angle of the major axis
+    angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
+    # get the points on the ellipse
+    angles_and_radii_rands = random_state.uniform(0, 1, (n, 2))
+    angles = angles_and_radii_rands[:, 0] * 2 * np.pi
+    radii  = np.sqrt(angles_and_radii_rands[:, 1])
+    points = np.array([center[0] + major_axis * radii * np.cos(angle) * np.cos(angles) - minor_axis * radii * np.sin(angle) * np.sin(angles),
+                       center[1] + major_axis * radii * np.sin(angle) * np.cos(angles) + minor_axis * radii * np.cos(angle) * np.sin(angles)]).T
+    return points
