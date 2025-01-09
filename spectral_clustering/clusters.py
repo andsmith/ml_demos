@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 import cv2
 from colors import COLORS
-from util import bbox_contains
+from util import bbox_contains,get_ellipse_points
 class CtrlPt(IntEnum):
     """
     Enum for the control points of the cluster.
@@ -39,7 +39,7 @@ class Cluster(ABC):
                       CtrlPt.p1: pos,
                       }
         self._rnd_seed = np.random.randint(0, 2**15)
-        self._color = (np.random.rand(3)*255).astype(np.uint8)
+        self._color = (np.random.rand(3)*255).astype(np.uint8).tolist()
         self._ctrl_held = CtrlPt.p1
         self._ctrl_mouse_over = None
 
@@ -149,6 +149,22 @@ class Cluster(ABC):
         #print("HOLD STATE", self._ctrl_held)
         #print("\n")
         
+        # draw major/minor axes on BOTH sides of center
+        # major
+
+        def _draw_symm_line(center, p, color):
+            cv2.line(img, (int(center[0]), int(center[1])),
+                    (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
+            cv2.line(img, (int(center[0]), int(center[1])),
+                    (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
+            
+        # draw ellipse
+        pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
+        cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)  
+
+        _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
+        _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
+        
         # draw control points, in this order:
         draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
 
@@ -162,13 +178,6 @@ class Cluster(ABC):
             
             pos_screen = int(pos[0]), int(pos[1])
             cv2.circle(img,pos_screen, DRAW_PT_SIZE, color, -1, cv2.LINE_AA)
-        
-        # draw major/minor axes
-        cv2.line(img, (int(self._ctrl[CtrlPt.center][0]), int(self._ctrl[CtrlPt.center][1])),
-                 (int(self._ctrl[CtrlPt.p0][0]), int(self._ctrl[CtrlPt.p0][1])), self._color.tolist(), 1)
-        cv2.line(img, (int(self._ctrl[CtrlPt.center][0]), int(self._ctrl[CtrlPt.center][1])),
-                    (int(self._ctrl[CtrlPt.p1][0]), int(self._ctrl[CtrlPt.p1][1])), self._color.tolist(), 1)
-        
 
 
 class EllipseCluster(Cluster):

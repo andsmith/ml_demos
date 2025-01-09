@@ -40,6 +40,21 @@ def get_n_disp_colors(n):
     colors = (colors * 255).astype(np.uint8)
     return colors
 
+def get_ellipse_points(center, p0, p1, n_points):
+    """
+    Get n_points on the ellipse with given center and passing through 
+    major, and minor axes points p0 and p1.
+    """
+    # get the major and minor axes
+    major_axis = np.linalg.norm(p0 - center)
+    minor_axis = np.linalg.norm(p1 - center)
+    # get the angle of the major axis
+    angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
+    # get the points on the ellipse
+    angles = np.linspace(0, 2 * np.pi, n_points)
+    points = np.array([center[0] + major_axis * np.cos(angle) * np.cos(angles) - minor_axis * np.sin(angle) * np.sin(angles),
+                       center[1] + major_axis * np.sin(angle) * np.cos(angles) + minor_axis * np.cos(angle) * np.sin(angles)]).T
+    return points
 
 def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
     """
