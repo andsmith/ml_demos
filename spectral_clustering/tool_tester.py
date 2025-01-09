@@ -5,7 +5,7 @@ Lightweight interface with tools.
 import cv2
 import numpy as np
 from tools import RadioButtons, Tool, Button, Slider
-from windows import COLORS
+from colors import COLORS
 
 
 class ToolTester(object):

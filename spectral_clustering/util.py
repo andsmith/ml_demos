@@ -1,6 +1,22 @@
 import numpy as np
 import cv2
+def scale_bbox(bbox_rel, bbox_abs):
+    """
+    Get absolute coordinates of a bounding box from relative coordinates.
+    Boxes are dicts with keys 'x' and 'y' and values (x0, x1) and (y0, y1)
 
+    :param bbox_rel: bbox in unit square
+    :param bbox_abs:  bbox in pixels
+    :return: bbox in pixels, the subset of bbox_abs that corresponds to bbox_rel
+    """
+    x0, x1 = bbox_rel['x']
+    y0, y1 = bbox_rel['y']
+    x0_abs, x1_abs = bbox_abs['x']
+    y0_abs, y1_abs = bbox_abs['y']
+    return {'x': (int(x0_abs + x0 * (x1_abs - x0_abs)),
+                  int(x0_abs + x1 * (x1_abs - x0_abs))),
+            'y': (int(y0_abs + y0 * (y1_abs - y0_abs)),
+                  int(y0_abs + y1 * (y1_abs - y0_abs)))}
 
 def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
     """

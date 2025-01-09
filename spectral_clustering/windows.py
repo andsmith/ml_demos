@@ -4,40 +4,12 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
+from util import scale_bbox
 import logging
+from tools import RadioButtons, Slider, Button
 
-COLORS = {'white': np.array((255, 255, 255)).astype(np.uint8),
-          'gray': np.array((128, 128, 128)).astype(np.uint8),
-          'black':  np.array((0, 0, 0)).astype(np.uint8),
-          'red': np.array((0, 0, 255)).astype(np.uint8),
-          'green':  np.array((0, 255, 0)).astype(np.uint8),
-          'blue':  np.array((255, 0, 0)).astype(np.uint8),
-          'yellow':  np.array((0, 255, 255)).astype(np.uint8),
-          'magenta':  np.array((255, 0, 255)).astype(np.uint8),
-          'cyan':  np.array((255, 255, 0)).astype(np.uint8)}
-
-LAYOUT = {"windows": {'ui': {'x': (0, .666),  # scale from unit square to window size
-                             'y': (0, .666)},
-                      'tools': {'x': (0, .666),
-                                'y': (.667, 1)},
-                      'eigenvectors': {'x': (.667, 1),
-                                   'y': (.333, .667)},
-                      'clusters': {'x': (.667, 1),
-                                   'y': ( .667,1)},
-                      'spectrum': {'x': ( .667,1),
-                                       'y': (0, .333)}},
-          'colors': {'bkg': COLORS['black'],
-                     'border': COLORS['gray'],
-                     'active_border': COLORS['white'],
-                     'font': COLORS['white']},
-
-          'dims': {'margin_px': 5,
-                   'pt_size': 2,
-                   'mouseover_rad_px': 20},
-          'font': cv2.FONT_HERSHEY_SIMPLEX,
-          'font_size': .9,
-          'font_color': (0, 0, 0),
-          'font_thickness': 1}
+from colors import COLORS
+from layout import LAYOUT, TOOLBAR_LAYOUT
 
 
 class Window(ABC):
@@ -48,8 +20,9 @@ class Window(ABC):
     the window's bounding box.
     """
 
-    def __init__(self, name, win_size):
+    def __init__(self, name, win_size, app):
         self.name = name
+        self.app = app
         self.win_size = win_size
         self.margin_px = int(LAYOUT['dims']['margin_px'])
         self.bbox = self._get_bbox()
@@ -109,7 +82,7 @@ class Window(ABC):
         color = self.colors['active_border'] if active else self.colors['border']
         cv2.rectangle(img, (x0, y0), (x1, y1), color.tolist(), 2)
 
-    def render(self,img, active=False):
+    def render(self, img, active=False):
         """
         Render the window onto the image.
         (override for specific window types)
@@ -152,11 +125,11 @@ class UiWindow(Window):
     Window for the cluster creator UI.
     """
 
-    def __init__(self, name, win_size):
-        super().__init__(name, win_size)
+    def __init__(self, name, win_size, app):
+        super().__init__(name, win_size, app)
 
     def render(self, img, active=False):
-        super().render(img,active = active)
+        super().render(img, active=active)
 
     def keypress(self, key):
         pass
@@ -173,7 +146,75 @@ class UiWindow(Window):
 
 
 class ToolsWindow(UiWindow):
-    pass
+    """
+    Create & manage toolbox for the app.
+    """
+
+    def __init__(self, name, win_size, app):
+        super().__init__(name, win_size, app)
+        self._setup_tools()
+        self._held_tool = None
+
+    def _setup_tools(self):
+        self.tools = {'kind_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], self.bbox),
+                                                 'Cluster Type',
+                                                 ['gauss', 'ellipse', 'annulus'],
+                                                 default_selection=0),
+                      'norm_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['norm_radio'], self.bbox),
+                                                 'Normalization',
+                                                 ['none', 'laplacian'],
+                                                 default_selection=0),
+                      'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], self.bbox),
+                                                 'N-Nearest',
+                                                 [3, 20], 5, format_str="=%i"),
+                      'n_pts_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], self.bbox),
+                                             'Num Pts',
+                                             [100, 5000], 2000, format_str="=%i"),
+                      'run_button': Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], self.bbox), 'Run',callback= self.app.recompute),
+                      'clear_button': Button(scale_bbox(TOOLBAR_LAYOUT['clear_button'], self.bbox), 'Clear', self.app.clear)}
+        logging.info(f"Created tools window with {len(self.tools)} tools")
+
+    def render(self, img, active=False):
+        #super().render(img, active=active)
+        for tool in self.tools.values():
+            tool.render(img)
+
+    def keypress(self, key):
+        pass
+
+    def mouse_click(self, x, y):
+        """
+        Send to all tools, each will handle if it was clicked.
+        Return whatever tool uses the click.
+        """
+        for tool in self.tools.values():
+            if tool.mouse_click(x, y):
+                self._held_tool = tool
+                return True
+        return False
+
+    def mouse_unclick(self, x, y):
+        if self._held_tool is not None:
+            self._held_tool.mouse_unclick(x, y)
+            self._held_tool = None
+
+    def mouse_move(self, x, y):
+        if self._held_tool is not None:
+            return self._held_tool.mouse_move(x, y)
+        else:
+            for tool in self.tools.values():
+                tool.mouse_move(x, y)
+        return False
+
+    def get_val(self, param):
+        if param == 'kind':
+            return self.tools['kind_radio'].get_selected_option()
+        elif param == 'norm':
+            return self.tools['norm_radio'].get_selected_option()
+        elif param == 'n_nearest':
+            return self.tools['n_nearest_slider'].get_value()
+        elif param == 'n_pts':
+            return self.tools['n_pts_slider'].get_value()
 
 
 class SpectrumWindow(UiWindow):

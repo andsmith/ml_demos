@@ -4,7 +4,7 @@ Toolbox sub-window of the cluster editor.
 
 import cv2
 import numpy as np
-from windows import COLORS
+from colors import COLORS
 from util import bbox_contains, calc_font_size
 from abc import ABC, abstractmethod
 
@@ -24,7 +24,7 @@ class Tool(ABC):
     def __init__(self, bbox, name):
         self._bbox = bbox
         self._name = name
-        self._spacing_px = 10
+        self._spacing_px = 7
 
     @abstractmethod
     def render(self, img):
@@ -69,11 +69,12 @@ class Slider(Tool):
         [---|------]
     """
 
-    def __init__(self, bbox, name, range, default=None, format_str=' = {:.2f}'):
+    def __init__(self, bbox, name, range, default=None, format_str='=%.2f'):
         super().__init__(bbox, name)
         self._format_str = format_str
-        self._t_vert_frac = 0.5   # fraction of slider that is for title
+        self._t_vert_frac = 0.6   # fraction of slider that is for title
         self._slider_width_px = 10
+
         self._range = range
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
@@ -97,11 +98,11 @@ class Slider(Tool):
         self._y_midline = int((self._bbox['y'][1] * self._t_vert_frac + self._bbox['y'][0] * (1 - self._t_vert_frac)))
         # title position
         self._text_bbox = {'x': (self._bbox['x'][0]+self._spacing_px, self._bbox['x'][1]-self._spacing_px),
-                           'y': [self._bbox['y'][0]+self._spacing_px, self._y_midline-self._spacing_px]}
+                           'y': [self._bbox['y'][0]+self._spacing_px, self._y_midline]}
 
         # test font size with random value
         test_val =self._range[1] 
-        test_str = self._name + self._format_str.format(test_val)
+        test_str = self._name + self._format_str%(test_val,)
 
         self._font_size, _ = calc_font_size([test_str], self._text_bbox, self._font, 0)
         title_dims, baseline = cv2.getTextSize(test_str, self._font, self._font_size, 1)
@@ -123,56 +124,70 @@ class Slider(Tool):
         """
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        # bbox
-        cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+        if False:
+            # bbox
+            cv2.rectangle(img, p0, p1, COLORS['orange'].tolist(), 1)
+            # text bbox
+            cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
+                        (self._text_bbox['x'][1], self._text_bbox['y'][1]), COLORS['red'].tolist(), 1)
+            # midline in violet
+            cv2.line(img, (self._bbox['x'][0], self._y_midline), (self._bbox['x'][1], self._y_midline), COLORS['violet'].tolist(), 1)
+            # slider bbox in turquoise
+            cv2.rectangle(img, (self._slider_bbox['x'][0], self._slider_bbox['y'][0]),
+                        (self._slider_bbox['x'][1], self._slider_bbox['y'][1]), COLORS['turquoise'].tolist(), 1)
+      
+      
         # title
         val = self.get_value()
-        slider_str = self._name + self._format_str.format(val)
+        slider_str = self._name + self._format_str%(val,)
         cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
-        # text bbox
-
-        cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
-                      (self._text_bbox['x'][1], self._text_bbox['y'][1]), COLORS['red'].tolist(), 1)
         # slider bar
         slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
         cv2.line(img, (self._s_left, slider_y), (self._s_right, slider_y), self._colors['idle'], 1)
         # slider tab
-        slider_xpos = int(self._slider_pos * (self._s_right - self._s_left)) + self._s_left
+        slider_xpos = int(self._slider_pos * (self._s_right - self._s_left)) + self._s_left - self._slider_width_px // 2
+
         tab_color = self._colors['tab']
         if self._held:
             tab_color = self._colors['held']
         elif self._moused_over:
             tab_color = self._colors['mouseover']
+        
+        img[self._slider_bbox['y'][0] :self._slider_bbox['y'][1],
+            slider_xpos: slider_xpos + self._slider_width_px] = np.array(tab_color, dtype=np.uint8)
 
-        cv2.line(img, (slider_xpos, self._s_top),
-                 (slider_xpos, self._s_bottom),
-                 tab_color, self._slider_width_px)
 
     def mouse_click(self, x, y):
         """
         Check if the click is within the slider.
         """
-        if bbox_contains(self._slider_bbox, x, y):
+        print("Slider mouse click")
+        if bbox_contains(self._bbox, x, y):
             self._held = True
             self._move_slider(x)
+            return True
 
     def mouse_move(self, x, y):
         """
         Check if the mouse is over the slider.
         """
         self._moused_over = False
-        if bbox_contains(self._slider_bbox, x, y):
+        if bbox_contains(self._bbox, x, y):
             self._moused_over = True
         if self._held:
             self._move_slider(x)
+            return True
+        return False
 
     def mouse_unclick(self, x, y):
         self._held = False
+        print("Slider mouse unclick")
 
     def _move_slider(self, x):
         """
         Move the slider to the new position.
         """
+
         rel_x = (x - self._s_left) / (self._s_right - self._s_left)  
         rel_x = np.clip(rel_x, 0, 1)
         self._slider_pos = rel_x
@@ -183,7 +198,7 @@ class Button(Tool):
     left-click calls callback function.
     """
 
-    def __init__(self, bbox, text, callback):
+    def __init__(self, bbox, text, callback, border_indent=2):
         super().__init__(bbox, text)
         self._text = text
         self._callback = callback
@@ -191,7 +206,7 @@ class Button(Tool):
         self._text_bbox = {'x': (bbox['x'][0] + self._spacing_px, bbox['x'][1] - self._spacing_px),
                            'y': (bbox['y'][0] + self._spacing_px, bbox['y'][1] - self._spacing_px)}
     
-        self._font_size, _ = calc_font_size([text], self._text_bbox, self._font, 0)
+        self._font_size, _ = calc_font_size([text], self._text_bbox, self._font, border_indent)
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
         self._calc_dims()
         self._moused_over = False
@@ -224,15 +239,22 @@ class Button(Tool):
             color = self._colors['held']
         elif self._moused_over:
             color = self._colors['mouseover']
-        cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+        # bbox
+        # cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+
+        # text box
+        cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
+                        (self._text_bbox['x'][1], self._text_bbox['y'][1]), self._colors['idle'], 1)
         cv2.putText(img, self._text, self._text_pos, self._font, self._font_size, color)
 
     def mouse_click(self, x, y):
         """
         Check if the click is within the button.
         """
+        print("Button mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
+            return True
 
     def mouse_move(self, x, y):
         """
@@ -241,11 +263,15 @@ class Button(Tool):
         self._moused_over = False
         if bbox_contains(self._bbox, x, y):
             self._moused_over = True
+            return self._held
         else:
             if self._held:
                 self._held = False
+        return False
+            
 
     def mouse_unclick(self, x, y):
+        print("Button mouse unclick")
         if self._held and bbox_contains(self._bbox, x, y):
             self._callback()
         self._held = False
@@ -304,7 +330,7 @@ class RadioButtons(Tool):
         left = self._bbox['x'][0] + self._spacing_px
         top = self._bbox['y'][0] + title_dims[1] + self._spacing_px
         self._title_pos = left, top
-        line_length = np.max([int(title_dims[0] * .5), 5])
+        line_length = np.max([int(title_dims[0] * .85), 5])
         top += self._spacing_px + self._baseline
         self._line_coords = [(left, top),
                              (left+line_length, top)]
@@ -327,7 +353,7 @@ class RadioButtons(Tool):
         """
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        cv2.rectangle(img, p0, p1, self._colors['unselected'], 1)
+        #cv2.rectangle(img, p0, p1, self._colors['unselected'], 1)
         cv2.putText(img, self._title, self._title_pos, self._font,
                     self._font_size, self._colors['unselected'])
         cv2.line(img, self._line_coords[0], self._line_coords[1], self._colors['unselected'])
@@ -357,11 +383,12 @@ class RadioButtons(Tool):
         Check if the click is within the radio buttons.
         :
         """
-        if not bbox_contains(self._bbox, x, y):
-            return
-        ind = self._get_item_at(y)
-        if ind is not None:
-            self._selected_ind = ind
+        print("RadioButtons mouse click")
+        if bbox_contains(self._bbox, x, y):
+            ind = self._get_item_at(y)
+            if ind is not None:
+                self._selected_ind = ind
+        return False
 
     def mouse_move(self, x, y):
         """
@@ -377,9 +404,16 @@ class RadioButtons(Tool):
                 if item is not None:
                     self._mouseover_ind = item
                     break
+        return False
+    
+    def get_selected_option(self):
+        """
+        Return the selected index.
+        """
+        return self._options[self._selected_ind]
 
     def mouse_unclick(self, x, y):
-        pass
+        print("RadioButtons mouse unclick")
 
     def get_selection(self, name=False):
         """

@@ -22,11 +22,12 @@ Widgets includes buttons for interacting:
 
 """
 import numpy as np
-from windows import ClustersWindow, ToolsWindow, SpectrumWindow, EigenvectorsWindow, UiWindow, COLORS
+from windows import ClustersWindow, ToolsWindow, SpectrumWindow, EigenvectorsWindow, UiWindow
 import cv2
 import logging
 import time
 # all dims in unit square, to be scaled to window size
+from layout import LAYOUT, TOOLBAR_LAYOUT
 
 
 class ClusterCreator(object):
@@ -34,12 +35,12 @@ class ClusterCreator(object):
     def __init__(self, size=(640, 480)):
         logging.info('Initializing Cluster Creator')
         self._size = size
-        self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + COLORS['black']
-        self._windows = [UiWindow('ui', size),
-                         ToolsWindow('tools', size),
-                         SpectrumWindow('spectrum', size),
-                         ClustersWindow('clusters', size),
-                         EigenvectorsWindow('eigenvectors', size)
+        self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + LAYOUT['colors']['bkg']
+        self._windows = [UiWindow('ui', size,self),
+                         ToolsWindow('tools', size,self),
+                         SpectrumWindow('spectrum', size,self),
+                         ClustersWindow('clusters', size,self),
+                         EigenvectorsWindow('eigenvectors', size,self)
                          ]
         self._active_window = None  # Mouse is over this window
         self._clicked_window = None  # Mouse was clicked in this window, but may not be over it
@@ -49,6 +50,20 @@ class ClusterCreator(object):
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
+        
+    def recompute(self):
+        """
+        Recompute the clustering.
+        """
+        print('Recomputing')
+        
+
+    def clear(self):
+        """
+        Clear the clusters.
+        self._windows['ui'].clear()
+        """
+        print('Clearing')
 
     def run(self):
         """
