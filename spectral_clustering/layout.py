@@ -1,6 +1,21 @@
 from colors import COLORS
 import cv2
 
+"""
+Windows are laid out rougly:
+|---------------------------------------------------|
+|  Adding clusters ("UI")         |  spectrum       |
+|  (click to add points)          |-----------------|
+|                                 |  eigenvectors   |
+|---------------------------------|-----------------|       
+|  sim_matrix    graph_stats      |  clustering     |
+|---------------------------------------------------|
+| toolbar                                           |
+|---------------------------------------------------| 
+"""
+
+
+
 
 LAYOUT = {"windows": {'ui': {'x': (0, .666),  # scale from unit square to window size
                              'y': (0, .666)},
@@ -34,21 +49,24 @@ TOOLS = ['kind_radio',
 
 """
 Toolbar layout roughly:
-|----------------------------------------|
-| kind:     Algorithm:       K:          |
-| 1gauss     1unnormalized   |------+--| |
-| 2ellipse   2normalized                 |
-| 3annulus   3kmeans         N-nearest:  |
-| 4????                      |---+-----| |
-|            n_pts                      |
-| run clear  |---+--------------------|  |
-|---------------------------------------|
+|---------------------------------------------------|
+| kind:     Algorithm:      sim_graph:  K:          |
+| 1gauss     1unnormalized    1epsion   |------+--| |
+| 2ellipse   2normalized      2K-nn                 |
+| 3annulus   3kmeans          full      N-nearest:  |
+| 4????                                 |---+-----| |
+|                                                   |
+|            n_pts                      epsilon:    |
+| run clear  |---+--------------------| |---+-----| |
+|---------------------------------------------------|
 """
 # coords are in unit square, will be scaled to toolbar area of window (as defined in LAYOUT['windows']['tools'])
-TOOLBAR_LAYOUT = {'kind_radio': {'x': (0, .33), 'y': (0, .67)},
-                  'alg_radio': {'x': (.33, .67), 'y': (0, .67)},
-                  'k_slider': {'x': (.67, 1), 'y': (0, .33)},
-                  'n_nearest_slider': {'x': (.67, 1), 'y': (.33, .67)},
+TOOLBAR_LAYOUT = {'kind_radio': {'x': (0, .3), 'y': (0, .67)},
+                  'alg_radio': {'x': (.3, .6), 'y': (0, .67)},
+                  'sim_graph_radio': {'x': (.6, 8), 'y': (0, .67)},
+                  'k_slider': {'x': (.8, 1), 'y': (.17, .43)},
+                  'n_nearest_slider': {'x': (.8, 1), 'y': (.43, .67)},
+                  'epsilon_slider': {'x': (.8, 1), 'y': (.67, .90)},
                   'n_pts_slider': {'x': (.33, 1), 'y': (.67, 1)},
                   'run_button': {'x': (0, .33/2), 'y': (.67, 1)},
                   'clear_button': {'x': (.33/2, .33), 'y': (.67, 1)}}

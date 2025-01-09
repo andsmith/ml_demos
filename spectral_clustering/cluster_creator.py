@@ -33,7 +33,7 @@ from util import get_n_disp_colors, unscale_coords
 
 class ClusterCreator(object):
 
-    def __init__(self, size=(640, 480)):
+    def __init__(self, size=(640*2, 700)):
         logging.info('Initializing Cluster Creator')
         self._size = size
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + LAYOUT['colors']['bkg']

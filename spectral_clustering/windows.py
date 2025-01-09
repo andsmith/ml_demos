@@ -158,7 +158,7 @@ class UiWindow(Window):
     def render(self, img, active=False):
         # draw points
         # render cluster metadata
-        #print("Rendering %i clusters" % len(self._clusters))
+        # print("Rendering %i clusters" % len(self._clusters))
         n_points = self.app.windows['tools'].get_value('n_pts')
         for cluster in self._clusters:
             cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
@@ -200,11 +200,11 @@ class UiWindow(Window):
             self._clusters.append(self._create_cluster(x, y))
             self._clusters[-1].update_mouse_pos(x, y)
             self._clusters[-1].start_adjusting()
-            
+
             print("M-state", self._clusters[-1]._ctrl_mouse_over, self._clusters[-1]._ctrl_held)
             self._adjusting_ind = len(self._clusters) - 1
             return True
-        
+
     def clear(self):
         """
         Clear all clusters.
@@ -260,16 +260,24 @@ class ToolsWindow(UiWindow):
         indented_bbox = {'x': (self.bbox['x'][0] + indent_px, self.bbox['x'][1] - indent_px),
                          'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
         self.tools = {'kind_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], indented_bbox),
-                                                 'Cluster Type:',
+                                                 'Cluster Type',
                                                  ['Gauss', 'Ellipse', 'Annulus'],
                                                  default_selection=1),
                       'alg_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['alg_radio'], indented_bbox),
-                                                'Algorithm:',
+                                                'Algorithm',
                                                 ['Unnormalized', 'Normalized', 'K-means'],
                                                 default_selection=2),
+                      'sim_graph_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['sim_graph_radio'], indented_bbox),
+                                                      'Sim Graph',
+                                                      ['Epsilon', 'K-NN', 'Full'],
+                                                      default_selection=1),
                       'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], indented_bbox),
                                                  'N-Nearest:',
                                                  [3, 20], 5, format_str="=%i"),
+                      'epsilon_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['epsilon_slider'], indented_bbox),
+                                               'e (dist)',
+                                               [1., 50], 5, format_str="=%.2f"),
+
                       'n_pts_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], indented_bbox),
                                              'Num Pts',
                                              [5, 2000], 100, format_str="=%i"),
@@ -332,7 +340,7 @@ class ToolsWindow(UiWindow):
 
 
 class SpectrumWindow(UiWindow):
-    
+
     def render(self, img, active=False):
         """
         Render the window onto the image.
