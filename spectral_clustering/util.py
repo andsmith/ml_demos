@@ -1,2 +1,37 @@
+import numpy as np
+import cv2
+
+
+def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
+    """
+    Calculate the largest font size to fit the text in the bbox.
+    :param lines: list of strings, one per line
+    :param bbox: dict(x=(x0, x1), y=(y0, y1))
+    :param font: cv2 font constant
+    :param item_spacing_px: int, vertical spacing between lines, left and right horizontal spacing within box.
+    :param n_extra_v_spaces: int, number of extra item_spacing_px to add to the bottom.
+    """
+    font_sizes = np.linspace(.2, 3.0, 100)[::-1]
+    for font_size in font_sizes:
+        (title_width, title_height), baseline = cv2.getTextSize(lines[0], font, font_size, 1)
+        header_height = title_height + item_spacing_px * 2 + 1 + baseline  # space, title, space, line
+        if len(lines) > 1:
+
+            text_sizes = [cv2.getTextSize(text, font, font_size, 1)[0] for text in lines[1:]]
+            text_widths, text_heights = zip(*text_sizes)
+        else:
+            text_widths, text_heights = [0], [0]
+            
+        total_height = header_height + np.sum(text_heights) + item_spacing_px * \
+            (len(text_heights) + 1) + baseline * len(text_heights)
+        total_width = max(title_width, max(text_widths)) + item_spacing_px * 2
+        item_height = text_heights[0]
+        if total_height < bbox['y'][1] - bbox['y'][0] and total_width < bbox['x'][1] - bbox['x'][0]:
+
+            return font_size, int(item_height/2)
+
+    return 0.1, .05
+
+
 def bbox_contains(box, x, y):
     return box['x'][0] <= x <= box['x'][1] and box['y'][0] <= y <= box['y'][1]
