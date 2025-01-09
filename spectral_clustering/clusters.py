@@ -32,8 +32,9 @@ class Cluster(ABC):
     a point is generated from the chosen cluster's distribution.
     """
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, bbox):
         pos = np.array([x, y])
+        self._bbox = bbox
         self._ctrl = {CtrlPt.center: pos,
                       CtrlPt.p0: pos,
                       CtrlPt.p1: pos,
@@ -165,17 +166,20 @@ class Cluster(ABC):
             
         # draw sample points
         pts = self.get_points(n_pts)
+        valid = bbox_contains(self._bbox,pts[:,0],pts[:,1])
+        pts = pts[valid]
         pts_size = 1
         if pts.shape[0] < 1000:
             pts_size = 2
         if pts.shape[0] < 100:
             pts_size = 3
-        for pt in pts:
-            px, py = int(pt[0]), int(pt[1])
-            if pts_size==1:
-                img[py,px] = self._color
-            else:
-                img[py:py+pts_size,px:px+pts_size] = self._color
+        if pts.shape[0] > 0:
+            for pt in pts:
+                px, py = int(pt[0]), int(pt[1])
+                if pts_size==1:
+                    img[py,px] = self._color
+                else:
+                    img[py:py+pts_size,px:px+pts_size] = self._color
             
 
         if show_ctrls:
@@ -195,8 +199,8 @@ class Cluster(ABC):
 
 
 class EllipseCluster(Cluster):
-    def __init__(self, x, y):
-        super().__init__(x, y)
+    def __init__(self, x, y, bbox):
+        super().__init__(x, y,bbox)
 
     def get_points(self, n):
         self._random_state = np.random.RandomState(self._rnd_seed)

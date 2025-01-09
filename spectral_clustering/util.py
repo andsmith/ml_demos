@@ -20,6 +20,26 @@ def scale_bbox(bbox_rel, bbox_abs):
             'y': (int(y0_abs + y0 * (y1_abs - y0_abs)),
                   int(y0_abs + y1 * (y1_abs - y0_abs)))}
 
+def unscale_coords(bbox, coords):
+    """
+    Get relative coordinates of a point from absolute coordinates.
+    :param bbox: bbox in pixels
+    :param coords: N x 2 array of points in pixel coords
+    :return: points in unit square
+    """
+    x0, x1 = bbox['x']
+    y0, y1 = bbox['y']
+    return np.array([(coords[:, 0] - x0) / (x1 - x0),
+                     (coords[:, 1] - y0) / (y1 - y0)]).T
+
+def test_bbox_scaling():
+    bbox_rel = {'x': (.1, .9), 'y': (.1, .9)}
+    bbox_abs = {'x': (0, 100), 'y': (0, 100)}
+    bbox_abs_scaled = scale_bbox(bbox_rel, bbox_abs)
+    assert bbox_abs_scaled == {'x': (10, 90), 'y': (10, 90)}
+    unscalled_coords = unscale_coords(bbox_abs, np.array([[10, 10], [90, 90]]))
+    assert np.allclose(unscalled_coords, np.array([[.10, .10], [.9, .9]]))
+
 
 def get_n_disp_colors(n):
     """
@@ -91,6 +111,16 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
 
 
 def bbox_contains(box, x, y):
+    """
+    :param box: dict(x=(x0, x1), y=(y0, y1))
+    :param x: float or np.array of x coordinates
+    :param y: float or np.array of same length as x
+    :return: bool or np.array of bools
+    """
+    if isinstance(x,np.ndarray):
+        x_valid = np.logical_and(box['x'][0] <= x, x <= box['x'][1])
+        y_valid = np.logical_and(box['y'][0] <= y, y <= box['y'][1])
+        return np.logical_and(x_valid, y_valid)
     return box['x'][0] <= x <= box['x'][1] and box['y'][0] <= y <= box['y'][1]
 
 
@@ -111,3 +141,7 @@ def sample_ellipse(center, p0, p1, n, random_state):
     points = np.array([center[0] + major_axis * radii * np.cos(angle) * np.cos(angles) - minor_axis * radii * np.sin(angle) * np.sin(angles),
                        center[1] + major_axis * radii * np.sin(angle) * np.cos(angles) + minor_axis * radii * np.cos(angle) * np.sin(angles)]).T
     return points
+
+if __name__ == '__main__':
+    test_bbox_scaling()
+    print("All tests passed!")

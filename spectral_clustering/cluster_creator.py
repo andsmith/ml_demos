@@ -29,7 +29,7 @@ import time
 # all dims in unit square, to be scaled to window size
 from layout import LAYOUT, TOOLBAR_LAYOUT
 from clustering import KMeansAlgorithm
-from util import get_n_disp_colors
+from util import get_n_disp_colors, unscale_coords
 
 class ClusterCreator(object):
 
@@ -80,10 +80,11 @@ class ClusterCreator(object):
             self._cluster_colors = get_n_disp_colors(n_clusters)
         n_nearest = self.windows['tools'].get_value('n_nearest')
         print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
-        points = self.windows['ui'].get_points(n_points, scaled_to_unit=True)
-        cluster_ids = self._do_clustering(points, algorithm_name, n_clusters, n_nearest)
+        points = self.windows['ui'].get_points(n_points)
+        unit_points = unscale_coords(self.windows['ui'].bbox, points)
+        cluster_ids = self._do_clustering(unit_points, algorithm_name, n_clusters, n_nearest)
         #import ipdb; ipdb.set_trace()
-        self.windows['clusters'].update(points, cluster_ids, self._cluster_colors)
+        self.windows['clusters'].update(unit_points, cluster_ids, self._cluster_colors)
 
 
     def clear(self):

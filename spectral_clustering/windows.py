@@ -134,13 +134,15 @@ class UiWindow(Window):
         self._mouse_pos = None
         self._clicked_pos = None
 
-    def get_points(self, n_per_cluster, scaled_to_unit):
+    def get_points(self, n_per_cluster):
         """
-        Generate points from the clusters, optionally scaled to the unit square. (else window pixel coords)
+        Generate points from the clusters in the ui window
+        :param n_per_cluster: number of points per cluster
+        :returns: N x 2 array of points (inside the UI bbox)
         """
         points = []
         for cluster in self._clusters:
-            points.append(cluster.get_points(n_per_cluster, scaled_to_unit))
+            points.append(cluster.get_points(n_per_cluster))
 
         """
         # for now, random
@@ -239,7 +241,7 @@ class UiWindow(Window):
         """
         print("Creating cluster at", x, y)
         c_name = self.app.windows['tools'].get_value('kind')
-        cluster = CLUSTER_TYPES[c_name](x, y)
+        cluster = CLUSTER_TYPES[c_name](x, y, self.bbox)
         return cluster
 
 
