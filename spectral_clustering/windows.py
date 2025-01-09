@@ -10,6 +10,7 @@ from tools import RadioButtons, Slider, Button
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import LAYOUT, TOOLBAR_LAYOUT
+from clusters import EllipseCluster, CLUSTER_TYPES
 
 
 class Window(ABC):
@@ -128,39 +129,117 @@ class UiWindow(Window):
     def __init__(self, name, win_size, app):
         super().__init__(name, win_size, app)
         self._clusters = []
+        self._mouseover_ind = None
+        self._adjusting_ind = None
+        self._mouse_pos = None
+        self._clicked_pos = None
 
-
-    def get_points(self, n_per_cluster):
+    def get_points(self, n_per_cluster, scaled_to_unit):
         """
-        Each cluster has a weight in [0, 100].
-
+        Generate points from the clusters, optionally scaled to the unit square. (else window pixel coords)
+        """
         points = []
         for cluster in self._clusters:
-            points.append(cluster.generate_points(n_per_cluster))
+            points.append(cluster.get_points(n_per_cluster, scaled_to_unit))
+
         """
-        points = []
         # for now, random
         for _ in range(2):  # three test clusters
             c_center = np.random.rand(2)
             c_points = np.random.randn(n_per_cluster, 2) * .1 + c_center
             points.append(c_points)
+        
+        """
+
         return np.vstack(points)
 
     def render(self, img, active=False):
-        super().render(img, active=active)
+        # draw points
+        # render cluster metadata
+        #print("Rendering %i clusters" % len(self._clusters))
+        for cluster in self._clusters:
+            cluster.render(img)
+
+        status = "N clusters: %i" % len(self._clusters)
+        text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][1] - self.margin_px)
+        cv2.putText(img, status, text_pos, LAYOUT['font'], LAYOUT['font_size'],
+                    LAYOUT['colors']['font'].tolist(), LAYOUT['font_thickness'])
 
     def keypress(self, key):
         pass
 
+    def _update_mouse_pos(self, x, y):
+        """
+        Update internal state.
+        Determine which control point of which cluster is being hovered over.
+        :returns: cluster_ind 
+        """
+        self._mouse_pos = (x, y)
+        self._mouseover_ind = None
+        for i, cluster in enumerate(self._clusters):
+            if cluster.update_mouse_pos(x, y):
+                self._mouseover_ind = i
+                return i
+        return None
+
     def mouse_click(self, x, y):
-        print(f'{self.name} clicked at ({x}, {y})')
-        return True
+        """
+        Handle a mouse click event.
+        :returns: True if future mouse events should be sent to this window until unclick is called
+        """
+        clicked_ind = self._update_mouse_pos(x, y)
+        self._clicked_pos = (x, y)
+
+        if clicked_ind is not None:
+            self._adjusting_ind = clicked_ind
+            return self._clusters[clicked_ind].start_adjusting()
+        else:
+            self._clusters.append(self._create_cluster(x, y))
+            self._clusters[-1].update_mouse_pos(x, y)
+            self._clusters[-1].start_adjusting()
+            
+            print("M-state", self._clusters[-1]._ctrl_mouse_over, self._clusters[-1]._ctrl_held)
+            self._adjusting_ind = len(self._clusters) - 1
+            return True
+        
+    def clear(self):
+        """
+        Clear all clusters.
+        """
+        self._clusters = []
 
     def mouse_unclick(self, x, y):
-        print(f'{self.name} unclicked at ({x}, {y})')
+        """
+        Send the unclick event to the cluster being adjusted.
+        Un-hold it.
+        """
+        if self._adjusting_ind is not None:
+            print("Un-clicking cluster", self._adjusting_ind)
+            if self._clusters[self._adjusting_ind].stop_adjusting(self.bbox):
+                # if the cluster wants to be removed
+                del self._clusters[self._adjusting_ind]
+
+            self._adjusting_ind = None
+        self._update_mouse_pos(x, y)
 
     def mouse_move(self, x, y):
-        print(f'{self.name} mouse moved to ({x}, {y})')
+        """
+        If a cluster is being held, send it the move signal, 
+        else just update the mouse position.
+        """
+        if self._adjusting_ind is not None:
+            self._clusters[self._adjusting_ind].drag_ctrl(x, y)
+        else:
+            self._update_mouse_pos(x, y)
+
+    def _create_cluster(self, x, y):
+        """
+        Lookup current params, create a cluster with them.
+        """
+        print("Creating cluster at", x, y)
+        c_name = self.app.windows['tools'].get_value('kind')
+        cluster = CLUSTER_TYPES[c_name](x, y)
+        return cluster
 
 
 class ToolsWindow(UiWindow):
@@ -179,12 +258,12 @@ class ToolsWindow(UiWindow):
                          'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
         self.tools = {'kind_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], indented_bbox),
                                                  'Cluster Type:',
-                                                 ['gauss', 'ellipse', 'annulus'],
-                                                 default_selection=0),
+                                                 ['Gauss', 'Ellipse', 'Annulus'],
+                                                 default_selection=1),
                       'alg_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['alg_radio'], indented_bbox),
-                                                 'Algorithm:',
-                                                 ['Unnormalized', 'Normalized','K-means'],
-                                                 default_selection=2),
+                                                'Algorithm:',
+                                                ['Unnormalized', 'Normalized', 'K-means'],
+                                                default_selection=2),
                       'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], indented_bbox),
                                                  'N-Nearest:',
                                                  [3, 20], 5, format_str="=%i"),
@@ -192,17 +271,17 @@ class ToolsWindow(UiWindow):
                                              'Num Pts',
                                              [5, 2000], 100, format_str="=%i"),
                       'k_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['k_slider'], indented_bbox),
-                                             'K (clusters)',
-                                             [2, 25], 5, format_str="=%i"),
-                      'run_button': Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], indented_bbox), 'Run',callback= self.app.recompute),
+                                         'K (clusters)',
+                                         [2, 25], 5, format_str="=%i"),
+                      'run_button': Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], indented_bbox), 'Run', callback=self.app.recompute),
                       'clear_button': Button(scale_bbox(TOOLBAR_LAYOUT['clear_button'], indented_bbox), 'Clear', self.app.clear)}
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
     def render(self, img, active=False):
-        #super().render(img, active=active)
+        # super().render(img, active=active)
         w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
-        #cv2.rectangle(img, (self.margin_px, self.margin_px),
-        ##              (w - self.margin_px, h - self.margin_px),
+        # cv2.rectangle(img, (self.margin_px, self.margin_px),
+        # (w - self.margin_px, h - self.margin_px),
         #              LAYOUT['colors']['border'].tolist(), 2)
         for tool in self.tools.values():
             tool.render(img)
@@ -250,7 +329,14 @@ class ToolsWindow(UiWindow):
 
 
 class SpectrumWindow(UiWindow):
-    pass
+    
+    def render(self, img, active=False):
+        """
+        Render the window onto the image.
+        (override for specific window types)
+        """
+        self.render_box(img, active=active)
+        self.render_title(img)
 
 
 class ClustersWindow(UiWindow):
@@ -258,7 +344,7 @@ class ClustersWindow(UiWindow):
         super().__init__(name, win_size, app)
         w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
         self._bkg_color = + LAYOUT['colors']['bkg']
-        self._blank = np.zeros((h, w, 3), np.uint8) +self._bkg_color  # only redraw after updates
+        self._blank = np.zeros((h, w, 3), np.uint8) + self._bkg_color  # only redraw after updates
         cv2.rectangle(self._blank, (self.margin_px, self.margin_px),
                       (w - self.margin_px, h - self.margin_px),
                       LAYOUT['colors']['border'].tolist(), 2)
@@ -272,10 +358,13 @@ class ClustersWindow(UiWindow):
         render_clustering(self._frame, points, cluster_ids, colors, margin_px=self.margin_px)
         print("Regenerated cluster window")
 
+    def clear(self):
+        self._frame = self._blank.copy()
+
     def render(self, img, active=False):
         img[self.bbox['y'][0]:self.bbox['y'][1],
             self.bbox['x'][0]:self.bbox['x'][1]] = self._frame
 
 
-class EigenvectorsWindow(UiWindow):
+class EigenvectorsWindow(SpectrumWindow):
     pass

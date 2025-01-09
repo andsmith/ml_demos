@@ -11,4 +11,5 @@ COLORS = {'white': np.array((255, 255, 255)).astype(np.uint8),
           'blue':  np.array((255, 0, 0)).astype(np.uint8),
           'yellow':  np.array((0, 255, 255)).astype(np.uint8),
           'magenta':  np.array((255, 0, 255)).astype(np.uint8),
-          'cyan':  np.array((255, 255, 0)).astype(np.uint8)}
+          'cyan':  np.array((255, 255, 0)).astype(np.uint8),
+          'neon green':  np.array((57, 255, 20)).astype(np.uint8),}

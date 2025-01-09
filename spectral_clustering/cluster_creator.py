@@ -37,7 +37,7 @@ class ClusterCreator(object):
         logging.info('Initializing Cluster Creator')
         self._size = size
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + LAYOUT['colors']['bkg']
-        self._windows = {'ui':UiWindow('ui', size,self),
+        self.windows = {'ui':UiWindow('ui', size,self),
                          'tools':ToolsWindow('tools', size,self),
                          'spectrum':SpectrumWindow('spectrum', size,self),
                          'clusters':ClustersWindow('clusters', size,self),
@@ -71,26 +71,27 @@ class ClusterCreator(object):
             * cluster data w/current settings
             * update cluster window w/results
         """
-        n_points = self._windows['tools'].get_value('n_pts')
-        algorithm_name = self._windows['tools'].get_value('algorithm')
-        n_clusters = self._windows['tools'].get_value('k')
+        n_points = self.windows['tools'].get_value('n_pts')
+        algorithm_name = self.windows['tools'].get_value('algorithm')
+        n_clusters = self.windows['tools'].get_value('k')
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
-        n_nearest = self._windows['tools'].get_value('n_nearest')
+        n_nearest = self.windows['tools'].get_value('n_nearest')
         print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
-        points = self._windows['ui'].get_points(n_points)
+        points = self.windows['ui'].get_points(n_points, scaled_to_unit=True)
         cluster_ids = self._do_clustering(points, algorithm_name, n_clusters, n_nearest)
         #import ipdb; ipdb.set_trace()
-        self._windows['clusters'].update(points, cluster_ids, self._cluster_colors)
+        self.windows['clusters'].update(points, cluster_ids, self._cluster_colors)
 
 
     def clear(self):
         """
         Clear the clusters.
-        self._windows['ui'].clear()
+        self.windows['ui'].clear()
         """
-        print('Clearing')
+        self.windows['ui'].clear()
+        self.windows['clusters'].clear()    
 
     def run(self):
         """
@@ -111,7 +112,7 @@ class ClusterCreator(object):
             if k & 0xFF == 27 or k == ord('q'):
                 break
             elif self._active_window_name is not None:
-                self._windows[self._active_window_name].keypress(k)
+                self.windows[self._active_window_name].keypress(k)
 
             # update fps
             self._fps_info['n_frames'] += 1
@@ -129,16 +130,16 @@ class ClusterCreator(object):
         Refresh the windows and return the main frame.
         """
         frame = self._bkg.copy()
-        for window_name in self._windows:
-            self._windows[window_name].render(frame, active = (window_name == self._active_window_name))
+        for window_name in self.windows:
+            self.windows[window_name].render(frame, active = (window_name == self._active_window_name))
         return frame
 
     def _get_window_name(self, x, y):
         """
         Return the window that contains the point (x, y).
         """
-        for window_name in self._windows:
-            if self._windows[window_name].contains(x, y):
+        for window_name in self.windows:
+            if self.windows[window_name].contains(x, y):
                 return window_name
         return None
 
@@ -151,9 +152,9 @@ class ClusterCreator(object):
         self._mouse_pos = (x, y)
         if self._clicked_window_name is not None:
             if event == cv2.EVENT_MOUSEMOVE:
-                self._windows[self._clicked_window_name].mouse_move(x, y)
+                self.windows[self._clicked_window_name].mouse_move(x, y)
             elif event == cv2.EVENT_LBUTTONUP:
-                self._windows[self._clicked_window_name].mouse_unclick(x, y)
+                self.windows[self._clicked_window_name].mouse_unclick(x, y)
                 self._clicked_window_name = None
             else:
                 raise Exception("Can't click in a window while another window is clicked!")
@@ -161,11 +162,11 @@ class ClusterCreator(object):
         self._active_window_name = self._get_window_name(x, y)
         if self._active_window_name is not None:
             if event == cv2.EVENT_LBUTTONDOWN:
-                if self._windows[self._active_window_name].mouse_click(x, y):
+                if self.windows[self._active_window_name].mouse_click(x, y):
                     self._clicked_window_name = self._active_window_name
                     self._clicked_pos = (x, y)
             elif event == cv2.EVENT_MOUSEMOVE:
-                self._windows[self._active_window_name].mouse_move(x, y)
+                self.windows[self._active_window_name].mouse_move(x, y)
             elif event == cv2.EVENT_LBUTTONUP:
                 #raise Exception("Can't unclick in a window that wasn't clicked!")
                 pass # will happen if double-clicking, so just do nothing.

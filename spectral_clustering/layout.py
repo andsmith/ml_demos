@@ -21,7 +21,7 @@ LAYOUT = {"windows": {'ui': {'x': (0, .666),  # scale from unit square to window
                    'pt_size': 2,
                    'mouseover_rad_px': 20},
           'font': cv2.FONT_HERSHEY_SIMPLEX,
-          'font_size': .7,
+          'font_size': .5,
           'font_color': (0, 0, 0),
           'font_thickness': 1}
 
