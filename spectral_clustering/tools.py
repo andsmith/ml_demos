@@ -12,9 +12,8 @@ COLOR_OPTIONS = {'unselected': COLORS['black'],
                  'selected': COLORS['black'],
                  'mouseover': COLORS['red'],
                  'idle': COLORS['black'],
-                 'held': COLORS['blue']}
-
-MIN_SPACING_PX = 5  # min vertical spacing between things
+                 'held': COLORS['blue'],
+                 'tab': COLORS['gray']}
 
 
 class Tool(ABC):
@@ -25,6 +24,7 @@ class Tool(ABC):
     def __init__(self, bbox, name):
         self._bbox = bbox
         self._name = name
+        self._spacing_px = 10
 
     @abstractmethod
     def render(self, img):
@@ -54,6 +54,124 @@ class Tool(ABC):
         """
         pass
 
+    def move_to(self, bbox):
+        """
+        Move the tool to the new bbox.
+        """
+        self._bbox = bbox
+
+
+class Slider(Tool):
+    """
+    Vertical slider, looks like this:
+
+        Value = 0.4
+        [---|------]
+    """
+
+    def __init__(self, bbox, name, range, default=None, format_str=' = {:.2f}'):
+        super().__init__(bbox, name)
+        self._format_str = format_str
+        self._t_vert_frac = 0.5   # fraction of slider that is for title
+        self._slider_width_px = 10
+        self._range = range
+        self._font = cv2.FONT_HERSHEY_SIMPLEX
+        self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
+        self._calc_dims()
+
+        self._moused_over = False
+        self._held = False
+        if default is None:
+            self._slider_pos = 0.0  # smallest (biggest is 1.0)
+        else:
+            self._slider_pos = (default - self._range[0]) / (self._range[1] - self._range[0])
+
+    def get_value(self):
+        """
+        Return the current value.
+        """
+        return self._range[0] + self._slider_pos * (self._range[1] - self._range[0])
+
+    def _calc_dims(self):
+        self._y_midline = int((self._bbox['y'][1] * self._t_vert_frac + self._bbox['y'][0] * (1 - self._t_vert_frac)))
+        # title position
+        self._text_bbox = {'x': (self._bbox['x'][0]+self._spacing_px, self._bbox['x'][1]-self._spacing_px),
+                           'y': [self._bbox['y'][0]+self._spacing_px, self._y_midline-self._spacing_px]}
+
+        # test font size with random value
+        test_val = 50.  # self._range[0] + (self._range[1] - self._range[0]) * np.random.rand()
+        test_str = self._name + self._format_str.format(test_val)
+
+        self._font_size, _ = calc_font_size([test_str], self._text_bbox, self._font, 0)
+        title_dims, baseline = cv2.getTextSize(test_str, self._font, self._font_size, 1)
+        left = self._bbox['x'][0] + self._spacing_px
+        top = self._bbox['y'][0] + title_dims[1] + self._spacing_px + baseline
+        self._title_pos = (left, top)
+        # slider dims
+        self._s_left = left
+        self._s_right = self._bbox['x'][1] - self._spacing_px
+        self._s_top = self._y_midline + self._spacing_px
+        self._s_bottom = self._bbox['y'][1] - self._spacing_px
+
+        self._slider_bbox = {'x': [self._s_left, self._s_right],
+                             'y': [self._s_top, self._s_bottom]}
+
+    def render(self, img):
+        """
+        Render the slider.
+        """
+        p0 = (self._bbox['x'][0], self._bbox['y'][0])
+        p1 = (self._bbox['x'][1], self._bbox['y'][1])
+        # bbox
+        #cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+        # title
+        val = self.get_value()
+        slider_str = self._name + self._format_str.format(val)
+        cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
+
+        # slider bar
+        slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
+        cv2.line(img, (self._s_left, slider_y), (self._s_right, slider_y), self._colors['idle'], 1)
+        # slider tab
+        slider_xpos = int(self._slider_pos * (self._s_right - self._s_left)) + self._s_left
+        tab_color = self._colors['tab']
+        if self._held:
+            tab_color = self._colors['held']
+        elif self._moused_over:
+            tab_color = self._colors['mouseover']
+
+        cv2.line(img, (slider_xpos, self._s_top),
+                 (slider_xpos, self._s_bottom),
+                 tab_color, self._slider_width_px)
+
+    def mouse_click(self, x, y):
+        """
+        Check if the click is within the slider.
+        """
+        if bbox_contains(self._slider_bbox, x, y):
+            self._held = True
+            self._move_slider(x)
+
+    def mouse_move(self, x, y):
+        """
+        Check if the mouse is over the slider.
+        """
+        self._moused_over = False
+        if bbox_contains(self._slider_bbox, x, y):
+            self._moused_over = True
+        if self._held:
+            self._move_slider(x)
+
+    def mouse_unclick(self, x, y):
+        self._held = False
+
+    def _move_slider(self, x):
+        """
+        Move the slider to the new position.
+        """
+        rel_x = (x - self._s_left) / (self._s_right - self._s_left)  
+        rel_x = np.clip(rel_x, 0, 1)
+        self._slider_pos = rel_x
 
 class Button(Tool):
     """
@@ -66,11 +184,19 @@ class Button(Tool):
         self._text = text
         self._callback = callback
         self._font = cv2.FONT_HERSHEY_SIMPLEX
-        self._font_size, _ = calc_font_size([text], bbox, self._font, MIN_SPACING_PX)
+
+        self._font_size, _ = calc_font_size([text], bbox, self._font, self._spacing_px)
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
         self._calc_dims()
         self._moused_over = False
         self._held = False
+
+    def move(self, bbox):
+        """
+        Move the button to the new bbox.
+        """
+        self._bbox = bbox
+        self._calc_dims()
 
     def _calc_dims(self):
         """
@@ -149,6 +275,13 @@ class RadioButtons(Tool):
 
         self._calc_dims()
 
+    def move(self, bbox):
+        """
+        Move the button to the new bbox.
+        """
+        self._bbox = bbox
+        self._calc_dims()
+
     def _calc_dims(self):
         """
         Determine the text size, the X,Y positions of each option.
@@ -156,29 +289,29 @@ class RadioButtons(Tool):
         self._font_size, self._mark_height = calc_font_size([self._title] + self._texts,
                                                             self._bbox,
                                                             self._font,
-                                                            MIN_SPACING_PX)
+                                                            self._spacing_px)
         text_dims = [cv2.getTextSize(text, self._font, self._font_size, 1)  # (width, height), baseline
                      for text in self._texts]
         self._baseline = text_dims[0][1]
         title_dims = cv2.getTextSize(self._title, self._font, self._font_size, 1)[0]
 
-        left = self._bbox['x'][0] + MIN_SPACING_PX
-        top = self._bbox['y'][0] + title_dims[1] + MIN_SPACING_PX
+        left = self._bbox['x'][0] + self._spacing_px
+        top = self._bbox['y'][0] + title_dims[1] + self._spacing_px
         self._title_pos = left, top
         line_length = np.max([int(title_dims[0] * .5), 5])
-        top += MIN_SPACING_PX + self._baseline
+        top += self._spacing_px + self._baseline
         self._line_coords = [(left, top),
                              (left+line_length, top)]
         self._text_pos = []
         # indent for indicator-dot
         self._dot_size = 2
-        left += self._dot_size + MIN_SPACING_PX * 2
+        left += self._dot_size + self._spacing_px * 2
 
-        # top += MIN_SPACING_PX
+        # top += self._spacing_px
         self._div_lines = [top]   # y-coordinate between each selection (for determining which one the mouse is over)
 
         for text_dim in text_dims:
-            top += text_dim[0][1] + MIN_SPACING_PX + self._baseline
+            top += text_dim[0][1] + self._spacing_px + self._baseline
             self._text_pos.append((left, top))
             self._div_lines.append(top+self._baseline)
 
@@ -197,7 +330,7 @@ class RadioButtons(Tool):
                 color = self._colors['selected']
                 # indicator dot
                 dot_y = (self._div_lines[i+1] - self._baseline-self._mark_height)
-                cv2.circle(img, (self._text_pos[i][0] - MIN_SPACING_PX, dot_y), self._dot_size, color, -1)
+                cv2.circle(img, (self._text_pos[i][0] - self._spacing_px, dot_y), self._dot_size, color, -1)
             elif i == self._mouseover_ind:
                 color = self._colors['mouseover']
             else:

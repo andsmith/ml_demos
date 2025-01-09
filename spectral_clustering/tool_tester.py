@@ -4,7 +4,7 @@ Lightweight interface with tools.
 
 import cv2
 import numpy as np
-from toolbar import RadioButtons, Tool, Button
+from tools import RadioButtons, Tool, Button, Slider
 from windows import COLORS
 
 
@@ -57,7 +57,6 @@ def test_radio():
               'options': ['Elliptical', 'Gaussian', 'Annular', 'taco', 'nacho', 'burrito supreme'],
               'default_selection': 1,
               'bbox': {'x': [10, 220], 'y': [10, 220]}}
-
     tt = ToolTester(RadioButtons, tool_params=params)
 
 
@@ -66,10 +65,20 @@ def test_button():
         print("Button pressed")
     params = {'text': "Button",
               'callback': callback,
-              'bbox': {'x': [10, 220], 'y': [10, 220]}}
+              'bbox': {'x': [50, 125], 'y': [100, 160]}}
     tt = ToolTester(Button, tool_params=params)
 
 
+def test_slider():
+    params = {'name': "Numy Points",
+              'range': [0, 100],
+              'default': 100,
+              'bbox': {'x': [10, 330], 'y': [10, 120]}}
+    #import ipdb; ipdb.set_trace()
+    tt = ToolTester(Slider, tool_params=params)
+
+
 if __name__ == "__main__":
-    test_radio()
+    # test_radio()
     #test_button()
+    test_slider()

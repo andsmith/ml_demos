@@ -12,6 +12,10 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
     :param n_extra_v_spaces: int, number of extra item_spacing_px to add to the bottom.
     """
     font_sizes = np.linspace(.2, 3.0, 100)[::-1]
+
+    text_area_width = bbox['x'][1] - bbox['x'][0] - item_spacing_px * 2
+    text_area_height = bbox['y'][1] - bbox['y'][0] - item_spacing_px * 2 - n_extra_v_spaces * item_spacing_px
+    #print("Fitting text in %i x %i"%( text_area_width, text_area_height))
     for font_size in font_sizes:
         (title_width, title_height), baseline = cv2.getTextSize(lines[0], font, font_size, 1)
         header_height = title_height + item_spacing_px * 2 + 1 + baseline  # space, title, space, line
@@ -24,13 +28,13 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
             
         total_height = header_height + np.sum(text_heights) + item_spacing_px * \
             (len(text_heights) + 1) + baseline * len(text_heights)
-        total_width = max(title_width, max(text_widths)) + item_spacing_px * 2
+        total_width = max(title_width, max(text_widths))
         item_height = text_heights[0]
-        if total_height < bbox['y'][1] - bbox['y'][0] and total_width < bbox['x'][1] - bbox['x'][0]:
-
+        if total_height < text_area_height and total_width < text_area_width:
+            #print("Found font size", font_size)
             return font_size, int(item_height/2)
-
-    return 0.1, .05
+    #print("Failed to find good font size, using smallest.")
+    return np.min(font_sizes), np.min(font_sizes)//2
 
 
 def bbox_contains(box, x, y):
