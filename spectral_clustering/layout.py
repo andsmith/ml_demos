@@ -26,7 +26,7 @@ LAYOUT = {"windows": {'ui': {'x': (0, .666),  # scale from unit square to window
           'font_thickness': 1}
 
 TOOLS = ['kind_radio',
-         'norm_radio',
+         'alg_radio',
          'n_nearest_slider',
          'n_pts_slider',
          'run_button',
@@ -34,19 +34,21 @@ TOOLS = ['kind_radio',
 
 """
 Toolbar layout roughly:
-|-------------------------------------|
-| kind:   Normalization:  n_nearest:  |
-| gauss    none           |---+-----| |
-| ellipse  laplacian                  |
-| annulus            [run]    [clear] |
-| ????     n_pts                      |
-|          |---+--------------------| |
-|-------------------------------------|
+|----------------------------------------|
+| kind:     Algorithm:       K:          |
+| 1gauss     1unnormalized   |------+--| |
+| 2ellipse   2normalized                 |
+| 3annulus   3kmeans         N-nearest:  |
+| 4????                      |---+-----| |
+|            n_pts                      |
+| run clear  |---+--------------------|  |
+|---------------------------------------|
 """
 # coords are in unit square, will be scaled to toolbar area of window (as defined in LAYOUT['windows']['tools'])
-TOOLBAR_LAYOUT = {'kind_radio': {'x': (0, .33), 'y': (0, 1)},
-                  'norm_radio': {'x': (.33, .67), 'y': (0, .67)},
-                  'n_nearest_slider': {'x': (.67, 1), 'y': (0, .33)},
+TOOLBAR_LAYOUT = {'kind_radio': {'x': (0, .33), 'y': (0, .67)},
+                  'alg_radio': {'x': (.33, .67), 'y': (0, .67)},
+                  'k_slider': {'x': (.67, 1), 'y': (0, .33)},
+                  'n_nearest_slider': {'x': (.67, 1), 'y': (.33, .67)},
                   'n_pts_slider': {'x': (.33, 1), 'y': (.67, 1)},
-                  'run_button': {'x': (.67, .83), 'y': (.33, .67)},
-                  'clear_button': {'x': (.83, 1), 'y': (.33, .67)}}
+                  'run_button': {'x': (0, .33/2), 'y': (.67, 1)},
+                  'clear_button': {'x': (.33/2, .33), 'y': (.67, 1)}}

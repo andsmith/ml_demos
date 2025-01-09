@@ -1,5 +1,7 @@
 import numpy as np
 import cv2
+
+
 def scale_bbox(bbox_rel, bbox_abs):
     """
     Get absolute coordinates of a bounding box from relative coordinates.
@@ -18,6 +20,27 @@ def scale_bbox(bbox_rel, bbox_abs):
             'y': (int(y0_abs + y0 * (y1_abs - y0_abs)),
                   int(y0_abs + y1 * (y1_abs - y0_abs)))}
 
+
+def get_n_disp_colors(n):
+    """
+    Get colors to display n clusters.
+    Should be somewhat dark.
+    """
+    if n < 5:
+        print("Making primary colors")
+        colors = np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0], [1, 0, 0]])
+        colors= colors[:n]
+    elif n< 27:
+        print("Making 27 colors")
+        colors = np.array([[r, g, b] for r in [0, .5, 1.0] for g in [0, .5, 1.0] for b in [0, .5, 1.0]])
+        colors= colors[:n]
+    else:
+        print("Making random colors")
+        colors = np.random.rand(n, 3) * .5 + .2
+    colors = (colors * 255).astype(np.uint8)
+    return colors
+
+
 def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
     """
     Calculate the largest font size to fit the text in the bbox.
@@ -31,7 +54,7 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
 
     text_area_width = bbox['x'][1] - bbox['x'][0] - item_spacing_px * 2
     text_area_height = bbox['y'][1] - bbox['y'][0] - item_spacing_px * 2 - n_extra_v_spaces * item_spacing_px
-    #print("Fitting text in %i x %i"%( text_area_width, text_area_height))
+    # print("Fitting text in %i x %i"%( text_area_width, text_area_height))
     for font_size in font_sizes:
         (title_width, title_height), baseline = cv2.getTextSize(lines[0], font, font_size, 1)
         header_height = title_height + item_spacing_px * 2 + 1 + baseline  # space, title, space, line
@@ -41,14 +64,14 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, searc
             text_widths, text_heights = zip(*text_sizes)
         else:
             text_widths, text_heights = [0], [0]
-            
+
         total_height = header_height + np.sum(text_heights) + item_spacing_px * \
             (len(text_heights) + 1) + baseline * len(text_heights)
         total_width = max(title_width, max(text_widths))
         item_height = text_heights[0]
         if total_height < text_area_height and total_width < text_area_width:
             return font_size, int(item_height/2)
-    #print("Failed to find good font size, using smallest.")
+    # print("Failed to find good font size, using smallest.")
     return np.min(font_sizes), np.min(font_sizes)//2
 
 

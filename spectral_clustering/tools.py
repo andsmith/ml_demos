@@ -13,7 +13,8 @@ COLOR_OPTIONS = {'unselected': COLORS['black'],
                  'mouseover': COLORS['red'],
                  'idle': COLORS['black'],
                  'held': COLORS['blue'],
-                 'tab': COLORS['gray']}
+                 'tab': COLORS['gray'],
+                 'border': COLORS['gray'],}
 
 
 class Tool(ABC):
@@ -59,7 +60,11 @@ class Tool(ABC):
         Move the tool to the new bbox.
         """
         self._bbox = bbox
-
+    def get_value(self):
+        """
+        Return the current value.
+        """
+        pass
 
 class Slider(Tool):
     """
@@ -124,9 +129,7 @@ class Slider(Tool):
         """
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        if False:
-            # bbox
-            cv2.rectangle(img, p0, p1, COLORS['orange'].tolist(), 1)
+        if False:  # debug graphics
             # text bbox
             cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
                         (self._text_bbox['x'][1], self._text_bbox['y'][1]), COLORS['red'].tolist(), 1)
@@ -136,7 +139,9 @@ class Slider(Tool):
             cv2.rectangle(img, (self._slider_bbox['x'][0], self._slider_bbox['y'][0]),
                         (self._slider_bbox['x'][1], self._slider_bbox['y'][1]), COLORS['turquoise'].tolist(), 1)
       
-      
+        # bbox, in border color
+        #cv2.rectangle(img, p0, p1, self._colors['border'], 2)
+            
         # title
         val = self.get_value()
         slider_str = self._name + self._format_str%(val,)
@@ -161,7 +166,7 @@ class Slider(Tool):
         """
         Check if the click is within the slider.
         """
-        print("Slider mouse click")
+        #print("Slider mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
             self._move_slider(x)
@@ -181,7 +186,7 @@ class Slider(Tool):
 
     def mouse_unclick(self, x, y):
         self._held = False
-        print("Slider mouse unclick")
+        #print("Slider mouse unclick")
 
     def _move_slider(self, x):
         """
@@ -251,7 +256,7 @@ class Button(Tool):
         """
         Check if the click is within the button.
         """
-        print("Button mouse click")
+        #print("Button mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
             return True
@@ -271,10 +276,13 @@ class Button(Tool):
             
 
     def mouse_unclick(self, x, y):
-        print("Button mouse unclick")
+        #print("Button mouse unclick")
         if self._held and bbox_contains(self._bbox, x, y):
             self._callback()
         self._held = False
+
+    def get_value(self):
+        return self._text
 
 
 class RadioButtons(Tool):
@@ -383,7 +391,7 @@ class RadioButtons(Tool):
         Check if the click is within the radio buttons.
         :
         """
-        print("RadioButtons mouse click")
+        #print("RadioButtons mouse click")
         if bbox_contains(self._bbox, x, y):
             ind = self._get_item_at(y)
             if ind is not None:
@@ -406,15 +414,15 @@ class RadioButtons(Tool):
                     break
         return False
     
-    def get_selected_option(self):
+    def get_value(self):
         """
         Return the selected index.
         """
         return self._options[self._selected_ind]
 
     def mouse_unclick(self, x, y):
-        print("RadioButtons mouse unclick")
-
+        #print("RadioButtons mouse unclick")
+        pass
     def get_selection(self, name=False):
         """
         Return the selected index.

@@ -7,7 +7,7 @@ import cv2
 from util import scale_bbox
 import logging
 from tools import RadioButtons, Slider, Button
-
+from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import LAYOUT, TOOLBAR_LAYOUT
 
@@ -127,6 +127,24 @@ class UiWindow(Window):
 
     def __init__(self, name, win_size, app):
         super().__init__(name, win_size, app)
+        self._clusters = []
+
+
+    def get_points(self, n_per_cluster):
+        """
+        Each cluster has a weight in [0, 100].
+
+        points = []
+        for cluster in self._clusters:
+            points.append(cluster.generate_points(n_per_cluster))
+        """
+        points = []
+        # for now, random
+        for _ in range(2):  # three test clusters
+            c_center = np.random.rand(2)
+            c_points = np.random.randn(n_per_cluster, 2) * .1 + c_center
+            points.append(c_points)
+        return np.vstack(points)
 
     def render(self, img, active=False):
         super().render(img, active=active)
@@ -156,26 +174,36 @@ class ToolsWindow(UiWindow):
         self._held_tool = None
 
     def _setup_tools(self):
-        self.tools = {'kind_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], self.bbox),
-                                                 'Cluster Type',
+        indent_px = 5
+        indented_bbox = {'x': (self.bbox['x'][0] + indent_px, self.bbox['x'][1] - indent_px),
+                         'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
+        self.tools = {'kind_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], indented_bbox),
+                                                 'Cluster Type:',
                                                  ['gauss', 'ellipse', 'annulus'],
                                                  default_selection=0),
-                      'norm_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['norm_radio'], self.bbox),
-                                                 'Normalization',
-                                                 ['none', 'laplacian'],
-                                                 default_selection=0),
-                      'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], self.bbox),
-                                                 'N-Nearest',
+                      'alg_radio': RadioButtons(scale_bbox(TOOLBAR_LAYOUT['alg_radio'], indented_bbox),
+                                                 'Algorithm:',
+                                                 ['Unnormalized', 'Normalized','K-means'],
+                                                 default_selection=2),
+                      'n_nearest_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_nearest_slider'], indented_bbox),
+                                                 'N-Nearest:',
                                                  [3, 20], 5, format_str="=%i"),
-                      'n_pts_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], self.bbox),
+                      'n_pts_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], indented_bbox),
                                              'Num Pts',
-                                             [100, 5000], 2000, format_str="=%i"),
-                      'run_button': Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], self.bbox), 'Run',callback= self.app.recompute),
-                      'clear_button': Button(scale_bbox(TOOLBAR_LAYOUT['clear_button'], self.bbox), 'Clear', self.app.clear)}
+                                             [5, 2000], 100, format_str="=%i"),
+                      'k_slider': Slider(scale_bbox(TOOLBAR_LAYOUT['k_slider'], indented_bbox),
+                                             'K (clusters)',
+                                             [2, 25], 5, format_str="=%i"),
+                      'run_button': Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], indented_bbox), 'Run',callback= self.app.recompute),
+                      'clear_button': Button(scale_bbox(TOOLBAR_LAYOUT['clear_button'], indented_bbox), 'Clear', self.app.clear)}
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
     def render(self, img, active=False):
         #super().render(img, active=active)
+        w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
+        #cv2.rectangle(img, (self.margin_px, self.margin_px),
+        ##              (w - self.margin_px, h - self.margin_px),
+        #              LAYOUT['colors']['border'].tolist(), 2)
         for tool in self.tools.values():
             tool.render(img)
 
@@ -206,15 +234,19 @@ class ToolsWindow(UiWindow):
                 tool.mouse_move(x, y)
         return False
 
-    def get_val(self, param):
+    def get_value(self, param):
         if param == 'kind':
-            return self.tools['kind_radio'].get_selected_option()
-        elif param == 'norm':
-            return self.tools['norm_radio'].get_selected_option()
+            return self.tools['kind_radio'].get_value()
+        elif param == 'algorithm':
+            return self.tools['alg_radio'].get_value()
         elif param == 'n_nearest':
-            return self.tools['n_nearest_slider'].get_value()
+            return int(self.tools['n_nearest_slider'].get_value())
         elif param == 'n_pts':
-            return self.tools['n_pts_slider'].get_value()
+            return int(self.tools['n_pts_slider'].get_value())
+        elif param == 'k':
+            return int(self.tools['k_slider'].get_value())
+        else:
+            raise ValueError(f"Invalid parameter: {param}")
 
 
 class SpectrumWindow(UiWindow):
@@ -222,7 +254,27 @@ class SpectrumWindow(UiWindow):
 
 
 class ClustersWindow(UiWindow):
-    pass
+    def __init__(self, name, win_size, app):
+        super().__init__(name, win_size, app)
+        w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
+        self._bkg_color = + LAYOUT['colors']['bkg']
+        self._blank = np.zeros((h, w, 3), np.uint8) +self._bkg_color  # only redraw after updates
+        cv2.rectangle(self._blank, (self.margin_px, self.margin_px),
+                      (w - self.margin_px, h - self.margin_px),
+                      LAYOUT['colors']['border'].tolist(), 2)
+        self._frame = self._blank.copy()
+
+    def update(self, points, cluster_ids, colors):
+        """
+        Update the cluster window with new points and cluster assignments.
+        """
+        self._frame = self._blank.copy()
+        render_clustering(self._frame, points, cluster_ids, colors, margin_px=self.margin_px)
+        print("Regenerated cluster window")
+
+    def render(self, img, active=False):
+        img[self.bbox['y'][0]:self.bbox['y'][1],
+            self.bbox['x'][0]:self.bbox['x'][1]] = self._frame
 
 
 class EigenvectorsWindow(UiWindow):
