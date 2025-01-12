@@ -40,8 +40,7 @@ class ClusterCreator(object):
         self._size = size
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + WINDOW_LAYOUT['colors']['bkg']
         window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
-        self.windows = {Windows.ui: WINDOW_TYPES[Windows.ui](window_layout[Windows.ui], self._bkg),
-
+        self.windows = {Windows.ui: UiWindow()
 
         self._active_window_name = None  # Mouse is over this window
         self._clicked_window_name = None  # Mouse was clicked in this window, but may not be over it

@@ -266,7 +266,7 @@ class ToolsWindow(Window):
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], indented_bbox),
                                              'Num Pts',
                                              [5, 2000], 100, format_str="=%i"),
-                      Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['k_slider'], indented_bbox),
+                      Tools.c: Slider(scale_bbox(TOOLBAR_LAYOUT['k_slider'], indented_bbox),
                                          'K (clusters)',
                                          [2, 25], 5, format_str="=%i"),
                       Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], indented_bbox), 'Run', callback=self.app.recompute),
