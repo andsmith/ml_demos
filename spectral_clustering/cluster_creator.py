@@ -22,12 +22,12 @@ Widgets includes buttons for interacting:
 
 """
 import numpy as np
-from windows import ClustersWindow, ToolsWindow, SpectrumWindow, EigenvectorsWindow, UiWindow, SimMatrixWindow, GraphStatsWindow
+from windows import UiWindow, ClustersWindow, ToolsWindow, SimMatrixWindow, ToolsWindow,GraphStatsWindow, SpectrumWindow
 import cv2
 import logging
 import time
 # all dims in unit square, to be scaled to window size
-from layout import LAYOUT, TOOLBAR_LAYOUT
+from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
 from spectral import SimilarityGraph
@@ -38,15 +38,11 @@ class ClusterCreator(object):
     def __init__(self, size=(640*2, 800)):
         logging.info('Initializing Cluster Creator')
         self._size = size
-        self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + LAYOUT['colors']['bkg']
-        window_layout = self._get_layouts(LAYOUT['windows'], size)
-        self.windows = {'ui': UiWindow('ui', window_layout['ui'], self,),
-                        'tools': ToolsWindow('tools', window_layout['tools'], self),
-                        'spectrum': SpectrumWindow('spectrum', window_layout['spectrum'], self),
-                        'clusters': ClustersWindow('clusters', window_layout['clusters'], self),
-                        'eigenvectors': EigenvectorsWindow('eigenvectors', window_layout['eigenvectors'], self),
-                        'sim_matrix': SimMatrixWindow('sim_matrix', window_layout['sim_matrix'], self),
-                        'graph_stats': GraphStatsWindow('graph_stats', window_layout['graph_stats'], self)}
+        self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + WINDOW_LAYOUT['colors']['bkg']
+        window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
+        self.windows = {Windows.ui: WINDOW_TYPES[Windows.ui](window_layout[Windows.ui], self._bkg),
+
+
         self._active_window_name = None  # Mouse is over this window
         self._clicked_window_name = None  # Mouse was clicked in this window, but may not be over it
         self._mouse_pos = None
@@ -69,28 +65,28 @@ class ClusterCreator(object):
             * 
         """
         window_layout = {}
-        for window_name in layout:
-            window = layout[window_name]
+        for window_kind in layout:
+            window = layout[window_kind]
             x0, x1 = window['x']
             y0, y1 = window['y']
-            window_layout[window_name] = {'x': (int(x0 * size[0]), int(x1 * size[0])),
+            window_layout[window_kind] = {'x': (int(x0 * size[0]), int(x1 * size[0])),
                                           'y': (int(y0 * size[1]), int(y1 * size[1]))}
         # adjust sim_matrix window and it's neighbor
-        sim_window_name = 'sim_matrix'
-        sim_neighbor_name = [w for w in layout if (layout[w]['y'] == layout[sim_window_name]['y']) and
+        sim_window_k = Windows.sim_matrix
+        sim_neighbor_k = [w for w in layout if (layout[w]['y'] == layout[sim_window_k]['y']) and
                              (w != 'sim_matrix') and
-                             (layout[sim_window_name]['x'][1] == layout[w]['x'][0])]
-        if len(sim_neighbor_name) == 0:
+                             (layout[sim_window_k]['x'][1] == layout[w]['x'][0])]
+        if len(sim_neighbor_k) == 0:
             raise ValueError("No window with y=%s and x[1]=%f in layout." %
-                             (layout[sim_window_name]['y'],layout[sim_window_name]['x'][1]))
-        sim_neighbor_name = sim_neighbor_name[0]
+                             (layout[sim_window_k]['y'],layout[sim_window_k]['x'][1]))
+        sim_neighbor_k = sim_neighbor_k[0]
 
-        sim_height = window_layout[sim_window_name]['y'][1] - window_layout[sim_window_name]['y'][0]
-        new_x = window_layout[sim_window_name]['x'][0] + sim_height
-        print("Adjusting sim matrix window from %i pixels to %i." % (window_layout[sim_window_name]['x'][1] - window_layout[sim_window_name]['x'][0], sim_height))
-        print("Adjusting %s window from %i pixels to %i." % (sim_neighbor_name, window_layout[sim_neighbor_name]['x'][1] - window_layout[sim_neighbor_name]['x'][0], sim_height))
-        window_layout[sim_window_name]['x'] = (window_layout[sim_window_name]['x'][0], new_x)
-        window_layout[sim_neighbor_name]['x'] = (new_x, window_layout[sim_neighbor_name]['x'][1])
+        sim_height = window_layout[sim_window_k]['y'][1] - window_layout[sim_window_k]['y'][0]
+        new_x = window_layout[sim_window_k]['x'][0] + sim_height
+        print("Adjusting sim matrix window from %i pixels to %i." % (window_layout[sim_window_k]['x'][1] - window_layout[sim_window_k]['x'][0], sim_height))
+        print("Adjusting %s window from %i pixels to %i." % (sim_neighbor_k, window_layout[sim_neighbor_k]['x'][1] - window_layout[sim_neighbor_k]['x'][0], sim_height))
+        window_layout[sim_window_k]['x'] = (window_layout[sim_window_k]['x'][0], new_x)
+        window_layout[sim_neighbor_k]['x'] = (new_x, window_layout[sim_neighbor_k]['x'][1])
 
         return window_layout
 
