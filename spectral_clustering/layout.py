@@ -30,31 +30,31 @@ class Windows(IntEnum):
 
 
 WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit square to window size
-                                  'y': (0, .5)},
-                      Windows.toolbar: {'x': (0, .667),
-                                       'y': (.75, 1)},
-                      Windows.spectrum: {'x': (.667, 1),
-                                        'y': (0, .333)},
-                      Windows.eigenvectors: {'x': (.667, 1),
-                                            'y': (.333, .667)},
-                      Windows.sim_matrix: {'x': (0, .25),
-                                          'y': (.5, .75)},  # will be made square regardless of window size
-                      Windows.graph_stats: {'x': (.25, .666),
-                                           'y': (.5, .75)},
-                      Windows.clustering: {'x': (.667, 1),
-                                          'y': (.667, 1)}},
-          'colors': {'bkg': COLORS['white'],
-                     'border': COLORS['gray'],
-                     'active_border': COLORS['black'],
-                     'font': COLORS['black']},
+                                          'y': (0, .5)},
+                             Windows.toolbar: {'x': (0, .667),
+                                               'y': (.75, 1)},
+                             Windows.spectrum: {'x': (.667, 1),
+                                                'y': (0, .333)},
+                             Windows.eigenvectors: {'x': (.667, 1),
+                                                    'y': (.333, .667)},
+                             Windows.sim_matrix: {'x': (0, .25),
+                                                  'y': (.5, .75)},  # will be made square regardless of window size
+                             Windows.graph_stats: {'x': (.25, .666),
+                                                   'y': (.5, .75)},
+                             Windows.clustering: {'x': (.667, 1),
+                                                  'y': (.667, 1)}},
+                 'colors': {'bkg': COLORS['white'],
+                            'border': COLORS['gray'],
+                            'active_border': COLORS['black'],
+                            'font': COLORS['black']},
 
-          'dims': {'margin_px': 5,
-                   'pt_size': 2,
-                   'mouseover_rad_px': 20},
-          'font': cv2.FONT_HERSHEY_SIMPLEX,
-          'font_size': .5,
-          'font_color': (0, 0, 0),
-          'font_thickness': 1}
+                 'dims': {'margin_px': 5,
+                          'pt_size': 2,
+                          'mouseover_rad_px': 20},
+                 'font': cv2.FONT_HERSHEY_SIMPLEX,
+                 'font_size': .5,
+                 'font_color': (0, 0, 0),
+                 'font_thickness': 1}
 
 
 """
@@ -81,10 +81,13 @@ class Tools(IntEnum):
     sim_graph_radio = 1
     k_slider = 2
     n_pts_slider = 3
-    sim_param_slider = 4
-    run_button = 5
-    clear_button = 6
-    alg_radio = 7
+    run_button = 4
+    clear_button = 5
+    alg_radio = 6
+
+    nn_slider = 7
+    epsilon_slider = 8
+    sigma_slider = 9
 
 
 # coords are in unit square, will be scaled to toolbar area of window (as defined in LAYOUT['windows']['tools'])
@@ -93,11 +96,13 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .25),  # scale from unit square to
                   Tools.sim_graph_radio: {'x': (.25, .5),
                                           'y': (0, .75)},
                   Tools.k_slider: {'x': (.5, .75),
-                                             'y': (0, .75)},
+                                   'y': (0, .75)},
                   Tools.n_pts_slider: {'x': (.5, 1),
                                        'y': (.75, 1)},
-                  Tools.sim_param_slider: {'x': (.25, .5),
-                                           'y': (.75, 1)},
+                  Tools.nn_slider: {'x': (.25, .5),
+                                    'y': (.75, 1)},
+                  Tools.epsilon_slider: None,
+                  Tools.sigma_slider: None,
 
                   Tools.run_button: {'x': (0, .125),
                                      'y': (.75, 1)},
@@ -106,3 +111,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .25),  # scale from unit square to
 
                   Tools.alg_radio: {'x': (.75, 1),
                                     'y': (0, .75)}, }
+
+# these all go in the same spot
+TOOLBAR_LAYOUT[Tools.epsilon_slider] = TOOLBAR_LAYOUT[Tools.nn_slider]
+TOOLBAR_LAYOUT[Tools.sigma_slider] = TOOLBAR_LAYOUT[Tools.nn_slider]

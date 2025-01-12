@@ -35,7 +35,6 @@ class Window(ABC):
         :param app: the main app instance
         :param bbox: bounding box of the window in pixels {'x': (x_min, x_max), 'y': (y_min, y_max)}
         """
-        self._kind = kind
         self.app = app
         self.bbox = bbox
         self.margin_px = int(WINDOW_LAYOUT['dims']['margin_px'])
@@ -50,7 +49,7 @@ class Window(ABC):
                                              self._txt['font_size'],
                                              self._txt['font_thickness'])[0][1]
 
-        logging.info(f"Created window {self._txt_name} with bbox {self.bbox}")
+        logging.info(f"Created window {self._txt['name']} with bbox {self.bbox}")
 
     def contains(self, x, y):
         """
@@ -71,7 +70,7 @@ class Window(ABC):
 
         cv2.putText(img, self._txt['name'], pos, self._txt['font'], self._txt['font_size'],
                     self._txt['color'], self._txt['font_thickness'])
-        
+
     def render_box(self, img, active=False):
         """
         Render the window box.
@@ -93,14 +92,12 @@ class Window(ABC):
         self.render_box(img, active=active)
         self.render_title(img)
 
-    @abstractmethod
     def keypress(self, key):
         """
         Handle a keypress event.
         """
         pass
 
-    @abstractmethod
     def mouse_click(self, x, y):
         """
         Handle a mouse click event.
@@ -108,14 +105,12 @@ class Window(ABC):
         """
         pass
 
-    @abstractmethod
     def mouse_unclick(self, x, y):
         """
         Handle a mouse unclick event.
         """
         pass
 
-    @abstractmethod
     def mouse_move(self, x, y):
         """
         Handle a mouse move event.
@@ -148,20 +143,23 @@ class UiWindow(Window):
 
         return np.vstack(points)
 
-    def render(self, img):
+    def render(self, img, active=False):
         # draw points
         # render cluster metadata
         # print("Rendering %i clusters" % len(self._clusters))
-        n_points = self.app.windows['tools'].get_value('n_pts')
+
+        self.render_box(img, active=active) # remove?
+        n_points = self.app.windows[Windows.toolbar].get_value('n_pts')
         for cluster in self._clusters:
             cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
 
         status = "N clusters: %i" % len(self._clusters)
-        status_height = cv2.getTextSize(status, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], WINDOW_LAYOUT['font_thickness'])[0][1]
-
+        status_height = cv2.getTextSize(
+            status, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], WINDOW_LAYOUT['font_thickness'])[0][1]
 
         text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
-        cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(), WINDOW_LAYOUT['font_thickness'])
+        cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
+        ), WINDOW_LAYOUT['font_thickness'])
 
     def keypress(self, key):
         pass
@@ -232,7 +230,7 @@ class UiWindow(Window):
         """
         Lookup current params, create a cluster with them.
         """
-        c_name = self.app.windows['tools'].get_value('kind')
+        c_name = self.app.windows[Windows.toolbar].get_value('kind')
         cluster = CLUSTER_TYPES[c_name](x, y, self.bbox)
         return cluster
 
@@ -242,54 +240,63 @@ class ToolsWindow(Window):
     Create & manage toolbox for the app.
     """
 
-    def __init__(self, bbox,app):
+    def __init__(self, bbox, app):
         super().__init__(Windows.toolbar, bbox, app)
         self._held_tool = None
         self._setup_tools()
-        
+
     def _setup_tools(self):
         indent_px = 5
         indented_bbox = {'x': (self.bbox['x'][0] + indent_px, self.bbox['x'][1] - indent_px),
                          'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
-        self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT['kind_radio'], indented_bbox),
-                                                 'Cluster Type',
-                                                 ['Gauss', 'Ellipse', 'Annulus'],
-                                                 default_selection=1),
-                      Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT['alg_radio'], indented_bbox),
-                                                'Algorithm',
-                                                ['Unnormalized', 'Normalized', 'K-means'],
-                                                default_selection=0),
-                      Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT['sim_graph_radio'], indented_bbox),
-                                                      'Sim Graph',
-                                                      ['epsilon', 'K-nn', 'full'],
-                                                      default_selection=0),  # be sure to set correct visibility of sim_param sliders
-                      Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['n_pts_slider'], indented_bbox),
-                                             'Num Pts',
-                                             [5, 2000], 100, format_str="=%i"),
-                      Tools.c: Slider(scale_bbox(TOOLBAR_LAYOUT['k_slider'], indented_bbox),
-                                         'K (clusters)',
-                                         [2, 25], 5, format_str="=%i"),
-                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT['run_button'], indented_bbox), 'Run', callback=self.app.recompute),
-                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT['clear_button'], indented_bbox), 'Clear', self.app.clear),
 
-                      # Only one of these three is on at a time, so we can use the same bbox:
-                      Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['sim_param_slider'], indented_bbox, visible=False),
-                                          'N-Nearest:',
-                                          [3, 20], 5, format_str="=%i"),
-                      Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['sim_param_slider'], indented_bbox, visible=True),
-                                               'epsilon (dist)',
-                                               [1., 50], 25, format_str="=%.3f"),
-                      Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT['sim_param_slider'], indented_bbox, visible=False),
-                                             'sigma (dist)',
-                                             [1., 50], 25, format_str="=%.3f")}
+        self._sim_param_names = {Tools.nn_slider: 'N-nearest',
+                                 Tools.epsilon_slider: 'epsilon (dist)',
+                                 Tools.sigma_slider: 'sigma (dist )'}
+        self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
+                                                     'Cluster Type', lambda: None,  # no callback
+                                                     options=['Gauss', 'Ellipse', 'Annulus'],
+                                                     default_selection=1),
+                      Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
+                                                    'Algorithm', lambda: None,  # no callback
+                                                    options=['Unnormalized', 'Normalized', 'K-means'],
+                                                    default_selection=0),
+                      Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
+                                                          'Sim Graph', lambda: None,  # no callback
+                                                          options=['epsilon', 'K-nn', 'full'],
+                                                          default_selection=0),
+                      Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
+                                                 'Num Pts', lambda _: None,  # no callback
+                                                 range=[5, 2000], default=100, format_str="=%i"),
+                      Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
+                                             'K (clusters)', lambda _: None,  # no callback
+                                             range=[2, 25], default=5, format_str="=%i"),
+                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute),
+                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear),
+
+                      # Only one of these three is on at a time, make the callback enforce this:
+                      Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
+                                              self._sim_param_names[Tools.nn_slider], self._change_sim_param_visibility,
+                                              range=[3, 20], default=5, format_str="=%i", visible=False),
+                      Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
+                                                   self._sim_param_names[Tools.epsilon_slider], self._change_sim_param_visibility,
+                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True),
+                      Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
+                                                 self._sim_param_names[Tools.sigma_slider], self._change_sim_param_visibility,
+                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
-    def _change_sim_param_visibility(self):
+    def _change_sim_param_visibility(self, param_name):
         """
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
+        param_name: "title" parameter of the Slider instance that was selected.
         """
-        sim_graph = self.tools['sim_graph_radio'].get_value()
+        for param_kind in self._sim_param_names:
+            if self._sim_param_names[param_kind] == param_name:
+                self.tools[param_kind].set_visible(True)
+            else:
+                self.tools[param_kind].set_visible(False)
 
     def render(self, img, active=False):
         # super().render(img, active=active)
@@ -329,45 +336,32 @@ class ToolsWindow(Window):
 
     def get_value(self, param):
         if param == 'kind':
-            return self.tools['kind_radio'].get_value()
+            return self.tools[Tools.kind_radio].get_value()
         elif param == 'algorithm':
-            return self.tools['alg_radio'].get_value()
+            return self.tools[Tools.alg_radio].get_value()
         elif param == 'n_nearest':
-            return int(self.tools['n_nearest_slider'].get_value())
+            return int(self.tools[Tools.nn_slider].get_value())
         elif param == 'n_pts':
-            return int(self.tools['n_pts_slider'].get_value())
+            return int(self.tools[Tools.n_pts_slider].get_value())
         elif param == 'epsilon':
-            return self.tools['epsilon_slider'].get_value()
+            return self.tools[Tools.epsilon_slider].get_value()
         elif param == 'sim_graph':
-            return self.tools['sim_graph_radio'].get_value()
+            return self.tools[Tools.sim_graph_radio].get_value()
         elif param == 'k':
-            return int(self.tools['k_slider'].get_value())
+            return int(self.tools[Tools.k_slider].get_value())
         else:
             raise ValueError(f"Invalid parameter: {param}")
 
 
-class SpectrumWindow(UiWindow):
-    def __init__(self, name, bbox, app):
-        super().__init__(Windows.spectrum,bbox,app)
-
-    def render(self, img, active=False):
-        """
-        Render the window onto the image.
-        (override for specific window types)
-        """
-        self.render_box(img, active=active)
-        self.render_title(img)
-
-
-class ClustersWindow(UiWindow):
-    def __init__(self, name, bbox, app):
-        super().__init__(name, bbox, app)
+class ClustersWindow(Window):
+    def __init__(self,  bbox, app):
+        super().__init__(Windows.clustering, bbox, app)
         w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
-        self._bkg_color = + LAYOUT['colors']['bkg']
+        self._bkg_color = + WINDOW_LAYOUT['colors']['bkg']
         self._blank = np.zeros((h, w, 3), np.uint8) + self._bkg_color  # only redraw after updates
         cv2.rectangle(self._blank, (self.margin_px, self.margin_px),
                       (w - self.margin_px, h - self.margin_px),
-                      LAYOUT['colors']['border'].tolist(), 2)
+                      WINDOW_LAYOUT['colors']['border'].tolist(), 2)
         self._frame = self._blank.copy()
 
     def update(self, points, cluster_ids, colors):
@@ -385,13 +379,9 @@ class ClustersWindow(UiWindow):
             self.bbox['x'][0]:self.bbox['x'][1]] = self._frame
 
 
-class EigenvectorsWindow(SpectrumWindow):
-    pass
-
-
-class SimMatrixWindow(SpectrumWindow):
-    def __init__(self, name, bbox, app):
-        super().__init__(name, bbox, app)
+class SimMatrixWindow(Window):
+    def __init__(self, bbox, app):
+        super().__init__(Windows.sim_matrix, bbox, app)
         self._img_bbox = {'x': (self.bbox['x'][0] + self.margin_px, self.bbox['x'][1] - self.margin_px),
                           'y': (self.bbox['y'][0] + self.margin_px, self.bbox['y'][1] - self.margin_px)}
 
@@ -436,8 +426,28 @@ class SimMatrixWindow(SpectrumWindow):
                 self._img_bbox['x'][0]:self._img_bbox['x'][0]+self._s] = self._image_rgb_resized
 
 
-class GraphStatsWindow(SpectrumWindow):
-    pass
+class SpectrumWindow(Window):
+    def __init__(self,  bbox, app):
+        super().__init__(Windows.spectrum, bbox, app)
+
+    def render(self, img, active=False):
+        """
+        Render the window onto the image.
+        (override for specific window types)
+        """
+        self.render_box(img, active=active)
+        self.render_title(img)
+
+
+class EigenvectorsWindow(Window):
+    def __init__(self, bbox, app):
+        super().__init__(Windows.eigenvectors, bbox, app)
+
+
+class GraphStatsWindow(Window):
+    def __init__(self, bbox, app):
+        super().__init__(Windows.graph_stats, bbox, app)
+        self._stats = None
 
 
 WINDOW_TYPES = {Windows.ui: UiWindow,

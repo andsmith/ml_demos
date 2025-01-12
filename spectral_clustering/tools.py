@@ -26,7 +26,7 @@ class Tool(ABC):
         """
         Create a tool with the given bounding box.
         :param bbox: {'x': [left, right], 'y': [top, bottom]}
-        :param label: Text label for the tool. (i.e. on a button)
+        :param label: Text label for rendering the tool. (i.e. on a button)
         :param visible: Whether the tool is visible initially.
         :param callback: Function to call when the tool is clicked.
            NOTE:  The base class does nothing with this, inheriting classes must implement the callback.
@@ -83,7 +83,7 @@ class Tool(ABC):
             return self._mouse_unclick(x, y)
 
     def set_visible(self, visible):
-        print("Tool %s set visible to %s" % (self._name, visible))
+        print("Tool %s set visible to %s" % (self._txt_name, visible))
         self._visible = visible
 
     def move_to(self, bbox):
@@ -92,6 +92,7 @@ class Tool(ABC):
         """
         self._bbox = bbox
 
+    @abstractmethod
     def get_value(self):
         """
         Return the current value.
@@ -103,8 +104,9 @@ class Slider(Tool):
     """
     Vertical slider, looks like this:
 
-        Value = 0.4
+        Value = 0.04
         [---|------]
+
     """
 
     def __init__(self, bbox, label, callback=None, visible=True, range=(0, 1), default=None, format_str='=%.2f'):
@@ -234,7 +236,7 @@ class Slider(Tool):
         rel_x = np.clip(rel_x, 0, 1)
         self._slider_pos = rel_x
         if old_pos != self._slider_pos and self._callback is not None:
-            self._callback()
+            self._callback(self.get_value())
 
 
 class Button(Tool):
@@ -343,9 +345,15 @@ class RadioButtons(Tool):
         """
         super().__init__(bbox,title, callback, visible)
         self._font = cv2.FONT_HERSHEY_SIMPLEX
-        self._bbox = bbox
-        self._options = options
         self._texts = texts if texts is not None else options
+        self._options = options
+
+        print("Title: ", self._txt_name)
+        print("Options: ", self._options)
+        print("Texts: ", self._texts)
+
+        self._title = title
+        self._bbox = bbox
         self._selected_ind = default_selection if default_selection is not None else 0  # currently selected index
         self._mouseover_ind = None  # index of item the mouse is over
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}

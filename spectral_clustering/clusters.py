@@ -203,6 +203,7 @@ class EllipseCluster(Cluster):
 
     def get_points(self, n):
         self._random_state = np.random.RandomState(self._rnd_seed)
+        # TODO: Cache these utnil n changes, etc.
         points = sample_ellipse(self._ctrl[CtrlPt.center],
                                  self._ctrl[CtrlPt.p0], 
                                  self._ctrl[CtrlPt.p1], n, self._random_state,)
