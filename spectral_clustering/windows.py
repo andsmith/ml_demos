@@ -4,13 +4,13 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, image_from_floats
+from util import scale_bbox, apply_colormap
 import logging
 from tools import RadioButtons, Slider, Button
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import LAYOUT, TOOLBAR_LAYOUT
-from clusters import EllipseCluster, CLUSTER_TYPES
+from clusters import EllipseCluster, AnnularCluster,CLUSTER_TYPES
 
 
 class Window(ABC):
@@ -21,12 +21,16 @@ class Window(ABC):
     the window's bounding box.
     """
 
-    def __init__(self, name, win_size, app):
+    def __init__(self, name, bbox, app):
+        """
+        :param name: name of the window
+        :param app: the main app instance
+        :param bbox: bounding box of the window in pixels {'x': (x_min, x_max), 'y': (y_min, y_max)}
+        """
         self.name = name
         self.app = app
-        self.win_size = win_size
+        self.bbox = bbox
         self.margin_px = int(LAYOUT['dims']['margin_px'])
-        self.bbox = self._get_bbox()
         self.colors = LAYOUT['colors']
 
         self._title_height = cv2.getTextSize(self.name, LAYOUT['font'], LAYOUT['font_size'],
@@ -35,20 +39,6 @@ class Window(ABC):
         if name not in LAYOUT['windows']:
             raise ValueError(f"Invalid window name: {name}")
         logging.info(f"Created window {name} with bbox {self.bbox}")
-
-    def _get_bbox(self):
-        """
-        Transform the relative layout dims to actual pixel coords.
-        """
-        x0, x1 = LAYOUT['windows'][self.name]['x']
-        y0, y1 = LAYOUT['windows'][self.name]['y']
-
-        x0 = int(x0 * self.win_size[0])
-        x1 = int(x1 * self.win_size[0])
-        y0 = int(y0 * self.win_size[1])
-        y1 = int(y1 * self.win_size[1])
-
-        return {'x': (x0, x1), 'y': (y0, y1)}
 
     def contains(self, x, y):
         """
@@ -126,8 +116,8 @@ class UiWindow(Window):
     Window for the cluster creator UI.
     """
 
-    def __init__(self, name, win_size, app):
-        super().__init__(name, win_size, app)
+    def __init__(self, name, bbox, app):
+        super().__init__(name, bbox, app)
         self._clusters = []
         self._mouseover_ind = None
         self._adjusting_ind = None
@@ -163,7 +153,10 @@ class UiWindow(Window):
             cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
 
         status = "N clusters: %i" % len(self._clusters)
-        text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][1] - self.margin_px)
+        status_height = cv2.getTextSize(status, LAYOUT['font'], LAYOUT['font_size'],
+                                        LAYOUT['font_thickness'])[0][1]
+    
+        text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
         cv2.putText(img, status, text_pos, LAYOUT['font'], LAYOUT['font_size'],
                     LAYOUT['colors']['font'].tolist(), LAYOUT['font_thickness'])
 
@@ -246,8 +239,8 @@ class ToolsWindow(UiWindow):
     Create & manage toolbox for the app.
     """
 
-    def __init__(self, name, win_size, app):
-        super().__init__(name, win_size, app)
+    def __init__(self, name, bbox, app):
+        super().__init__(name, bbox, app)
         self._setup_tools()
         self._held_tool = None
 
@@ -351,8 +344,8 @@ class SpectrumWindow(UiWindow):
 
 
 class ClustersWindow(UiWindow):
-    def __init__(self, name, win_size, app):
-        super().__init__(name, win_size, app)
+    def __init__(self, name, bbox, app):
+        super().__init__(name, bbox, app)
         w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
         self._bkg_color = + LAYOUT['colors']['bkg']
         self._blank = np.zeros((h, w, 3), np.uint8) + self._bkg_color  # only redraw after updates
@@ -381,14 +374,19 @@ class EigenvectorsWindow(SpectrumWindow):
 
 
 class SimMatrixWindow(SpectrumWindow):
-    def __init__(self, name, win_size, app):
-        super().__init__(name, win_size, app)
-        self._w = (self.bbox['x'][1] - self.bbox['x'][0])
-        self._h = (self.bbox['y'][1] - self.bbox['y'][0])
-        self._s =int( np.min((self._w, self._h)))
-        self._pad_x = self._w > self._h
-        self._m = None
+    def __init__(self, name, bbox, app):
+        super().__init__(name, bbox, app)
+        self._img_bbox = {'x': (self.bbox['x'][0] + self.margin_px, self.bbox['x'][1] - self.margin_px),
+                          'y': (self.bbox['y'][0] + self.margin_px, self.bbox['y'][1] - self.margin_px)}
+        
+        w = (self._img_bbox['x'][1] - self._img_bbox['x'][0])
+        h = (self._img_bbox['y'][1] - self._img_bbox['y'][0])
+        if h!=w:
+            raise ValueError("SimMatrixWindow must be square")
+        self._s = w
+        self._m = None  # the similarity matrix
         self._image_rgb_resized = None
+        self._colormap = cv2.COLORMAP_HOT
 
     def set_graph(self, sim_mat):
         """
@@ -396,10 +394,10 @@ class SimMatrixWindow(SpectrumWindow):
         :param sim_mat: spectral.SimilarityGraph instance
         """
         self._m = sim_mat.get_matrix()     
-        img_full = image_from_floats(self._m)
-        img_resized = cv2.resize(img_full, (self._s, self._s))
-        #import ipdb; ipdb.set_trace()
-        self._image_rgb_resized = cv2.merge((img_resized, img_resized, img_resized))
+        #img_full = image_from_floats(self._m)
+        img_full = apply_colormap(self._m, self._colormap)
+        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
+        self._image_rgb_resized =  img_resized #cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         print("Image created: shape %s, mean %.4f" % (self._image_rgb_resized.shape, np.mean(self._image_rgb_resized)))
         cv2.imwrite('sim_matrix_resized.png', self._image_rgb_resized)
         cv2.imwrite('sim_matrix_full.png', img_full)
@@ -415,17 +413,12 @@ class SimMatrixWindow(SpectrumWindow):
         For now grayscale, min_value=(0,0,0), max_value=(255,255,255)
         """
         if self._image_rgb_resized is None:
-            # bbox and title
+            # default window render
             super().render(img, active=active)
         else:
-            if self._pad_x:
-                padding = self._w - self._h
-                pad_left = padding // 2
-                #img = np.zeros((self._h, self._w, 3), np.uint8) + LAYOUT['colors']['bkg']
-                img[self.bbox['y'][0]:self.bbox['y'][0]+self._s, pad_left:pad_left+self._s] = self._image_rgb_resized
-                cv2.imwrite("taco.png", img)
-            else:
-                raise NotImplementedError()
+            img[self._img_bbox['y'][0]:self._img_bbox['y'][0]+self._s, 
+                self._img_bbox['x'][0]:self._img_bbox['x'][0]+self._s] = self._image_rgb_resized
+            
 
 
 class GraphStatsWindow(SpectrumWindow):

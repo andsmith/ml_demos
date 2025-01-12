@@ -61,16 +61,40 @@ class KMeansAlgorithm(ClusteringAlgorithm):
         return self._kmeans.fit_predict(x)
     
 class SpectralAlgorithm(ClusteringAlgorithm):
-    def __init__(self, k, n_nearest, kind):
+    def __init__(self, k, sim_graph):
         super().__init__('Spectral', k)
-        self._n_nearest = n_nearest
-        self._kind = kind
+        #self._n_nearest = n_nearest
+        #self._kind = kind
+        self._g = sim_graph
+        self._fit()
+
+    def _fit(self):
+        w = self._g.get_matrix()
+        degree_mat = np.sum(w, axis=1)
+        laplacian = np.diag(degree_mat) - w
+        eigvals, eigvecs = np.linalg.eigh(laplacian)
+
+        # sort by eigenvalues
+        idx = eigvals.argsort()
+        eigvals = eigvals[idx]
+        eigvecs = eigvecs[:, idx]
+
+        # get the first k eigenvectors
+        self._eigvecs = eigvecs[:, :self._k]
+
+        # kmeans on eigenvectors
+        self._kmeans = KMeans(n_clusters=self._k)
+        self._kmeans.fit(self._eigvecs)
+
+        # cluster
+        self._cluster_ids = self._kmeans.labels_
+
 
     def cluster(self, x):
-        # x fit
-        
-        # x predict
-        return np.random.randint(0, self._k, x.shape[0])
+        return self._cluster_ids
+    
+    def get_clusters(self):
+        return self._cluster_ids
 
 
 def test_render_clustering():

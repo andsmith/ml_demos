@@ -18,8 +18,8 @@ class CtrlPt(IntEnum):
     p1 = 2  # Second principal axis, changing its length changes only the second axis.
 
 CTRL_ORDER = [CtrlPt.p0, CtrlPt.center, CtrlPt.p1]
-CTRL_RAD=5
-DRAW_PT_SIZE=3
+CTRL_RAD=7
+DRAW_PT_SIZE = 3
 
 class Cluster(ABC):
     """
@@ -183,8 +183,9 @@ class Cluster(ABC):
         if show_ctrls:
             # draw control points, in this order:
             draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
+            draw_size_multipliers = [1.0, 1.5, 1.00]
 
-            for ctrl in draw_pts:
+            for ctrl, size_mul in zip( draw_pts, draw_size_multipliers):
                 pos = self._ctrl[ctrl]
                 color = self._colors['ctrl_idle']
                 if ctrl == self._ctrl_mouse_over:
@@ -193,7 +194,7 @@ class Cluster(ABC):
                     color = self._colors['ctrl_held']
                 
                 pos_screen = int(pos[0]), int(pos[1])
-                cv2.circle(img,pos_screen, DRAW_PT_SIZE, color, -1, cv2.LINE_AA)
+                cv2.circle(img,pos_screen, int(DRAW_PT_SIZE*size_mul) , color, -1, cv2.LINE_AA)
 
 
 class EllipseCluster(Cluster):
@@ -204,8 +205,18 @@ class EllipseCluster(Cluster):
         self._random_state = np.random.RandomState(self._rnd_seed)
         points = sample_ellipse(self._ctrl[CtrlPt.center],
                                  self._ctrl[CtrlPt.p0], 
-                                 self._ctrl[CtrlPt.p1], n, self._random_state)
+                                 self._ctrl[CtrlPt.p1], n, self._random_state,)
         return points
 
+class AnnularCluster(EllipseCluster):
 
-CLUSTER_TYPES = {'Ellipse': EllipseCluster}
+
+    def get_points(self, n):
+        self._random_state = np.random.RandomState(self._rnd_seed)
+        points = sample_ellipse(self._ctrl[CtrlPt.center],
+                                 self._ctrl[CtrlPt.p0], 
+                                 self._ctrl[CtrlPt.p1], n, self._random_state,
+                                 empty_frac=0.5)
+        return points
+CLUSTER_TYPES = {'Ellipse': EllipseCluster,
+                 'Annulus': AnnularCluster}

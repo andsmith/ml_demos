@@ -6,6 +6,16 @@ def image_from_floats(floats):
     values = (floats - small) / (big - small) * 255
     return values.astype(np.uint8)
 
+def apply_colormap(floats, colormap=cv2.COLORMAP_JET):
+    """
+    Apply a colormap to an image.
+    :param floats: 2D array of floats
+    :param colormap: cv2 colormap
+    :return: 3D array of uint8
+    """
+    image = image_from_floats(floats)
+    return cv2.applyColorMap(image, colormap)
+
 def test_image_from_floats():
     image = np.random.randn(100, 100)
     image_uint8 = image_from_floats(image)
@@ -134,7 +144,7 @@ def bbox_contains(box, x, y):
 
 
 
-def sample_ellipse(center, p0, p1, n, random_state):
+def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     """
     Generate N random points inside the ellipse.
     """
@@ -145,8 +155,14 @@ def sample_ellipse(center, p0, p1, n, random_state):
     angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
     # get the points on the ellipse
     angles_and_radii_rands = random_state.uniform(0, 1, (n, 2))
+
     angles = angles_and_radii_rands[:, 0] * 2 * np.pi
-    radii  = np.sqrt(angles_and_radii_rands[:, 1])
+    rad_rands = angles_and_radii_rands[:, 1]
+    if empty_frac>0:
+        rad_rands *= (1-empty_frac) 
+    radii  = 1.-(rad_rands)
+
+
     points = np.array([center[0] + major_axis * radii * np.cos(angle) * np.cos(angles) - minor_axis * radii * np.sin(angle) * np.sin(angles),
                        center[1] + major_axis * radii * np.sin(angle) * np.cos(angles) + minor_axis * radii * np.cos(angle) * np.sin(angles)]).T
     return points

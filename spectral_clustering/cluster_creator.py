@@ -32,19 +32,21 @@ from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
 from spectral import SimilarityGraph
 
+
 class ClusterCreator(object):
 
     def __init__(self, size=(640*2, 800)):
         logging.info('Initializing Cluster Creator')
         self._size = size
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + LAYOUT['colors']['bkg']
-        self.windows = {'ui':UiWindow('ui', size,self),
-                         'tools':ToolsWindow('tools', size,self),
-                         'spectrum':SpectrumWindow('spectrum', size,self),
-                         'clusters':ClustersWindow('clusters', size,self),
-                         'eigenvectors':EigenvectorsWindow('eigenvectors', size,self),
-                         'sim_matrix':SimMatrixWindow('sim_matrix', size,self),
-                         'graph_stats':GraphStatsWindow('graph_stats', size,self)}
+        window_layout = self._get_layouts(LAYOUT['windows'], size)
+        self.windows = {'ui': UiWindow('ui', window_layout['ui'], self,),
+                        'tools': ToolsWindow('tools', window_layout['tools'], self),
+                        'spectrum': SpectrumWindow('spectrum', window_layout['spectrum'], self),
+                        'clusters': ClustersWindow('clusters', window_layout['clusters'], self),
+                        'eigenvectors': EigenvectorsWindow('eigenvectors', window_layout['eigenvectors'], self),
+                        'sim_matrix': SimMatrixWindow('sim_matrix', window_layout['sim_matrix'], self),
+                        'graph_stats': GraphStatsWindow('graph_stats', window_layout['graph_stats'], self)}
         self._active_window_name = None  # Mouse is over this window
         self._clicked_window_name = None  # Mouse was clicked in this window, but may not be over it
         self._mouse_pos = None
@@ -54,7 +56,44 @@ class ClusterCreator(object):
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
-        
+
+    def _get_layouts(self, layout, size):
+        """
+        Convert the relative dimensions in LAYOUT['windows'] to absolute dimensions now
+        that we have the window size.
+
+        Also, make special adjustments:
+            * The similiarity matrix window should be square, so change its width
+                to match its height.  Check whatever window is next to it has the same
+                height, and adjust the width to match.
+            * 
+        """
+        window_layout = {}
+        for window_name in layout:
+            window = layout[window_name]
+            x0, x1 = window['x']
+            y0, y1 = window['y']
+            window_layout[window_name] = {'x': (int(x0 * size[0]), int(x1 * size[0])),
+                                          'y': (int(y0 * size[1]), int(y1 * size[1]))}
+        # adjust sim_matrix window and it's neighbor
+        sim_window_name = 'sim_matrix'
+        sim_neighbor_name = [w for w in layout if (layout[w]['y'] == layout[sim_window_name]['y']) and
+                             (w != 'sim_matrix') and
+                             (layout[sim_window_name]['x'][1] == layout[w]['x'][0])]
+        if len(sim_neighbor_name) == 0:
+            raise ValueError("No window with y=%s and x[1]=%f in layout." %
+                             (layout[sim_window_name]['y'],layout[sim_window_name]['x'][1]))
+        sim_neighbor_name = sim_neighbor_name[0]
+
+        sim_height = window_layout[sim_window_name]['y'][1] - window_layout[sim_window_name]['y'][0]
+        new_x = window_layout[sim_window_name]['x'][0] + sim_height
+        print("Adjusting sim matrix window from %i pixels to %i." % (window_layout[sim_window_name]['x'][1] - window_layout[sim_window_name]['x'][0], sim_height))
+        print("Adjusting %s window from %i pixels to %i." % (sim_neighbor_name, window_layout[sim_neighbor_name]['x'][1] - window_layout[sim_neighbor_name]['x'][0], sim_height))
+        window_layout[sim_window_name]['x'] = (window_layout[sim_window_name]['x'][0], new_x)
+        window_layout[sim_neighbor_name]['x'] = (new_x, window_layout[sim_neighbor_name]['x'][1])
+
+        return window_layout
+
     def _do_clustering(self, points):
         """
         Cluster the points with the given algorithm.
@@ -74,15 +113,13 @@ class ClusterCreator(object):
 
         elif algorithm_name in ('Unnormalized', 'Normalized'):
             # spectral
-            sim_graph = SimilarityGraph(points,kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
+            sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
             self.windows['sim_matrix'].set_graph(sim_graph)
-            sa = SpectralAlgorithm(n_clusters, sim_graph, algorithm_name).cluster(points)
-            return sa
+            sa = SpectralAlgorithm(n_clusters, sim_graph)
+            return sa.get_clusters()
         else:
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
-        
 
-        
     def recompute(self):
         """
         Recompute the clustering:
@@ -95,7 +132,7 @@ class ClusterCreator(object):
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
-        #print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
+        # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
         points = self.windows['ui'].get_points(n_points)
         unit_points = unscale_coords(self.windows['ui'].bbox, points)
 
@@ -103,14 +140,13 @@ class ClusterCreator(object):
 
         self.windows['clusters'].update(unit_points, cluster_ids, self._cluster_colors)
 
-
     def clear(self):
         """
         Clear the clusters.
         self.windows['ui'].clear()
         """
         self.windows['ui'].clear()
-        self.windows['clusters'].clear()    
+        self.windows['clusters'].clear()
         self.windows['sim_matrix'].clear()
 
     def run(self):
@@ -154,7 +190,7 @@ class ClusterCreator(object):
         """
         frame = self._bkg.copy()
         for window_name in self.windows:
-            self.windows[window_name].render(frame, active = (window_name == self._active_window_name))
+            self.windows[window_name].render(frame, active=(window_name == self._active_window_name))
         return frame
 
     def _get_window_name(self, x, y):
@@ -191,8 +227,8 @@ class ClusterCreator(object):
             elif event == cv2.EVENT_MOUSEMOVE:
                 self.windows[self._active_window_name].mouse_move(x, y)
             elif event == cv2.EVENT_LBUTTONUP:
-                #raise Exception("Can't unclick in a window that wasn't clicked!")
-                pass # will happen if double-clicking, so just do nothing.
+                # raise Exception("Can't unclick in a window that wasn't clicked!")
+                pass  # will happen if double-clicking, so just do nothing.
         else:
             self._active_window_name = None
 
