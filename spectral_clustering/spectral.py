@@ -3,17 +3,24 @@ import numpy as np
 from scipy.spatial.distance import pdist,squareform
 from sklearn.neighbors import NearestNeighbors
 
+from enum import IntEnum
+
+class SimilarityGraphTypes(IntEnum):
+    EPSILON = 0
+    NN = 1
+    FULL = 2
+
 
 class SimilarityGraph(object):
     """
     Build a similarity graph from a set of points using euclidean distances.
     """
 
-    def __init__(self, points, kind='epsilon', epsilon_dist=.01, n_nearest=10):
+    def __init__(self, points, kind, epsilon_dist=.01, n_nearest=10):
         """
         Construct a similarity graph from points in the unit square.
         :param points: 2D numpy array of points
-        :param kind: type of similarity graph to build, one of 'Epsilon', 'K-NN', or 'Full'
+        :param kind: type of similarity graph to build, one SimilarityGraphTypes.
         :param epsilon_dist: epsilon distance for epsilon graph
             M[i,j] = 1 if dist(i,j) < epsilon, 0 otherwise
         :param n_nearest: number of nearest neighbors for K-NN graph
@@ -24,14 +31,15 @@ class SimilarityGraph(object):
         self._points = points
         self._kind = kind
 
-        if kind == 'epsilon':
+        if kind == SimilarityGraphTypes.EPSILON:
             self._mat = self._build_epsilon_sim_matrix(epsilon_dist)
-        elif self._kind == 'K-nn':
+        elif self._kind == SimilarityGraphTypes.NN:
             self._mat = self._build_knn_sim_matrix(n_nearest)
-        elif self._kind == 'full':
+        elif self._kind == SimilarityGraphTypes.FULL:
             self._mat = self._build_full_sim_matrix(np.inf)
         else:
             raise ValueError(f"Invalid kind: {self._kind}")
+        
         print("Built similarity matrix, shape %s" %( self._mat.shape,))
 
     def _build_epsilon_sim_matrix(self, max_dist):

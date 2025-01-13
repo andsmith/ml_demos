@@ -22,17 +22,18 @@ class Tool(ABC):
     Abstract class for tools in the cluster creator app.
     """
 
-    def __init__(self, bbox, label,callback=None, visible=True):
+    def __init__(self, bbox, label,callback=None, visible=True, spacing_px=6):
         """
         Create a tool with the given bounding box.
         :param bbox: {'x': [left, right], 'y': [top, bottom]}
         :param label: Text label for rendering the tool. (i.e. on a button)
         :param visible: Whether the tool is visible initially.
         :param callback: Function to call when the tool is clicked.
+        :param spacing_px: Spacing between elements in the tool (text lines, etc)
            NOTE:  The base class does nothing with this, inheriting classes must implement the callback.
         """
         self._bbox = bbox
-        self._spacing_px = 4
+        self._spacing_px = spacing_px
         self._visible = visible
         self._callback = callback
         self._txt_name = label
@@ -109,12 +110,12 @@ class Slider(Tool):
 
     """
 
-    def __init__(self, bbox, label, callback=None, visible=True, range=(0, 1), default=None, format_str='=%.2f'):
+    def __init__(self, bbox, label, callback=None, visible=True, range=(0, 1), default=None, format_str='=%.2f', spacing_px=3):
         """
         Create a slider with the given bounding box.
         :param format_str: Format string for the value display:  label + format_str % (value,) 
         """
-        super().__init__(bbox, label, callback, visible)
+        super().__init__(bbox, label, callback, visible, spacing_px)
         self._format_str = format_str
         self._t_vert_frac = 0.6   # fraction of slider that is for title
         self._slider_width_px = 10
@@ -245,8 +246,8 @@ class Button(Tool):
     left-click calls callback function.
     """
 
-    def __init__(self, bbox,  label, callback, visible=True, border_indent=2):
-        super().__init__(bbox,label, callback, visible)
+    def __init__(self, bbox,  label, callback, visible=True, border_indent=2, spacing_px=4):
+        super().__init__(bbox,label, callback, visible, spacing_px)
         self._text = label
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._text_bbox = {'x': (bbox['x'][0] + self._spacing_px, bbox['x'][1] - self._spacing_px),
@@ -339,11 +340,11 @@ class RadioButtons(Tool):
 
     """
 
-    def __init__(self, bbox, title, callback, visible=True, options=('1', '2', '3'), texts=None, default_selection=None):
+    def __init__(self, bbox, title, callback, visible=True, options=('1', '2', '3'), texts=None, default_selection=None, spacing_px=6):
         """
         Create list of mutually exclusive items to select.
         """
-        super().__init__(bbox,title, callback, visible)
+        super().__init__(bbox,title, callback, visible, spacing_px=spacing_px)
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._texts = texts if texts is not None else options
         self._options = options
@@ -441,6 +442,8 @@ class RadioButtons(Tool):
             ind = self._get_item_at(y)
             if ind is not None:
                 self._selected_ind = ind
+                if self._callback is not None:
+                    self._callback(self.get_value())
         return False
 
     def _mouse_move(self, x, y):

@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraph
+from spectral import SimilarityGraph, SimilarityGraphTypes
 
 
 class ClusterCreator(object):

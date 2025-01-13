@@ -11,7 +11,7 @@ from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
-
+from spectral import SimilarityGraphTypes
 WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.toolbar: "Toolbar",
                 Windows.clustering: "Clusters",
@@ -19,6 +19,10 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.eigenvectors: "Eigenvectors",
                 Windows.sim_matrix: "Similarity matrix",
                 Windows.graph_stats: "Edge weightstats"}
+
+SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
+                        SimilarityGraphTypes.EPSILON: "Epsilon",
+                        SimilarityGraphTypes.FULL: "Sigma"}
 
 
 class Window(ABC):
@@ -148,7 +152,7 @@ class UiWindow(Window):
         # render cluster metadata
         # print("Rendering %i clusters" % len(self._clusters))
 
-        self.render_box(img, active=active) # remove?
+        self.render_box(img, active=active)  # remove?
         n_points = self.app.windows[Windows.toolbar].get_value('n_pts')
         for cluster in self._clusters:
             cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
@@ -250,21 +254,24 @@ class ToolsWindow(Window):
         indented_bbox = {'x': (self.bbox['x'][0] + indent_px, self.bbox['x'][1] - indent_px),
                          'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
 
-        self._sim_param_names = {Tools.nn_slider: 'N-nearest',
-                                 Tools.epsilon_slider: 'epsilon (dist)',
-                                 Tools.sigma_slider: 'sigma (dist )'}
+        self._sim_param_names = {Tools.nn_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN],
+                                 Tools.epsilon_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
+                                 Tools.sigma_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL]}
+
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
-                                                     'Cluster Type', lambda: None,  # no callback
+                                                     'Cluster Type', lambda x: None,  # no callback
                                                      options=['Gauss', 'Ellipse', 'Annulus'],
-                                                     default_selection=1),
+                                                     default_selection=1, spacing_px=7),
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
-                                                    'Algorithm', lambda: None,  # no callback
+                                                    'Algorithm', lambda x: None,  # no callback
                                                     options=['Unnormalized', 'Normalized', 'K-means'],
-                                                    default_selection=0),
+                                                    default_selection=0, spacing_px=7),
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
-                                                          'Sim Graph', lambda: None,  # no callback
-                                                          options=['epsilon', 'K-nn', 'full'],
-                                                          default_selection=0),
+                                                          'Sim Graph', callback=self._change_sim_param_visibility,
+                                                          options=[self._sim_param_names[Tools.nn_slider],
+                                                                   self._sim_param_names[Tools.epsilon_slider],
+                                                                   self._sim_param_names[Tools.sigma_slider]],
+                                                          default_selection=1, spacing_px=7),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
                                                  'Num Pts', lambda _: None,  # no callback
                                                  range=[5, 2000], default=100, format_str="=%i"),
@@ -276,14 +283,14 @@ class ToolsWindow(Window):
 
                       # Only one of these three is on at a time, make the callback enforce this:
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
-                                              self._sim_param_names[Tools.nn_slider], self._change_sim_param_visibility,
-                                              range=[3, 20], default=5, format_str="=%i", visible=False),
+                                              self._sim_param_names[Tools.nn_slider], lambda x: None,
+                                              range=[3, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
-                                                   self._sim_param_names[Tools.epsilon_slider], self._change_sim_param_visibility,
-                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True),
+                                                   self._sim_param_names[Tools.epsilon_slider], lambda x: None,
+                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True, spacing_px=5),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
-                                                 self._sim_param_names[Tools.sigma_slider], self._change_sim_param_visibility,
-                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False)}
+                                                 self._sim_param_names[Tools.sigma_slider], lambda x: None,
+                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False, spacing_px=5)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
@@ -292,11 +299,15 @@ class ToolsWindow(Window):
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
         param_name: "title" parameter of the Slider instance that was selected.
         """
+        print("Changing sim param visibility based on", param_name)
+        print("which should be one of:  %s" % self._sim_param_names.values())
         for param_kind in self._sim_param_names:
             if self._sim_param_names[param_kind] == param_name:
                 self.tools[param_kind].set_visible(True)
             else:
                 self.tools[param_kind].set_visible(False)
+
+        print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
 
     def render(self, img, active=False):
         # super().render(img, active=active)
