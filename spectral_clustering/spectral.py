@@ -1,14 +1,20 @@
 from clustering import ClusteringAlgorithm
 import numpy as np
-from scipy.spatial.distance import pdist,squareform
+from scipy.spatial.distance import pdist, squareform
 from sklearn.neighbors import NearestNeighbors
 
 from enum import IntEnum
+
 
 class SimilarityGraphTypes(IntEnum):
     EPSILON = 0
     NN = 1
     FULL = 2
+
+
+SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
+                        SimilarityGraphTypes.EPSILON: "Epsilon",
+                        SimilarityGraphTypes.FULL: "Sigma"}
 
 
 class SimilarityGraph(object):
@@ -25,22 +31,22 @@ class SimilarityGraph(object):
             M[i,j] = 1 if dist(i,j) < epsilon, 0 otherwise
         :param n_nearest: number of nearest neighbors for K-NN graph
             M[i,j] = 1 if j is among the n_nearest neighbors of i, 0 otherwise
-        
+
 
         """
         self._points = points
         self._kind = kind
 
-        if kind == SimilarityGraphTypes.EPSILON:
+        if kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON]:
             self._mat = self._build_epsilon_sim_matrix(epsilon_dist)
-        elif self._kind == SimilarityGraphTypes.NN:
+        elif self._kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN]:
             self._mat = self._build_knn_sim_matrix(n_nearest)
-        elif self._kind == SimilarityGraphTypes.FULL:
+        elif self._kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL]:
             self._mat = self._build_full_sim_matrix(np.inf)
         else:
             raise ValueError(f"Invalid kind: {self._kind}")
-        
-        print("Built similarity matrix, shape %s" %( self._mat.shape,))
+
+        print("Built similarity matrix, shape %s" % (self._mat.shape,))
 
     def _build_epsilon_sim_matrix(self, max_dist):
         """
@@ -53,19 +59,19 @@ class SimilarityGraph(object):
         sim_matrix = np.zeros(dists.shape)
         sim_matrix[dists < max_dist] = 1
         print("Built epsilong similarity matrix, n_mean_neighbors = %.3f" % (sim_matrix.mean(),))
-        #from util import image_from_floats
-        ##import cv2
-        #img= image_from_floats(sim_matrix)
-        #cv2.imwrite('sim_matrix.png', img)
+        # from util import image_from_floats
+        # import cv2
+        # img= image_from_floats(sim_matrix)
+        # cv2.imwrite('sim_matrix.png', img)
 
         return sim_matrix
-    
+
     def _build_full_sim_matrix(self, max_dist):
         raise NotImplementedError("Full graph not implemented")
-        
+
     def get_matrix(self):
         return self._mat
-    
+
     def _build_knn_sim_matrix(self, k, mutual=False):
         """
         Build the similarity matrix using K-nearest neighbors, i.e.
@@ -92,8 +98,4 @@ class SimilarityGraph(object):
             sim_matrix = np.minimum(sim_matrix, sim_matrix.T)
             sim_matrix = sim_matrix * mask
 
-                
-
         return sim_matrix
-    
-

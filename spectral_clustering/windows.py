@@ -11,7 +11,7 @@ from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
-from spectral import SimilarityGraphTypes
+from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES
 WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.toolbar: "Toolbar",
                 Windows.clustering: "Clusters",
@@ -19,10 +19,6 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.eigenvectors: "Eigenvectors",
                 Windows.sim_matrix: "Similarity matrix",
                 Windows.graph_stats: "Edge weightstats"}
-
-SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
-                        SimilarityGraphTypes.EPSILON: "Epsilon",
-                        SimilarityGraphTypes.FULL: "Sigma"}
 
 
 class Window(ABC):
@@ -135,15 +131,12 @@ class UiWindow(Window):
         self._mouse_pos = None
         self._sim_graph = None
         self._clicked_pos = None
-
         self._clusters = []
 
     def get_points(self):
-        points = []
-        for i, cluster in enumerate(self._clusters):
-            points[i] = cluster.get_points()
+        points = [cluster.get_points() for cluster in self._clusters]
         return np.vstack(points)
-    
+
     def n_pts_slider_callback(self, n_pts):
         for cluster in self._clusters:
             cluster.set_n_pts(int(n_pts))
@@ -288,7 +281,8 @@ class ToolsWindow(Window):
                                                                    self._sim_param_names[Tools.sigma_slider]],
                                                           default_selection=1, spacing_px=7),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
-                                                 'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,  # no callback
+                                                 # no callback
+                                                 'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,
                                                  range=[5, 2000], default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
                                              'K (clusters)', lambda _: None,  # no callback
@@ -431,9 +425,6 @@ class SimMatrixWindow(Window):
         img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
-        print("Image created: shape %s, mean %.4f" % (self._image_rgb_resized.shape, np.mean(self._image_rgb_resized)))
-        cv2.imwrite('sim_matrix_resized.png', self._image_rgb_resized)
-        cv2.imwrite('sim_matrix_full.png', img_full)
 
     def clear(self):
         self._m = None

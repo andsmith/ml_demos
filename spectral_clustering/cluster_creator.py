@@ -141,7 +141,7 @@ class ClusterCreator(object):
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
         # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
-        points = self.windows[Windows.ui].get_points(n_points)
+        points = self.windows[Windows.ui].get_points()
         unit_points = unscale_coords(self.windows[Windows.ui].bbox, points)
 
         cluster_ids, sim_graph = self._do_clustering(unit_points)
@@ -167,6 +167,7 @@ class ClusterCreator(object):
 
         logging.info('Running Cluster Creator')
         while True:
+            #print(len(self.windows[Windows.ui]._points), len(self.windows[Windows.ui]._clusters))
             # refresh
             frame = self._refresh()
 
