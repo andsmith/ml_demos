@@ -117,14 +117,14 @@ class ClusterCreator(object):
         epsilon = epsilon / width
 
         if algorithm_name == 'K-means':
-            return KMeansAlgorithm(n_clusters).cluster(points)
+            return KMeansAlgorithm(n_clusters).cluster(points), None
 
         elif algorithm_name in ('Unnormalized', 'Normalized'):
             # spectral
             sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
             self.windows[Windows.sim_matrix].set_graph(sim_graph)
             sa = SpectralAlgorithm(n_clusters, sim_graph)
-            return sa.get_clusters()
+            return sa.get_clusters(), sim_graph
         else:
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
 
@@ -144,9 +144,10 @@ class ClusterCreator(object):
         points = self.windows[Windows.ui].get_points(n_points)
         unit_points = unscale_coords(self.windows[Windows.ui].bbox, points)
 
-        cluster_ids = self._do_clustering(unit_points)
+        cluster_ids, sim_graph = self._do_clustering(unit_points)
 
         self.windows[Windows.clustering].update(unit_points, cluster_ids, self._cluster_colors)
+        self.windows[Windows.ui].update(sim_graph)
 
     def clear(self):
         """

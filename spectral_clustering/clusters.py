@@ -6,7 +6,9 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 import cv2
 from colors import COLORS
-from util import bbox_contains,get_ellipse_points,sample_ellipse
+from util import bbox_contains, get_ellipse_points, sample_ellipse
+
+
 class CtrlPt(IntEnum):
     """
     Enum for the control points of the cluster.
@@ -17,9 +19,11 @@ class CtrlPt(IntEnum):
     center = 1  # Place/move cluster by this ctrl point
     p1 = 2  # Second principal axis, changing its length changes only the second axis.
 
+
 CTRL_ORDER = [CtrlPt.p0, CtrlPt.center, CtrlPt.p1]
-CTRL_RAD=7
+CTRL_RAD = 7
 DRAW_PT_SIZE = 3
+
 
 class Cluster(ABC):
     """
@@ -32,8 +36,9 @@ class Cluster(ABC):
     a point is generated from the chosen cluster's distribution.
     """
 
-    def __init__(self, x, y, bbox):
+    def __init__(self, x, y, n, bbox):
         pos = np.array([x, y])
+        self._n = n
         self._bbox = bbox
         self._ctrl = {CtrlPt.center: pos,
                       CtrlPt.p0: pos,
@@ -43,11 +48,31 @@ class Cluster(ABC):
         self._color = (np.random.rand(3)*255).astype(np.uint8).tolist()
         self._ctrl_held = CtrlPt.p1
         self._ctrl_mouse_over = None
-
         self._colors = {'ctrl_idle': COLORS['gray'].tolist(),
                         'ctrl_mouse_over': COLORS['red'].tolist(),
                         'ctrl_held': COLORS['neon green'].tolist()}
-        print("Created cluster %s"% (self._ctrl,))
+        self._refresh()
+        print("Created cluster %s" % (self._ctrl,))
+
+    @abstractmethod
+    def _generate(self, n):
+        """
+        Generate random points.
+        For the same N, should be the same points each time.
+        :param n: number of points to generate
+        :returns: n x 2 array of points
+        """
+        pass
+
+    def _refresh(self):
+        self._points = self._generate(self._n)
+
+    def get_points(self):
+        return self._points
+
+    def set_n_pts(self, n):
+        self._n = n
+        self._refresh()
 
     def start_adjusting(self):
         if self._ctrl_mouse_over is None:
@@ -55,41 +80,39 @@ class Cluster(ABC):
         self._ctrl_held = self._ctrl_mouse_over
         self._ctrl_mouse_over = None
 
-        return True # change for single-click actions
+        return True  # change for single-click actions
 
     def stop_adjusting(self, bbox):
         self._ctrl_held = None
         # if out of bounds, delete
-        if not bbox_contains(bbox,*self._ctrl[CtrlPt.center]):
+        if not bbox_contains(bbox, *self._ctrl[CtrlPt.center]):
             return True
         return False
-        
 
     def update_mouse_pos(self, x, y, tol_px=CTRL_RAD):
         """
         Mouse moved to (x,y), is it over one of our control points?
         if so, set mousover state and return True.
         """
-        #import ipdb; ipdb.set_trace()
         tol_px_sq = tol_px**2
         for ctrl in CTRL_ORDER:
             pos = self._ctrl[ctrl]
-            #print("Q",ctrl)
-            #if ctrl==CtrlPt.center:
-                #print(pos, x, y, np.sum((np.array([x, y]) - pos)**2), tol_px_sq)
+            # print("Q",ctrl)
+            # if ctrl==CtrlPt.center:
+            # print(pos, x, y, np.sum((np.array([x, y]) - pos)**2), tol_px_sq)
             if np.sum((np.array([x, y]) - pos)**2) < tol_px_sq:
                 self._ctrl_mouse_over = ctrl
-                #print("Mouse over control point %s" % ctrl)
+                # print("Mouse over control point %s" % ctrl)
                 return True
         self._ctrl_mouse_over = None
-        #print("Mouse not over any control point")
+        # print("Mouse not over any control point")
         return False
 
     def drag_ctrl(self, x, y):
         """
         Drag the control point under the mouse.
         """
-        if self._ctrl_held is not None:   
+        if self._ctrl_held is not None:
             delta = np.array([x, y]) - self._ctrl[CtrlPt.center]
 
             if self._ctrl_held == CtrlPt.center:
@@ -104,11 +127,11 @@ class Cluster(ABC):
                 aspect = r1 / r0 if r0 > 5 else 1.0
                 r1_new = r0_new * aspect
                 theta_0_new = np.arctan2(p0_new[1] - self._ctrl[CtrlPt.center][1],
-                                            p0_new[0] - self._ctrl[CtrlPt.center][0])
+                                         p0_new[0] - self._ctrl[CtrlPt.center][0])
                 theta_1_new = theta_0_new + np.pi/2.
                 p1_new = self._ctrl[CtrlPt.center] + np.array([r1_new * np.cos(theta_1_new),
-                                                               r1_new * np.sin(theta_1_new)])                   
-                self._ctrl[CtrlPt.p0] =p0_new
+                                                               r1_new * np.sin(theta_1_new)])
+                self._ctrl[CtrlPt.p0] = p0_new
                 self._ctrl[CtrlPt.p1] = p1_new
             elif self._ctrl_held == CtrlPt.p1:
                 # Just change length of p1, keep p0 in place
@@ -116,108 +139,93 @@ class Cluster(ABC):
                 old_theta1 = np.arctan2(self._ctrl[CtrlPt.p1][1] - self._ctrl[CtrlPt.center][1],
                                         self._ctrl[CtrlPt.p1][0] - self._ctrl[CtrlPt.center][0])
                 self._ctrl[CtrlPt.p1] = self._ctrl[CtrlPt.center] + np.array([new_r1 * np.cos(old_theta1),
-                                                                            new_r1 * np.sin(old_theta1)])   
+                                                                              new_r1 * np.sin(old_theta1)])
             else:
                 raise ValueError("Control point held is not valid to drag")
-
-
-
-            #self._ctrl[self._ctrl_held] = np.array([x, y])
-            #print("Control point %s dragged to (%f, %f)" % (self._ctrl_held, x, y))
+            # self._ctrl[self._ctrl_held] = np.array([x, y])
+            # print("Control point %s dragged to (%f, %f)" % (self._ctrl_held, x, y))
         else:
             raise ValueError("No control point held to drag")
 
-    @abstractmethod
-    def get_points(self, n):
-        """
-        Generate a points from the cluster.
-        For the same N, should be the same points each time.
-        :param n: number of points to generate
-        :returns: n x 2 array of points
-        """
-        pass
+        self._refresh()
 
-    def render(self, img, n_pts, show_ctrls):
+    def render(self, img, show_ctrls, pt_size=3):
         """
         Render the cluster on the image.
         Draw center and points p0, p1, all the appropriate color.
         Draw major/minor axes.
         """
-        
-        #print("MOUSEOVER STATE", self._ctrl_mouse_over)
-        #print("HOLD STATE", self._ctrl_held)
-        #print("\n")
-        
+
+        # print("MOUSEOVER STATE", self._ctrl_mouse_over)
+        # print("HOLD STATE", self._ctrl_held)
+        # print("\n")
+
         if show_ctrls:
             def _draw_symm_line(center, p, color):
-                    cv2.line(img, (int(center[0]), int(center[1])),
-                            (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
-                    cv2.line(img, (int(center[0]), int(center[1])),
-                            (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
+                cv2.line(img, (int(center[0]), int(center[1])),
+                         (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
+                cv2.line(img, (int(center[0]), int(center[1])),
+                         (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
                 # draw axes
             _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
             _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
-            
+
             # draw ellipse
             pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
-            cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)  
-            
+            cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)
+
         # draw sample points
-        pts = self.get_points(n_pts)
-        valid = bbox_contains(self._bbox,pts[:,0],pts[:,1])
-        pts = pts[valid]
-        pts_size = 1
-        if pts.shape[0] < 1000:
-            pts_size = 2
-        if pts.shape[0] < 100:
-            pts_size = 3
+        self._points = self._points
+        valid = bbox_contains(self._bbox, self._points[:, 0], self._points[:, 1])
+        pts = self._points[valid]
         if pts.shape[0] > 0:
             for pt in pts:
                 px, py = int(pt[0]), int(pt[1])
-                if pts_size==1:
-                    img[py,px] = self._color
+                if pt_size == 1:
+                    img[py, px] = self._color
                 else:
-                    img[py:py+pts_size,px:px+pts_size] = self._color
-            
+                    img[py:py+pt_size, px:px+pt_size] = self._color
 
         if show_ctrls:
             # draw control points, in this order:
             draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
             draw_size_multipliers = [1.0, 1.5, 1.00]
 
-            for ctrl, size_mul in zip( draw_pts, draw_size_multipliers):
+            for ctrl, size_mul in zip(draw_pts, draw_size_multipliers):
                 pos = self._ctrl[ctrl]
                 color = self._colors['ctrl_idle']
                 if ctrl == self._ctrl_mouse_over:
                     color = self._colors['ctrl_mouse_over']
                 elif ctrl == self._ctrl_held:
                     color = self._colors['ctrl_held']
-                
+
                 pos_screen = int(pos[0]), int(pos[1])
-                cv2.circle(img,pos_screen, int(DRAW_PT_SIZE*size_mul) , color, -1, cv2.LINE_AA)
+                cv2.circle(img, pos_screen, int(DRAW_PT_SIZE*size_mul), color, -1, cv2.LINE_AA)
 
 
 class EllipseCluster(Cluster):
-    def __init__(self, x, y, bbox):
-        super().__init__(x, y,bbox)
+    def __init__(self, x, y, n, bbox):
+        super().__init__(x, y, n, bbox)
 
-    def get_points(self, n):
+    def _generate(self, n):
         self._random_state = np.random.RandomState(self._rnd_seed)
         # TODO: Cache these utnil n changes, etc.
         points = sample_ellipse(self._ctrl[CtrlPt.center],
-                                 self._ctrl[CtrlPt.p0], 
-                                 self._ctrl[CtrlPt.p1], n, self._random_state,)
+                                self._ctrl[CtrlPt.p0],
+                                self._ctrl[CtrlPt.p1], n, self._random_state,)
         return points
+
 
 class AnnularCluster(EllipseCluster):
 
-
-    def get_points(self, n):
+    def _generate(self, n):
         self._random_state = np.random.RandomState(self._rnd_seed)
         points = sample_ellipse(self._ctrl[CtrlPt.center],
-                                 self._ctrl[CtrlPt.p0], 
-                                 self._ctrl[CtrlPt.p1], n, self._random_state,
-                                 empty_frac=0.5)
+                                self._ctrl[CtrlPt.p0],
+                                self._ctrl[CtrlPt.p1], n, self._random_state,
+                                empty_frac=0.5)
         return points
+
+
 CLUSTER_TYPES = {'Ellipse': EllipseCluster,
                  'Annulus': AnnularCluster}

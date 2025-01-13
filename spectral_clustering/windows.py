@@ -125,45 +125,58 @@ class Window(ABC):
 class UiWindow(Window):
     """
     Window for the cluster creator UI.
+    Manage clusters, points.  Render similarity graph.
     """
 
     def __init__(self, bbox, app):
         super().__init__(Windows.ui, bbox, app)
-        self._clusters = []
         self._mouseover_ind = None
         self._adjusting_ind = None
         self._mouse_pos = None
+        self._sim_graph = None
         self._clicked_pos = None
 
-    def get_points(self, n_per_cluster):
-        """
-        Generate points from the clusters in the ui window
-        :param n_per_cluster: number of points per cluster
-        :returns: N x 2 array of points (inside the UI bbox)
-        """
-        points = []
-        for cluster in self._clusters:
-            points.append(cluster.get_points(n_per_cluster))
+        self._clusters = []
 
+    def get_points(self):
+        points = []
+        for i, cluster in enumerate(self._clusters):
+            points[i] = cluster.get_points()
         return np.vstack(points)
+    
+    def n_pts_slider_callback(self, n_pts):
+        for cluster in self._clusters:
+            cluster.set_n_pts(int(n_pts))
 
     def render(self, img, active=False):
-        # draw points
-        # render cluster metadata
-        # print("Rendering %i clusters" % len(self._clusters))
-
         self.render_box(img, active=active)  # remove?
-        n_points = self.app.windows[Windows.toolbar].get_value('n_pts')
-        for cluster in self._clusters:
-            cluster.render(img, n_points, show_ctrls=self.app.show_cluster_ctrls)
 
+        # draw points
+        n_points = self.app.windows[Windows.toolbar].get_value('n_pts') * len(self._clusters)
+        if n_points > 10000:
+            pts_size = 1
+        elif n_points > 1000:
+            pts_size = 2
+        else:
+            pts_size = 3
+
+        for cluster in self._clusters:
+            cluster.render(img, show_ctrls=self.app.show_cluster_ctrls, pt_size=pts_size)
+
+        # render cluster metadata
         status = "N clusters: %i" % len(self._clusters)
         status_height = cv2.getTextSize(
             status, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], WINDOW_LAYOUT['font_thickness'])[0][1]
-
         text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
         ), WINDOW_LAYOUT['font_thickness'])
+
+        # draw edges of similiarity graph
+
+    def update(self, new_sim_graph):
+        # just created from current set of points, so
+        # be sure to delete when points/clusters change.
+        self._sim_graph = new_sim_graph
 
     def keypress(self, key):
         pass
@@ -235,7 +248,9 @@ class UiWindow(Window):
         Lookup current params, create a cluster with them.
         """
         c_name = self.app.windows[Windows.toolbar].get_value('kind')
-        cluster = CLUSTER_TYPES[c_name](x, y, self.bbox)
+        n_points = self.app.windows[Windows.toolbar].get_value('n_pts')
+
+        cluster = CLUSTER_TYPES[c_name](x, y, n_points, self.bbox)
         return cluster
 
 
@@ -273,7 +288,7 @@ class ToolsWindow(Window):
                                                                    self._sim_param_names[Tools.sigma_slider]],
                                                           default_selection=1, spacing_px=7),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
-                                                 'Num Pts', lambda _: None,  # no callback
+                                                 'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,  # no callback
                                                  range=[5, 2000], default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
                                              'K (clusters)', lambda _: None,  # no callback
