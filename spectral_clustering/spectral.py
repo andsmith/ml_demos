@@ -51,7 +51,7 @@ class SimilarityGraph(object):
         else:
             raise ValueError(f"Invalid kind: {self._kind}")
 
-        print("Built similarity matrix, shape %s, mean %.3f" % (self._mat.shape,self._mat.mean()))
+        #print("Built similarity matrix, shape %s, mean %.3f" % (self._mat.shape,self._mat.mean()))
 
     def _build_epsilon_sim_matrix(self, max_dist):
         """
@@ -104,3 +104,14 @@ class SimilarityGraph(object):
             sim_matrix = sim_matrix * mask
 
         return sim_matrix
+
+    def draw_graph(self,img):
+        """
+        Draw an edge between points with nonzero entries in the similarity matrix.
+        """
+        lines = []
+        nonzero = np.nonzero(np.triu(self._mat))
+        for i, j in zip(*nonzero):
+            lines.append(np.array([self._points[i], self._points[j]], dtype=np.int32))
+
+        cv2.polylines(img, lines, False, (128, 128, 128), 1, cv2.LINE_AA)

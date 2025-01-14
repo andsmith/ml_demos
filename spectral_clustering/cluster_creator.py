@@ -59,6 +59,7 @@ class ClusterCreator(object):
         self._cluster_colors = None  # update only when K changes
         self._clicked_pos = None
         self.show_cluster_ctrls = True
+        self.show_graph=True
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
@@ -112,7 +113,7 @@ class ClusterCreator(object):
         """
         Get new points from the UI window.
         """
-        print("Main thread updating points")
+        #print("Main thread updating points")
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph()
 
@@ -124,7 +125,7 @@ class ClusterCreator(object):
         """
         def update_sim_graph_thread():
             # first, clear the current graph so it doesn't render while we're updating it
-            print("Updating similarity graph in thread:  ", get_ident())
+            #print("Updating similarity graph in thread:  ", get_ident())
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = None
             
@@ -135,7 +136,8 @@ class ClusterCreator(object):
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)
-            print("\tDone updating similarity graph in thread:  ", get_ident())
+                self.windows[Windows.ui].set_graph(sim_graph)
+            #print("\tDone updating similarity graph in thread:  ", get_ident())
         if asynch:
             Thread(target=update_sim_graph_thread).start()
         else:
@@ -162,6 +164,7 @@ class ClusterCreator(object):
             # spectral
             sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
             self.windows[Windows.sim_matrix].set_graph(sim_graph)
+            self.windows[Windows.ui].set_graph(sim_graph)
             sa = SpectralAlgorithm(n_clusters, sim_graph)
             return sa.get_clusters(), sim_graph
         else:
@@ -184,7 +187,6 @@ class ClusterCreator(object):
         cluster_ids, sim_graph = self._do_clustering(unit_points)
 
         self.windows[Windows.clustering].update(unit_points, cluster_ids, self._cluster_colors)
-        self.windows[Windows.ui].update(sim_graph)
 
     def clear(self):
         """
@@ -224,6 +226,9 @@ class ClusterCreator(object):
             elif k == ord(' '):
                 self.show_cluster_ctrls = not self.show_cluster_ctrls
                 print("Show cluster controls: %s" % self.show_cluster_ctrls)
+            elif k==ord('g'):
+                self.show_graph=not self.show_graph
+                print("Show graph: %s" % self.show_graph)
             elif self._active_window_name is not None:
                 self.windows[self._active_window_name].keypress(k)
 

@@ -147,6 +147,10 @@ class UiWindow(Window):
     def render(self, img, active=False):
         self.render_box(img, active=active)  # remove?
 
+        # draw edges of similiarity graph
+        if self.app.show_graph and self._sim_graph is not None:
+            self._sim_graph.draw_graph(img)
+
         # draw points
         n_points = self.app.windows[Windows.toolbar].get_value('n_pts') * len(self._clusters)
         if n_points > 10000:
@@ -167,9 +171,8 @@ class UiWindow(Window):
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
         ), WINDOW_LAYOUT['font_thickness'])
 
-        # draw edges of similiarity graph
 
-    def update(self, new_sim_graph):
+    def set_graph(self, new_sim_graph):
         # just created from current set of points, so
         # be sure to delete when points/clusters change.
         self._sim_graph = new_sim_graph
@@ -312,8 +315,8 @@ class ToolsWindow(Window):
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
         param_name: "title" parameter of the Slider instance that was selected.
         """
-        print("Changing sim param visibility based on", param_name)
-        print("which should be one of:  %s" % self._sim_param_names.values())
+        #print("Changing sim param visibility based on", param_name)
+        #print("which should be one of:  %s" % self._sim_param_names.values())
         for param_kind in self._sim_param_names:
             if self._sim_param_names[param_kind] == param_name:
                 self.tools[param_kind].set_visible(True)
@@ -321,7 +324,7 @@ class ToolsWindow(Window):
             else:
                 self.tools[param_kind].set_visible(False)
 
-        print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
+        #print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
 
         self.app.update_sim_graph()
 
