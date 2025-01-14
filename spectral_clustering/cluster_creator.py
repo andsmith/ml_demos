@@ -30,8 +30,8 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraph, SimilarityGraphTypes
-
+from spectral import SimilarityGraph, SimilarityGraphTypes, get_kind_from_name
+from threading import Thread, Lock ,get_ident
 
 class ClusterCreator(object):
     APP_WINDOWS = [Windows.ui,
@@ -62,6 +62,12 @@ class ClusterCreator(object):
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
+        
+
+        self._points = np.zeros((0, 2))
+        # Asynchronously updated components:
+        self._similarity_graph = {'graph': None, 'lock': Lock()}
+        self._cluster_ids = {'ids': None, 'lock': Lock()}
 
     def _get_layouts(self, layout, size):
         """
@@ -101,6 +107,39 @@ class ClusterCreator(object):
         window_layout[sim_neighbor_k]['x'] = (new_x, window_layout[sim_neighbor_k]['x'][1])
 
         return window_layout
+    
+    def update_points(self):
+        """
+        Get new points from the UI window.
+        """
+        print("Main thread updating points")
+        self._points = self.windows[Windows.ui].get_points()
+        self.update_sim_graph()
+
+    
+    def update_sim_graph(self, param_val=None, asynch=False):
+        """
+        Points, clusters, or sim-graph type/param has changed, recompute it in its own thread.
+        :param param_val: the value of the parameter that changed (ignored since they're looked up)
+        """
+        def update_sim_graph_thread():
+            # first, clear the current graph so it doesn't render while we're updating it
+            print("Updating similarity graph in thread:  ", get_ident())
+            with self._similarity_graph['lock']:
+                self._similarity_graph['graph'] = None
+            
+            unit_points = self._points##unscale_coords(self.windows[Windows.ui].bbox, self._points)
+            sim_graph = SimilarityGraph(unit_points, kind=self.windows[Windows.toolbar].get_value('sim_graph'),
+                                        epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon'),
+                                        n_nearest=self.windows[Windows.toolbar].get_value('n_nearest'))
+            with self._similarity_graph['lock']:
+                self._similarity_graph['graph'] = sim_graph
+                self.windows[Windows.sim_matrix].set_graph(sim_graph)
+            print("\tDone updating similarity graph in thread:  ", get_ident())
+        if asynch:
+            Thread(target=update_sim_graph_thread).start()
+        else:
+            update_sim_graph_thread()
 
     def _do_clustering(self, points):
         """
@@ -128,16 +167,14 @@ class ClusterCreator(object):
         else:
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
 
-    def recompute(self):
+    def recompute_clustering(self):
         """
         Recompute the clustering:
             * gather points from UI window
             * cluster data w/current settings
             * update cluster window w/results
         """
-        n_points = self.windows[Windows.toolbar].get_value('n_pts')
         n_clusters = self.windows[Windows.toolbar].get_value('k')
-
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
         # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
@@ -154,9 +191,16 @@ class ClusterCreator(object):
         Clear the clusters.
         self.windows[Windows.ui].clear()
         """
+        self._points = np.zeros((0, 2))
         self.windows[Windows.ui].clear()
         self.windows[Windows.clustering].clear()
         self.windows[Windows.sim_matrix].clear()
+
+        with self._similarity_graph['lock']:
+            self._similarity_graph['graph'] = None
+        with self._cluster_ids['lock']:
+            self._cluster_ids['ids'] = None
+        
 
     def run(self):
         """

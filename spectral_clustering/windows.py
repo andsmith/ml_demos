@@ -140,6 +140,9 @@ class UiWindow(Window):
     def n_pts_slider_callback(self, n_pts):
         for cluster in self._clusters:
             cluster.set_n_pts(int(n_pts))
+            
+        # update the similarity graph, but not clustering yet
+        self.app.update_points()
 
     def render(self, img, active=False):
         self.render_box(img, active=active)  # remove?
@@ -203,8 +206,8 @@ class UiWindow(Window):
             self._clusters.append(self._create_cluster(x, y))
             self._clusters[-1].update_mouse_pos(x, y)
             self._clusters[-1].start_adjusting()
-
             self._adjusting_ind = len(self._clusters) - 1
+            self.app.update_points()  # inform the app that the points have changed
             return True
 
     def clear(self):
@@ -222,6 +225,7 @@ class UiWindow(Window):
             if self._clusters[self._adjusting_ind].stop_adjusting(self.bbox):
                 # if the cluster wants to be removed
                 del self._clusters[self._adjusting_ind]
+                self.app.update_points()  
 
             self._adjusting_ind = None
         self._update_mouse_pos(x, y)
@@ -233,6 +237,7 @@ class UiWindow(Window):
         """
         if self._adjusting_ind is not None:
             self._clusters[self._adjusting_ind].drag_ctrl(x, y)
+            self.app.update_points()  
         else:
             self._update_mouse_pos(x, y)
 
@@ -267,11 +272,11 @@ class ToolsWindow(Window):
                                  Tools.sigma_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL]}
 
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
-                                                     'Cluster Type', lambda x: None,  # no callback
+                                                     'Cluster Type', lambda x: None,  # no callback, updates when user starts a new cluster
                                                      options=['Gauss', 'Ellipse', 'Annulus'],
                                                      default_selection=1, spacing_px=7),
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
-                                                    'Algorithm', lambda x: None,  # no callback
+                                                    'Algorithm', lambda x: None,    # no callback, updates when Run button is clicked
                                                     options=['Unnormalized', 'Normalized', 'K-means'],
                                                     default_selection=0, spacing_px=7),
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
@@ -281,24 +286,23 @@ class ToolsWindow(Window):
                                                                    self._sim_param_names[Tools.sigma_slider]],
                                                           default_selection=1, spacing_px=7),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
-                                                 # no callback
                                                  'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,
                                                  range=[5, 2000], default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
-                                             'K (clusters)', lambda _: None,  # no callback
+                                             'K (clusters)', lambda _: None,  # no callback, updates when Run button is clicked
                                              range=[2, 25], default=5, format_str="=%i"),
-                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute),
+                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_clustering),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear),
 
-                      # Only one of these three is on at a time, make the callback enforce this:
+                      # Only one of these three is on at a time:
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
-                                              self._sim_param_names[Tools.nn_slider], lambda x: None,
+                                              self._sim_param_names[Tools.nn_slider], self.app.update_sim_graph,
                                               range=[3, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
-                                                   self._sim_param_names[Tools.epsilon_slider], lambda x: None,
+                                                   self._sim_param_names[Tools.epsilon_slider], self.app.update_sim_graph,
                                                    range=[1., 50], default=25, format_str="=%.3f", visible=True, spacing_px=5),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
-                                                 self._sim_param_names[Tools.sigma_slider], lambda x: None,
+                                                 self._sim_param_names[Tools.sigma_slider], self.app.update_sim_graph,
                                                  range=[1., 50], default=25, format_str="=%.3f", visible=False, spacing_px=5)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
@@ -313,10 +317,13 @@ class ToolsWindow(Window):
         for param_kind in self._sim_param_names:
             if self._sim_param_names[param_kind] == param_name:
                 self.tools[param_kind].set_visible(True)
+                new_vis = self.tools[param_kind]._visible
             else:
                 self.tools[param_kind].set_visible(False)
 
         print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
+
+        self.app.update_sim_graph()
 
     def render(self, img, active=False):
         # super().render(img, active=active)
@@ -421,7 +428,7 @@ class SimMatrixWindow(Window):
         """
         self._m = sim_mat.get_matrix()
         # img_full = image_from_floats(self._m)
-        img_full = apply_colormap(self._m, self._colormap)
+        img_full = sim_mat.get_image()
         img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
@@ -436,8 +443,7 @@ class SimMatrixWindow(Window):
         For now grayscale, min_value=(0,0,0), max_value=(255,255,255)
         """
         if self._image_rgb_resized is None:
-            # default window render
-            super().render(img, active=active)
+            super().render(img, active=active)  # default window render
         else:
             img[self._img_bbox['y'][0]:self._img_bbox['y'][0]+self._s,
                 self._img_bbox['x'][0]:self._img_bbox['x'][0]+self._s] = self._image_rgb_resized

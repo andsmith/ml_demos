@@ -1,8 +1,10 @@
 import numpy as np
 import cv2
 
-def image_from_floats(floats):
-    small, big = floats.min(), floats.max()
+def image_from_floats(floats, small=None, big=None):
+    small = floats.min()  if small is None else small
+    big =  floats.max() if big is None else big
+    
     values = (floats - small) / (big - small) * 255
     return values.astype(np.uint8)
 
