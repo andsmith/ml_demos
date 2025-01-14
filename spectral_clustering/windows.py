@@ -482,14 +482,25 @@ class SpectrumWindow(Window):
         self.render_title(img)
 
 
+    def clear   (self):
+        pass
+
 class EigenvectorsWindow(Window):
     def __init__(self, bbox, app):
         super().__init__(Windows.eigenvectors, bbox, app)
+
+    def clear(self):
+        pass    
+
+
 
 
 class GraphStatsWindow(Window):
     def __init__(self, bbox, app):
         super().__init__(Windows.graph_stats, bbox, app)
+        self._stats = None
+
+    def clear   (self):
         self._stats = None
 
 

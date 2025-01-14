@@ -312,7 +312,7 @@ class Button(Tool):
         extra_y = self._text_bbox['y'][1] - self._text_bbox['y'][0] - text_dims[1]
         self._text_bbox['x'][0] += extra_x // 2 - extra_y//2
         self._text_bbox['x'][1] -= extra_x // 2 - extra_y//2
-        
+
 
     def _render(self, img):
         """
@@ -391,7 +391,7 @@ class ToggleButton(Button):
             return self._colors['inactive_toggle']
         
     def render(self,img):
-        if not self._state:
+        if not self._state and self._visible:
             # draw an X through the box
             p0 = (self._text_bbox['x'][0], self._text_bbox['y'][0])
             p1 = (self._text_bbox['x'][1], self._text_bbox['y'][1])
@@ -401,9 +401,7 @@ class ToggleButton(Button):
             cv2.line(img, p0, p1, color, 1)
             cv2.line(img, p2, p3, color, 1)
         super().render(img)
-             
         
-
     def get_value(self):
         return self._state
 
