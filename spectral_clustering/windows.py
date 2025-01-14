@@ -20,7 +20,6 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.sim_matrix: "Similarity matrix",
                 Windows.graph_stats: "Edge weightstats"}
 
-
 class Window(ABC):
     """
     Abstract class for windows in the cluster creator app.
@@ -135,6 +134,8 @@ class UiWindow(Window):
 
     def get_points(self):
         points = [cluster.get_points() for cluster in self._clusters]
+        if len(points) == 0:
+            return np.array([])
         return np.vstack(points)
 
     def n_pts_slider_callback(self, n_pts):

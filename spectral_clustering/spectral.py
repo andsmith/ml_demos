@@ -59,8 +59,7 @@ class SimilarityGraph(object):
         I.e., two points are connected if their distance is less than epsilon, all 
         weight 1 or 0.
         """
-        #if np.random.rand(1)<.05:
-        #    import ipdb; ipdb.set_trace()
+        #print("Recomputing similarity matrix with max_dist: %.3f" % max_dist)
         dists = squareform(pdist(self._points))
         sim_matrix = np.zeros(dists.shape)
         sim_matrix[dists < max_dist] = 1

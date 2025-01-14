@@ -67,8 +67,8 @@ class ClusterCreator(object):
 
         self._points = np.zeros((0, 2))
         # Asynchronously updated components:
-        self._similarity_graph = {'graph': None, 'lock': Lock()}
-        self._cluster_ids = {'ids': None, 'lock': Lock()}
+        self._similarity_graph = {'graph': None, 'lock': Lock(), 'thread': None}
+        self._cluster_ids = {'ids': None, 'lock': Lock(), 'thread': None}
 
     def _get_layouts(self, layout, size):
         """
@@ -122,14 +122,20 @@ class ClusterCreator(object):
         """
         Points, clusters, or sim-graph type/param has changed, recompute it in its own thread.
         :param param_val: the value of the parameter that changed (ignored since they're looked up)
+
+        IF asynch:
+          if the sim graph is already being updated, stop it and start a new one.
         """
         def update_sim_graph_thread():
             # first, clear the current graph so it doesn't render while we're updating it
-            #print("Updating similarity graph in thread:  ", get_ident())
+            print("Updating similarity graph with %i points in thread: %s "%(self._points.shape[0], get_ident()))
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = None
             
-            unit_points = self._points##unscale_coords(self.windows[Windows.ui].bbox, self._points)
+            unit_points = self._points ##unscale_coords(self.windows[Windows.ui].bbox, self._points)
+            if unit_points.shape[0] == 0:
+                print("No points to cluster.")
+                return
             sim_graph = SimilarityGraph(unit_points, kind=self.windows[Windows.toolbar].get_value('sim_graph'),
                                         epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon'),
                                         n_nearest=self.windows[Windows.toolbar].get_value('n_nearest'))
@@ -137,9 +143,14 @@ class ClusterCreator(object):
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)
                 self.windows[Windows.ui].set_graph(sim_graph)
-            #print("\tDone updating similarity graph in thread:  ", get_ident())
+            print("\tDone updating similarity graph in thread:  ", get_ident())
         if asynch:
-            Thread(target=update_sim_graph_thread).start()
+            with self._similarity_graph['lock']:
+                if self._similarity_graph['thread'] is not None:
+                    self._similarity_graph['thread'].join()
+                self._similarity_graph['thread'] = Thread(target=update_sim_graph_thread)
+                self._similarity_graph['thread'].start()
+            #print("Started similarity graph thread:  ", get_ident())
         else:
             update_sim_graph_thread()
 
@@ -148,25 +159,18 @@ class ClusterCreator(object):
         Cluster the points with the given algorithm.
         """
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
-        n_nearest = self.windows[Windows.toolbar].get_value('n_nearest')
-        epsilon = self.windows[Windows.toolbar].get_value('epsilon')
-        graph_type = self.windows[Windows.toolbar].get_value('sim_graph')
         n_clusters = self.windows[Windows.toolbar].get_value('k')
-
-        # scale epsilon to unit square
-        width = self.windows[Windows.ui].bbox['x'][1] - self.windows[Windows.ui].bbox['x'][0]
-        epsilon = epsilon / width
-
+        
         if algorithm_name == 'K-means':
-            return KMeansAlgorithm(n_clusters).cluster(points), None
+            return KMeansAlgorithm(n_clusters).cluster(points)
 
         elif algorithm_name in ('Unnormalized', 'Normalized'):
             # spectral
-            sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
-            self.windows[Windows.sim_matrix].set_graph(sim_graph)
-            self.windows[Windows.ui].set_graph(sim_graph)
-            sa = SpectralAlgorithm(n_clusters, sim_graph)
-            return sa.get_clusters(), sim_graph
+            #sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
+            #self.windows[Windows.sim_matrix].set_graph(sim_graph)
+            #self.windows[Windows.ui].set_graph(sim_graph)
+            sa = SpectralAlgorithm(n_clusters, self._similarity_graph['graph'])
+            return sa.get_clusters()
         else:
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
 
@@ -181,11 +185,8 @@ class ClusterCreator(object):
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
         # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
-        points = self.windows[Windows.ui].get_points()
-        unit_points = unscale_coords(self.windows[Windows.ui].bbox, points)
-
-        cluster_ids, sim_graph = self._do_clustering(unit_points)
-
+        cluster_ids = self._do_clustering(self._points)
+        unit_points =  unscale_coords(self.windows[Windows.ui].bbox, self._points)
         self.windows[Windows.clustering].update(unit_points, cluster_ids, self._cluster_colors)
 
     def clear(self):
