@@ -219,6 +219,8 @@ class UiWindow(Window):
         Clear all clusters.
         """
         self._clusters = []
+        self._sim_graph = None
+        
 
     def mouse_unclick(self, x, y):
         """

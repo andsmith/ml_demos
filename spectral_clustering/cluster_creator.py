@@ -31,7 +31,12 @@ from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
 from spectral import SimilarityGraph, SimilarityGraphTypes, get_kind_from_name
-from threading import Thread, Lock ,get_ident
+from threading import Thread, Lock, get_ident
+
+HOTKEYS = {'toggle graph view': 'g',
+           'toggle cluster controls': ' ',
+           'quit': 'q'}
+
 
 class ClusterCreator(object):
     APP_WINDOWS = [Windows.ui,
@@ -47,7 +52,7 @@ class ClusterCreator(object):
         self._size = size
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + WINDOW_LAYOUT['colors']['bkg']
         window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
-        self.windows = {}#WINDOW_TYPES[k]: WINDOW_TYPES[k](window_layout[k], self) for k in self.APP_WINDOWS}
+        self.windows = {}  # WINDOW_TYPES[k]: WINDOW_TYPES[k](window_layout[k], self) for k in self.APP_WINDOWS}
         for k in self.APP_WINDOWS:
             print("Initializing window %s" % WINDOW_NAMES[k])
             print("\tLayout: %s" % window_layout[k])
@@ -59,16 +64,23 @@ class ClusterCreator(object):
         self._cluster_colors = None  # update only when K changes
         self._clicked_pos = None
         self.show_cluster_ctrls = True
-        self.show_graph=True
+        self.show_graph = True
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
-        
 
         self._points = np.zeros((0, 2))
         # Asynchronously updated components:
         self._similarity_graph = {'graph': None, 'lock': Lock(), 'thread': None}
         self._cluster_ids = {'ids': None, 'lock': Lock(), 'thread': None}
+
+        self._print_hotkeys()
+
+    def _print_hotkeys(self):
+        print("\n\n\t\tHotkeys:")
+        for k, v in HOTKEYS.items():
+            print("\t\t\t'%s' - %s" % (v,k))
+        print("\n\n")
 
     def _get_layouts(self, layout, size):
         """
@@ -108,16 +120,15 @@ class ClusterCreator(object):
         window_layout[sim_neighbor_k]['x'] = (new_x, window_layout[sim_neighbor_k]['x'][1])
 
         return window_layout
-    
+
     def update_points(self):
         """
         Get new points from the UI window.
         """
-        #print("Main thread updating points")
+        # print("Main thread updating points")
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph()
 
-    
     def update_sim_graph(self, param_val=None, asynch=False):
         """
         Points, clusters, or sim-graph type/param has changed, recompute it in its own thread.
@@ -128,11 +139,11 @@ class ClusterCreator(object):
         """
         def update_sim_graph_thread():
             # first, clear the current graph so it doesn't render while we're updating it
-            print("Updating similarity graph with %i points in thread: %s "%(self._points.shape[0], get_ident()))
+            #print("Updating similarity graph with %i points in thread: %s " % (self._points.shape[0], get_ident()))
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = None
-            
-            unit_points = self._points ##unscale_coords(self.windows[Windows.ui].bbox, self._points)
+
+            unit_points = self._points  # unscale_coords(self.windows[Windows.ui].bbox, self._points)
             if unit_points.shape[0] == 0:
                 print("No points to cluster.")
                 return
@@ -143,14 +154,14 @@ class ClusterCreator(object):
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)
                 self.windows[Windows.ui].set_graph(sim_graph)
-            print("\tDone updating similarity graph in thread:  ", get_ident())
+            #print("\tDone updating similarity graph in thread:  ", get_ident())
         if asynch:
             with self._similarity_graph['lock']:
                 if self._similarity_graph['thread'] is not None:
                     self._similarity_graph['thread'].join()
                 self._similarity_graph['thread'] = Thread(target=update_sim_graph_thread)
                 self._similarity_graph['thread'].start()
-            #print("Started similarity graph thread:  ", get_ident())
+            # print("Started similarity graph thread:  ", get_ident())
         else:
             update_sim_graph_thread()
 
@@ -160,15 +171,11 @@ class ClusterCreator(object):
         """
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
         n_clusters = self.windows[Windows.toolbar].get_value('k')
-        
+
         if algorithm_name == 'K-means':
             return KMeansAlgorithm(n_clusters).cluster(points)
 
         elif algorithm_name in ('Unnormalized', 'Normalized'):
-            # spectral
-            #sim_graph = SimilarityGraph(points, kind=graph_type, epsilon_dist=epsilon, n_nearest=n_nearest)
-            #self.windows[Windows.sim_matrix].set_graph(sim_graph)
-            #self.windows[Windows.ui].set_graph(sim_graph)
             sa = SpectralAlgorithm(n_clusters, self._similarity_graph['graph'])
             return sa.get_clusters()
         else:
@@ -186,7 +193,7 @@ class ClusterCreator(object):
             self._cluster_colors = get_n_disp_colors(n_clusters)
         # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
         cluster_ids = self._do_clustering(self._points)
-        unit_points =  unscale_coords(self.windows[Windows.ui].bbox, self._points)
+        unit_points = unscale_coords(self.windows[Windows.ui].bbox, self._points)
         self.windows[Windows.clustering].update(unit_points, cluster_ids, self._cluster_colors)
 
     def clear(self):
@@ -203,7 +210,6 @@ class ClusterCreator(object):
             self._similarity_graph['graph'] = None
         with self._cluster_ids['lock']:
             self._cluster_ids['ids'] = None
-        
 
     def run(self):
         """
@@ -214,7 +220,7 @@ class ClusterCreator(object):
 
         logging.info('Running Cluster Creator')
         while True:
-            #print(len(self.windows[Windows.ui]._points), len(self.windows[Windows.ui]._clusters))
+            # print(len(self.windows[Windows.ui]._points), len(self.windows[Windows.ui]._clusters))
             # refresh
             frame = self._refresh()
 
@@ -222,13 +228,13 @@ class ClusterCreator(object):
 
             # display & send key event
             k = cv2.waitKey(1) & 0xFF
-            if k & 0xFF == 27 or k == ord('q'):
+            if k & 0xFF == 27 or k == ord(HOTKEYS['quit']):
                 break
-            elif k == ord(' '):
+            elif k == ord(HOTKEYS['toggle cluster controls']):
                 self.show_cluster_ctrls = not self.show_cluster_ctrls
                 print("Show cluster controls: %s" % self.show_cluster_ctrls)
-            elif k==ord('g'):
-                self.show_graph=not self.show_graph
+            elif k == ord(HOTKEYS['toggle graph view']):
+                self.show_graph = not self.show_graph
                 print("Show graph: %s" % self.show_graph)
             elif self._active_window_name is not None:
                 self.windows[self._active_window_name].keypress(k)
