@@ -144,7 +144,17 @@ def bbox_contains(box, x, y):
         return np.logical_and(x_valid, y_valid)
     return box['x'][0] <= x <= box['x'][1] and box['y'][0] <= y <= box['y'][1]
 
-
+def get_good_point_size(n_points, bbox):
+    # TODO: make this scale wrt bbox size
+    if n_points > 10000:
+        pts_size = 2
+    elif n_points > 1000:
+        pts_size = 3
+    elif n_points > 100:
+        pts_size = 4
+    else:
+        pts_size = 5
+    return pts_size
 
 def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     """
@@ -169,6 +179,43 @@ def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
                        center[1] + major_axis * radii * np.sin(angle) * np.cos(angles) + minor_axis * radii * np.cos(angle) * np.sin(angles)]).T
     return points
 
+def vsplit_bbox(bbox, weights):
+    """
+    Split the bounding box vertically, with relative heights given by weights.
+    :param bbox: dict(x=(left, right), y=(top, bottom))
+    :param weights: list of positive floats
+    :return: list of bounding boxes, from top to bottom
+    """
+    x = bbox['x']
+    y = bbox['y']
+    total_height = y[1] - y[0]
+    bboxes = []
+    top = y[0]
+    weights = np.array(weights) / np.sum(weights)
+    for w in weights:
+        bottom = top + w * total_height
+        bboxes.append({'x': x, 'y': (top, bottom)})
+        top = bottom
+    return bboxes
+
+def _test_vsplit_bbox():
+    import matplotlib.pyplot as plt
+
+    bbox = {'x': (0, 1), 'y': (0, 1)}
+    bboxes = vsplit_bbox(bbox, [1, 2, 1])
+
+    def plot_bbox(bbox, color):
+        x = bbox['x']
+        y = bbox['y']
+        plt.plot([x[0], x[1], x[1], x[0], x[0]], [y[0], y[0], y[1], y[1], y[0]], color)
+
+    for i, b in enumerate(bboxes):
+        plot_bbox(b, 'C{}'.format(i))
+
+    plt.show()
+
+
 if __name__ == '__main__':
-    test_image_from_floats()
+    _test_vsplit_bbox()
+
     print("All tests passed!")

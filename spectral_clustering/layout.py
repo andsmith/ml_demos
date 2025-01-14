@@ -1,7 +1,8 @@
 from colors import COLORS
 import cv2
+import numpy as np
 from enum import IntEnum
-
+from util import vsplit_bbox
 """
 Windows are laid out rougly:
 |---------------------------------------------------|
@@ -59,13 +60,14 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit squ
 
 """
 Toolbar layout roughly 4 columns:
-|----------------------------------------------------------|
-| C-Kind:    Sim_graph:   K =5: (n clust)  Algorithm:      |
-|   1gauss     1epsilon    |---+-----|        1unnormalized |
-|   2ellipse   2K-nn                         2normalized   |
-|   3annus     3full                         3k-means      |
-|            [sim-par]:   N_pts = 100                      |
-||run|clear| |---+-----|  |-------+----------------------| |
+|-----------------------------------------------------------|
+| C-Kind:     Sim_graph:     [sim-params]:  Algorithm:      |
+|   1gauss      1epsilon     |---+-----|      1unnormalized |
+|   2ellipse    2K-nn                         2normalized   |
+|   3anulus     3full                         3k-means      |
+|   4moons                                                  |
+|             K=5 (N clust)  N_pts = 100                    |
+||run|clear|  |---+-----|    |-------+--------------------| |
 |-----------------------------------------------------------|
 
 
@@ -86,6 +88,7 @@ class Tools(IntEnum):
     alg_radio = 6
 
     nn_slider = 7
+    nn_toggle = 10
     epsilon_slider = 8
     sigma_slider = 9
 
@@ -95,15 +98,15 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .25),  # scale from unit square to
                                      'y': (0, .75)},
                   Tools.sim_graph_radio: {'x': (.25, .5),
                                           'y': (0, .75)},
-                  Tools.k_slider: {'x': (.5, .75),
-                                   'y': (0, .75)},
+                  Tools.k_slider: {'x': (.25, .5),
+                                   'y': (.75, 1)},
                   Tools.n_pts_slider: {'x': (.5, 1),
                                        'y': (.75, 1)},
-                  Tools.nn_slider: {'x': (.25, .5),
-                                    'y': (.75, 1)},
-                  Tools.epsilon_slider: None,
-                  Tools.sigma_slider: None,
 
+                  Tools.epsilon_slider:  None,  # fill these in below
+                  Tools.sigma_slider: None,
+                  Tools.nn_slider: None,
+                  Tools.nn_toggle: None,
                   Tools.run_button: {'x': (0, .125),
                                      'y': (.75, 1)},
                   Tools.clear_button: {'x': (.125, .25),
@@ -112,6 +115,11 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .25),  # scale from unit square to
                   Tools.alg_radio: {'x': (.75, 1),
                                     'y': (0, .75)}, }
 
-# these all go in the same spot
-TOOLBAR_LAYOUT[Tools.epsilon_slider] = TOOLBAR_LAYOUT[Tools.nn_slider]
-TOOLBAR_LAYOUT[Tools.sigma_slider] = TOOLBAR_LAYOUT[Tools.nn_slider]
+sim_param_area = {'x': (.5, .70),
+                  'y': (0, .75)}
+
+three_boxes = vsplit_bbox(sim_param_area, [1.5,.5,1,1])
+TOOLBAR_LAYOUT[Tools.epsilon_slider] = three_boxes[0]
+TOOLBAR_LAYOUT[Tools.sigma_slider] = three_boxes[0]
+TOOLBAR_LAYOUT[Tools.nn_slider] = three_boxes[0]
+TOOLBAR_LAYOUT[Tools.nn_toggle] = three_boxes[2]

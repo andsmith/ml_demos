@@ -1,7 +1,7 @@
 import numpy as np
 from sklearn.cluster import KMeans
 from abc import ABC, abstractmethod
-
+from util import get_good_point_size
 
 class ClusteringAlgorithm(ABC):
     """
@@ -22,7 +22,7 @@ class ClusteringAlgorithm(ABC):
         pass
 
 
-def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_px=5, pt_size=2):
+def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_px=5):
     """
     Render the clustering.
     :param img: the image to render on
@@ -33,6 +33,7 @@ def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_p
     :param margin_px: don't put points in the margin
     :param pt_size: size of points (pt_size x pt_size boxes)
     """
+    pt_size = get_good_point_size(points.shape[0], None)
     points_scaled = (points * img.shape[1::-1]).astype(int)
     if cluster_ids is None:
         cluster_ids = np.zeros(points.shape[0],dtype=np.int32)

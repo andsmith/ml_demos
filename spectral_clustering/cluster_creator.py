@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraph, SimilarityGraphTypes, get_kind_from_name
+from spectral import SimilarityGraph, SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
 from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
@@ -147,9 +147,22 @@ class ClusterCreator(object):
             if unit_points.shape[0] == 0:
                 print("No points to cluster.")
                 return
-            sim_graph = SimilarityGraph(unit_points, kind=self.windows[Windows.toolbar].get_value('sim_graph'),
-                                        epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon'),
-                                        n_nearest=self.windows[Windows.toolbar].get_value('n_nearest'))
+            
+            graph_kind = self.windows[Windows.toolbar].get_value('sim_graph')
+            if graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]:
+                sigma = self.windows[Windows.toolbar].get_value['sigma']
+                sim_graph = FullSimGraph(unit_points, sigma)
+            elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN]:
+                n_nearest = self.windows[Windows.toolbar].get_value('n_nearest')
+                mutual = self.windows[Windows.toolbar].get_value('mutual')
+
+                sim_graph = NNSimGraph(unit_points, n_nearest, mutual)
+            elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON]:
+                epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon')
+                sim_graph = EpsilonSimGraph(unit_points, epsilon_dist)
+            else:
+                raise ValueError("Invalid similarity graph type: %s" % graph_kind)
+
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)

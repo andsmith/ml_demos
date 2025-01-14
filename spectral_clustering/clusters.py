@@ -45,7 +45,7 @@ class Cluster(ABC):
                       CtrlPt.p1: pos,
                       }
         self._rnd_seed = np.random.randint(0, 2**15)
-        self._color = (np.random.rand(3)*255).astype(np.uint8).tolist()
+        self._color = (np.random.rand(3)*128).astype(np.uint8).tolist()
         self._ctrl_held = CtrlPt.p1
         self._ctrl_mouse_over = None
         self._colors = {'ctrl_idle': COLORS['gray'].tolist(),
@@ -178,13 +178,16 @@ class Cluster(ABC):
         self._points = self._points
         valid = bbox_contains(self._bbox, self._points[:, 0], self._points[:, 1])
         pts = self._points[valid]
+        half_size = pt_size // 2
         if pts.shape[0] > 0:
-            for pt in pts:
-                px, py = int(pt[0]), int(pt[1])
-                if pt_size == 1:
+            if pt_size == 1:
+                for pt in pts:
+                    px, py = int(pt[0]), int(pt[1])
                     img[py, px] = self._color
-                else:
-                    img[py:py+pt_size, px:px+pt_size] = self._color
+            else:
+                for pt in pts:
+                    px, py = int(pt[0]), int(pt[1])
+                    img[py-half_size:py+half_size, px-half_size:px+half_size] = self._color
 
         if show_ctrls:
             # draw control points, in this order:

@@ -4,9 +4,9 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, apply_colormap
+from util import scale_bbox, apply_colormap, get_good_point_size
 import logging
-from tools import RadioButtons, Slider, Button
+from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
@@ -69,7 +69,7 @@ class Window(ABC):
                y+indent_px)
 
         cv2.putText(img, self._txt['name'], pos, self._txt['font'], self._txt['font_size'],
-                    self._txt['color'], self._txt['font_thickness'])
+                    self._txt['color'], self._txt['font_thickness'], cv2.LINE_AA)
 
     def render_box(self, img, active=False):
         """
@@ -155,12 +155,7 @@ class UiWindow(Window):
 
         # draw points
         n_points = self.app.windows[Windows.toolbar].get_value('n_pts') * len(self._clusters)
-        if n_points > 10000:
-            pts_size = 1
-        elif n_points > 1000:
-            pts_size = 2
-        else:
-            pts_size = 3
+        pts_size = get_good_point_size(n_points, self.bbox)
 
         for cluster in self._clusters:
             cluster.render(img, show_ctrls=self.app.show_cluster_ctrls, pt_size=pts_size)
@@ -171,7 +166,7 @@ class UiWindow(Window):
             status, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], WINDOW_LAYOUT['font_thickness'])[0][1]
         text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
-        ), WINDOW_LAYOUT['font_thickness'])
+        ), WINDOW_LAYOUT['font_thickness'], cv2.LINE_AA)
 
     def set_graph(self, new_sim_graph):
         # just created from current set of points, so
@@ -306,7 +301,12 @@ class ToolsWindow(Window):
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
                                               SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN],
                                               self.app.update_sim_graph,
-                                              range=[3, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
+                                              range=[1, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
+                      Tools.nn_toggle: ToggleButton(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_toggle], indented_bbox),
+                                                    'Mutual',
+                                                    self.app.update_sim_graph,
+                                                    default=True, visible=False, spacing_px=5, border_indent=0),
+
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
                                                    SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
                                                    self.app.update_sim_graph,
@@ -325,12 +325,19 @@ class ToolsWindow(Window):
         """
         # print("Changing sim param visibility based on", param_name)
         # print("which should be one of:  %s" % self._sim_param_names.values())
+        turn_on_toggle=False
         for param_kind in self._sim_kind_names:
             if self._sim_kind_names[param_kind] == kind_name:
                 self.tools[param_kind].set_visible(True)
-                new_vis = self.tools[param_kind]._visible
+                if param_kind==Tools.nn_slider:
+                    turn_on_toggle=True
             else:
                 self.tools[param_kind].set_visible(False)
+
+        if turn_on_toggle:
+            self.tools[Tools.nn_toggle].set_visible(True)
+        else:
+            self.tools[Tools.nn_toggle].set_visible(False)
 
         # print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
 
@@ -351,7 +358,7 @@ class ToolsWindow(Window):
     def mouse_click(self, x, y):
         """
         Send to all tools, each will handle if it was clicked.
-        Return whatever tool uses the click.
+        Return if a tool captures the mouse.
         """
         for tool in self.tools.values():
             if tool.mouse_click(x, y):
@@ -387,6 +394,8 @@ class ToolsWindow(Window):
             return self.tools[Tools.sim_graph_radio].get_value()
         elif param == 'k':
             return int(self.tools[Tools.k_slider].get_value())
+        elif param =='mutual':
+            return self.tools[Tools.nn_toggle].get_value()
         else:
             raise ValueError(f"Invalid parameter: {param}")
 

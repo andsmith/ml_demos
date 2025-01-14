@@ -15,6 +15,8 @@ COLOR_OPTIONS = {'unselected': COLORS['black'],
                  'idle': COLORS['black'],
                  'held': COLORS['blue'],
                  'tab': COLORS['gray'],
+                 'active_toggle': COLORS['black'],
+                 'inactive_toggle': COLORS['light gray'],
                  'border': COLORS['gray'], }
 
 class Tool(ABC):
@@ -247,17 +249,35 @@ class Button(Tool):
     """
 
     def __init__(self, bbox,  label, callback, visible=True, border_indent=2, spacing_px=4):
+        """
+        Create a button with a label.
+        :param bbox: {'x': [left, right], 'y': [top, bottom]} bounding box of region with button
+        :param label: Text label for the button.
+        :param callback: Function to call when the button is clicked.
+        :param visible: Whether the button is visible initially.
+        :param border_indent: Number of pixels to indent the rectangle of the button.
+        :param spacing_px: Vertical spacing between elements in the button (text lines, etc),
+            and horizontally from the border.
+        """
         super().__init__(bbox,label, callback, visible, spacing_px)
         self._text = label
+        self._border_indent = border_indent
         self._font = cv2.FONT_HERSHEY_SIMPLEX
-        self._text_bbox = {'x': (bbox['x'][0] + self._spacing_px, bbox['x'][1] - self._spacing_px),
-                           'y': (bbox['y'][0] + self._spacing_px, bbox['y'][1] - self._spacing_px)}
-
-        self._font_size, _ = calc_font_size([label], self._text_bbox, self._font, border_indent)
-        self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
-        self._calc_dims()
         self._moused_over = False
         self._held = False
+        self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
+        self._calc_dims()
+
+    def _get_button_text_color(self):
+        """
+        Return the color of the text.
+        """
+        if self._held:
+            return self._colors['held']
+        elif self._moused_over:
+            return self._colors['mouseover']
+        else:
+            return self._colors['idle']
 
     def move(self, bbox):
         """
@@ -270,10 +290,29 @@ class Button(Tool):
         """
         Determine the text size and position.
         """
+        self._text_bbox = {'x': [self._bbox['x'][0] + self._spacing_px, self._bbox['x'][1] - self._spacing_px],
+                           'y': [self._bbox['y'][0] + self._spacing_px, self._bbox['y'][1] - self._spacing_px]}
+        self._border_indent = self._border_indent
+        self._font_size, _ = calc_font_size([self._text], self._text_bbox, self._font, self._border_indent)
+        
         text_dims = cv2.getTextSize(self._text, self._font, self._font_size, 1)[0]
         x0, x1 = self._bbox['x']
         y0, y1 = self._bbox['y']
         self._text_pos = (x0 + (x1 - x0 - text_dims[0]) // 2, y0 + (y1 - y0 + text_dims[1]) // 2)
+        if self._text=='Run':
+            print("Run Button:")
+            print("\tbbox:",self._bbox)
+            print("\tspacing_px:",self._spacing_px)
+            print("\tborder_indent:",self._border_indent)
+            print("\ttext_bbox:",self._text_bbox)
+            print('\ttext_pos:',self._text_pos)
+
+        # now shrink the box horizontally to fit the text (make it match the vertical spacing)
+        extra_x =self._text_bbox['x'][1] - self._text_bbox['x'][0] - text_dims[0]
+        extra_y = self._text_bbox['y'][1] - self._text_bbox['y'][0] - text_dims[1]
+        self._text_bbox['x'][0] += extra_x // 2 - extra_y//2
+        self._text_bbox['x'][1] -= extra_x // 2 - extra_y//2
+        
 
     def _render(self, img):
         """
@@ -281,11 +320,7 @@ class Button(Tool):
         """
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        color = self._colors['idle']
-        if self._held:
-            color = self._colors['held']
-        elif self._moused_over:
-            color = self._colors['mouseover']
+        color = self._get_button_text_color()
         # bbox
         # cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
 
@@ -317,13 +352,60 @@ class Button(Tool):
         return False
 
     def _mouse_unclick(self, x, y):
-        # print("Button mouse unclick")
         if self._held and bbox_contains(self._bbox, x, y):
             self._callback()
         self._held = False
 
     def get_value(self):
         return self._text
+    
+class ToggleButton(Button):
+    """
+    Like a button, but has state (on/off), and renders different color to indicate state, and triggers on unclick.
+    """
+    
+    def __init__(self, bbox, label, callback, visible=True, border_indent=2, spacing_px=4, default=False):
+        self._state = default
+        super().__init__(bbox, label, callback, visible, border_indent, spacing_px)
+
+    def _mouse_unclick(self, x, y):
+        """
+        Check if the click is within the button.
+        """
+        print("ToggleButton mouse click")
+        if bbox_contains(self._bbox, x, y):
+            self._held = False
+            self._state = not self._state
+            self._callback(self._state)
+            return True
+        return False
+        
+    def _get_button_text_color(self):
+        if self._held:
+            return self._colors['held']
+        elif self._moused_over:
+            return self._colors['mouseover']
+        elif self._state:
+            return self._colors['active_toggle']
+        else:
+            return self._colors['inactive_toggle']
+        
+    def render(self,img):
+        if not self._state:
+            # draw an X through the box
+            p0 = (self._text_bbox['x'][0], self._text_bbox['y'][0])
+            p1 = (self._text_bbox['x'][1], self._text_bbox['y'][1])
+            p2 = (self._text_bbox['x'][0], self._text_bbox['y'][1])
+            p3 = (self._text_bbox['x'][1], self._text_bbox['y'][0])
+            color = self._colors['inactive_toggle']
+            cv2.line(img, p0, p1, color, 1)
+            cv2.line(img, p2, p3, color, 1)
+        super().render(img)
+             
+        
+
+    def get_value(self):
+        return self._state
 
 
 class RadioButtons(Tool):
