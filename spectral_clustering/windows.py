@@ -11,7 +11,7 @@ from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
-from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES
+from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
 WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.toolbar: "Toolbar",
                 Windows.clustering: "Clusters",
@@ -19,6 +19,7 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.eigenvectors: "Eigenvectors",
                 Windows.sim_matrix: "Similarity matrix",
                 Windows.graph_stats: "Edge weightstats"}
+
 
 class Window(ABC):
     """
@@ -141,7 +142,7 @@ class UiWindow(Window):
     def n_pts_slider_callback(self, n_pts):
         for cluster in self._clusters:
             cluster.set_n_pts(int(n_pts))
-            
+
         # update the similarity graph, but not clustering yet
         self.app.update_points()
 
@@ -171,7 +172,6 @@ class UiWindow(Window):
         text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
         ), WINDOW_LAYOUT['font_thickness'])
-
 
     def set_graph(self, new_sim_graph):
         # just created from current set of points, so
@@ -220,7 +220,6 @@ class UiWindow(Window):
         """
         self._clusters = []
         self._sim_graph = None
-        
 
     def mouse_unclick(self, x, y):
         """
@@ -231,7 +230,7 @@ class UiWindow(Window):
             if self._clusters[self._adjusting_ind].stop_adjusting(self.bbox):
                 # if the cluster wants to be removed
                 del self._clusters[self._adjusting_ind]
-                self.app.update_points()  
+                self.app.update_points()
 
             self._adjusting_ind = None
         self._update_mouse_pos(x, y)
@@ -243,7 +242,7 @@ class UiWindow(Window):
         """
         if self._adjusting_ind is not None:
             self._clusters[self._adjusting_ind].drag_ctrl(x, y)
-            self.app.update_points()  
+            self.app.update_points()
         else:
             self._update_mouse_pos(x, y)
 
@@ -272,10 +271,12 @@ class ToolsWindow(Window):
         indent_px = 5
         indented_bbox = {'x': (self.bbox['x'][0] + indent_px, self.bbox['x'][1] - indent_px),
                          'y': (self.bbox['y'][0] + indent_px, self.bbox['y'][1] - indent_px)}
+        # What parameter (name) does each slider control:
 
-        self._sim_param_names = {Tools.nn_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN],
-                                 Tools.epsilon_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
-                                 Tools.sigma_slider: SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL]}
+        # What are the kinds of sim graphs that can be selected:
+        self._sim_kind_names = {Tools.nn_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN],
+                                Tools.epsilon_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON],
+                                Tools.sigma_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]}
 
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
                                                      'Cluster Type', lambda x: None,  # no callback, updates when user starts a new cluster
@@ -287,47 +288,51 @@ class ToolsWindow(Window):
                                                     default_selection=0, spacing_px=7),
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
                                                           'Sim Graph', callback=self._change_sim_param_visibility,
-                                                          options=[self._sim_param_names[Tools.nn_slider],
-                                                                   self._sim_param_names[Tools.epsilon_slider],
-                                                                   self._sim_param_names[Tools.sigma_slider]],
+                                                          options=[self._sim_kind_names[Tools.nn_slider],
+                                                                   self._sim_kind_names[Tools.epsilon_slider],
+                                                                   self._sim_kind_names[Tools.sigma_slider]],
                                                           default_selection=1, spacing_px=7),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
                                                  'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,
                                                  range=[5, 2000], default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
-                                             'K (clusters)', lambda _: None,  # no callback, updates when Run button is clicked
+                                             # no callback, updates when Run button is clicked
+                                             'K (clusters)', lambda _: None,
                                              range=[2, 25], default=5, format_str="=%i"),
                       Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_clustering),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear),
 
                       # Only one of these three is on at a time:
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
-                                              self._sim_param_names[Tools.nn_slider], self.app.update_sim_graph,
+                                              SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN],
+                                              self.app.update_sim_graph,
                                               range=[3, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
-                                                   self._sim_param_names[Tools.epsilon_slider], self.app.update_sim_graph,
+                                                   SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
+                                                   self.app.update_sim_graph,
                                                    range=[1., 50], default=25, format_str="=%.3f", visible=True, spacing_px=5),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
-                                                 self._sim_param_names[Tools.sigma_slider], self.app.update_sim_graph,
+                                                 SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL], 
+                                                 self.app.update_sim_graph,
                                                  range=[1., 50], default=25, format_str="=%.3f", visible=False, spacing_px=5)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
-    def _change_sim_param_visibility(self, param_name):
+    def _change_sim_param_visibility(self, kind_name):
         """
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
-        param_name: "title" parameter of the Slider instance that was selected.
+        kind_name:  name of the kind of similarity graph to show sliders for.
         """
-        #print("Changing sim param visibility based on", param_name)
-        #print("which should be one of:  %s" % self._sim_param_names.values())
-        for param_kind in self._sim_param_names:
-            if self._sim_param_names[param_kind] == param_name:
+        # print("Changing sim param visibility based on", param_name)
+        # print("which should be one of:  %s" % self._sim_param_names.values())
+        for param_kind in self._sim_kind_names:
+            if self._sim_kind_names[param_kind] == kind_name:
                 self.tools[param_kind].set_visible(True)
                 new_vis = self.tools[param_kind]._visible
             else:
                 self.tools[param_kind].set_visible(False)
 
-        #print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
+        # print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
 
         self.app.update_sim_graph()
 

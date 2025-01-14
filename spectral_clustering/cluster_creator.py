@@ -205,6 +205,9 @@ class ClusterCreator(object):
         self.windows[Windows.ui].clear()
         self.windows[Windows.clustering].clear()
         self.windows[Windows.sim_matrix].clear()
+        self.windows[Windows.eigenvectors].clear()
+        self.windows[Windows.graph_stats].clear()
+        self.windows[Windows.spectrum].clear()
 
         with self._similarity_graph['lock']:
             self._similarity_graph['graph'] = None

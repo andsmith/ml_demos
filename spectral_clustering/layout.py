@@ -61,7 +61,7 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit squ
 Toolbar layout roughly 4 columns:
 |----------------------------------------------------------|
 | C-Kind:    Sim_graph:   K =5: (n clust)  Algorithm:      |
-|   1gauss     1epsion    |---+-----|        1unnormalized |
+|   1gauss     1epsilon    |---+-----|        1unnormalized |
 |   2ellipse   2K-nn                         2normalized   |
 |   3annus     3full                         3k-means      |
 |            [sim-par]:   N_pts = 100                      |

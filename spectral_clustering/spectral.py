@@ -16,6 +16,10 @@ SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
                         SimilarityGraphTypes.EPSILON: "Epsilon",
                         SimilarityGraphTypes.FULL: "Sigma"}
 
+SIMGRAPH_KIND_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
+                        SimilarityGraphTypes.EPSILON: "Epsilon",
+                        SimilarityGraphTypes.FULL: "Full"}
+
 def get_kind_from_name(names, name):
     for kind, kind_name in names.items():
         if kind_name == name:
@@ -42,11 +46,11 @@ class SimilarityGraph(object):
         self._points = points
         self._kind = kind
 
-        if kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON]:
+        if kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON]:
             self._mat, self._img = self._build_epsilon_sim_matrix(epsilon_dist)
-        elif self._kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN]:
+        elif self._kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN]:
             self._mat, self._img = self._build_knn_sim_matrix(n_nearest)
-        elif self._kind == SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL]:
+        elif self._kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]:
             self._mat, self._img = self._build_full_sim_matrix(np.inf)
         else:
             raise ValueError(f"Invalid kind: {self._kind}")
