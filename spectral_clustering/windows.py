@@ -534,7 +534,7 @@ class SpectrumWindow(WindowMouseManager,PlotWindow):
     def _init_tools(self):
         # init slider
         slider = Slider(self._tool_bbox, 'n', self.update_n_plot, orient='vertical',
-                              range=[1, 100], default=self._n_to_plot, format_str="=%i",
+                              range=[1, 50], default=self._n_to_plot, format_str="=%i",
                               spacing_px=0,
                               visible=False)
         self.tools = {'n':slider}
