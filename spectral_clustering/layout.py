@@ -34,7 +34,7 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit squ
                                           'y': (0, .5)},
                              Windows.toolbar: {'x': (0, .667),
                                                'y': (.75, 1)},
-                             Windows.spectrum: {'x': (.667, 1),
+                             Windows.spectrum: {'x': (.667, 1),  # move a bit in for a slider
                                                 'y': (0, .333)},
                              Windows.eigenvectors: {'x': (.667, 1),
                                                     'y': (.333, .667)},
@@ -58,6 +58,8 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit squ
                  'font_thickness': 1}
 
 
+OTHER_TOOL_LAYOUT= {'spectrum_slider_w_frac': .14,  # portion of the window for the slider
+}
 """
 Toolbar layout roughly 4 columns:
 |-----------------------------------------------------------|
@@ -115,10 +117,11 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .25),  # scale from unit square to
                   Tools.alg_radio: {'x': (.75, 1),
                                     'y': (0, .75)}, }
 
+
 sim_param_area = {'x': (.5, .70),
                   'y': (0, .75)}
 
-three_boxes = vsplit_bbox(sim_param_area, [1.5,.5,1,1])
+three_boxes = vsplit_bbox(sim_param_area, [1.5, .5, 1, 1])
 TOOLBAR_LAYOUT[Tools.epsilon_slider] = three_boxes[0]
 TOOLBAR_LAYOUT[Tools.sigma_slider] = three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_slider] = three_boxes[0]
@@ -129,5 +132,5 @@ PLOT_LAYOUT = {'axis_spacing': 5,
                'font': cv2.FONT_HERSHEY_SIMPLEX,
                'title_color': COLORS['gray'],
                'axis_color': COLORS['black'],
-               'tick_color':COLORS['gray']
+               'tick_color': COLORS['gray']
                }

@@ -4,12 +4,12 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image
+from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image, hsplit_bbox, indent_bbox
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
-from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
+from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, OTHER_TOOL_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
 from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
 from plot_to_img import PlotRenderer
@@ -167,7 +167,7 @@ class UiWindow(Window):
         status = "N clusters: %i" % len(self._clusters)
         status_height = cv2.getTextSize(
             status, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], WINDOW_LAYOUT['font_thickness'])[0][1]
-        text_pos = (self.bbox['x'][0] + self.margin_px, self.bbox['y'][0] + self.margin_px + status_height)
+        text_pos = (self.bbox['x'][0] + self.margin_px*2, self.bbox['y'][0] + self.margin_px*2 + status_height)
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
         ), WINDOW_LAYOUT['font_thickness'], cv2.LINE_AA)
 
@@ -255,14 +255,48 @@ class UiWindow(Window):
         return cluster
 
 
-class ToolsWindow(Window):
+class WindowMouseManager(ABC):
+    """
+    Classes with a member '.tools' that is a list of Tool objects can
+    inherit from this to handle mouse signals.
+    """
+
+    def __init__(self):
+        self._held_tool = None
+
+    def mouse_click(self, x, y):
+        """
+        Send to all tools, each will handle if it was clicked.
+        Return if a tool captures the mouse.
+        """
+        for tool in self.tools.values():
+            if tool.mouse_click(x, y):
+                self._held_tool = tool
+                return True
+        return False
+
+    def mouse_unclick(self, x, y):
+        if self._held_tool is not None:
+            self._held_tool.mouse_unclick(x, y)
+            self._held_tool = None
+
+    def mouse_move(self, x, y):
+        if self._held_tool is not None:
+            return self._held_tool.mouse_move(x, y)
+        else:
+            for tool in self.tools.values():
+                tool.mouse_move(x, y)
+        return False
+
+
+class ToolsWindow(WindowMouseManager, Window):
     """
     Create & manage toolbox for the app.
     """
 
     def __init__(self, bbox, app):
-        super().__init__(Windows.toolbar, bbox, app)
-        self._held_tool = None
+        super(WindowMouseManager, self).__init__(Windows.toolbar, bbox, app)
+        super().__init__()
         self._setup_tools()
 
     def _setup_tools(self):
@@ -358,30 +392,6 @@ class ToolsWindow(Window):
     def keypress(self, key):
         pass
 
-    def mouse_click(self, x, y):
-        """
-        Send to all tools, each will handle if it was clicked.
-        Return if a tool captures the mouse.
-        """
-        for tool in self.tools.values():
-            if tool.mouse_click(x, y):
-                self._held_tool = tool
-                return True
-        return False
-
-    def mouse_unclick(self, x, y):
-        if self._held_tool is not None:
-            self._held_tool.mouse_unclick(x, y)
-            self._held_tool = None
-
-    def mouse_move(self, x, y):
-        if self._held_tool is not None:
-            return self._held_tool.mouse_move(x, y)
-        else:
-            for tool in self.tools.values():
-                tool.mouse_move(x, y)
-        return False
-
     def get_value(self, param):
         if param == 'kind':
             return self.tools[Tools.kind_radio].get_value()
@@ -473,19 +483,28 @@ class SimMatrixWindow(Window):
 
 
 class PlotWindow(Window, ABC):
-    def __init__(self,  kind, bbox, app):
+    def __init__(self,  kind, bbox, app, tool_frac=0.0):
+        """
+        Plot on the left, tool area to the right, split proportional to tool_frac.
+        """
         super().__init__(kind, bbox, app)
-        w, h = bbox['x'][1] - bbox['x'][0], bbox['y'][1] - bbox['y'][0]
+
+        self._plot_bbox, self._tool_bbox = hsplit_bbox(bbox, [1-tool_frac, tool_frac])
+        self._tool_bbox = indent_bbox(self._tool_bbox, self.margin_px)
+        w = self._plot_bbox['x'][1] - self._plot_bbox['x'][0]
+        h = self._plot_bbox['y'][1] - self._plot_bbox['y'][0]
         self._plotter = PlotRenderer((w, h))
+
         self._disp_img = None
         self._values = None
+        self._init_tools()
 
     def render(self, img, active=False):
         if self._disp_img is None:
             self.render_box(img, active=active)  # remove?
             self.render_title(img)
         else:
-            add_sub_image(img, self._disp_img, self.bbox)
+            add_sub_image(img, self._disp_img, self._plot_bbox)
 
     def set_values(self, values):
         self._values = values
@@ -500,26 +519,65 @@ class PlotWindow(Window, ABC):
         # set self._disp_img
         pass
 
+    @abstractmethod
+    def _init_tools(self):
+        # set self.tools = dict(tool_id: Tool)
+        pass
 
-class SpectrumWindow(PlotWindow):
+
+class SpectrumWindow(WindowMouseManager,PlotWindow):
     def __init__(self, bbox, app):
-        super().__init__(Windows.spectrum, bbox, app)
-        self._n_to_plot = 30
+        self._n_to_plot = 10
+        super().__init__()
+        super(WindowMouseManager,self).__init__(Windows.spectrum, bbox, app, tool_frac=OTHER_TOOL_LAYOUT['spectrum_slider_w_frac'])
+        
+    def _init_tools(self):
+        # init slider
+        slider = Slider(self._tool_bbox, 'n', self.update_n_plot, orient='vertical',
+                              range=[1, 100], default=self._n_to_plot, format_str="=%i",
+                              spacing_px=0,
+                              visible=False)
+        self.tools = {'n':slider}
 
     def _refresh(self):
+        if self._values is None:
+            return
         fig, ax = self._plotter.get_axis()
         ax.plot(self._values[:self._n_to_plot], 'o-')
         # draw a vertical red line at k+.5
-        x_k = self.app.windows[Windows.toolbar].get_value('k') + 0.5
+        x_k = self.app.windows[Windows.toolbar].get_value('k') - 0.5
         ax.axvline(x=x_k, color='r', linestyle='-')
         ax.set_title("Eigenvalues")
         self._disp_img = self._plotter.render_fig(fig)
 
+    def render(self, img, active=False):
+        # render plot
+        super().render(img, active=active)
+
+        # render tools:
+        for tool in self.tools:
+            self.tools[tool].render(img)
+
+    def update_n_plot(self, n):
+        self._n_to_plot = int(n)
+        self._refresh()
+
+    def set_values(self, values):
+        super().set_values(values)
+        self.tools['n'].set_visible(True)
+
+    def clear(self):
+        super().clear()
+        self.tools['n'].set_visible(False)
+
 
 class EigenvectorsWindow(PlotWindow):
     def __init__(self, bbox, app):
-        super().__init__(Windows.eigenvectors, bbox, app)
+        super().__init__(Windows.eigenvectors, bbox, app, tool_frac=0)  # no tools
         self._n_to_plot = 30
+
+    def _init_tools(self):
+        pass
 
     def _refresh(self):
         pass

@@ -105,29 +105,47 @@ class Tool(ABC):
 
 class Slider(Tool):
     """
-    Vertical slider, looks like this:
+    Slider, orient='horizontal' looks like this:
 
-        Value = 0.04
+        Value = 0.4
         [---|------]
+
+    Vertical:
+    
+        V = .4
+        -----
+          |
+          +
+          |
+          |
+          |
+        -----
+
+
 
     """
 
-    def __init__(self, bbox, label, callback=None, visible=True, range=(0, 1), default=None, format_str='=%.2f', spacing_px=3):
+    def __init__(self, bbox, label, callback=None, visible=True, range=(0, 1), default=None, format_str='=%.2f', spacing_px=3, orient='horizontal'):
         """
         Create a slider with the given bounding box.
         :param format_str: Format string for the value display:  label + format_str % (value,) 
         """
         super().__init__(bbox, label, callback, visible, spacing_px)
+        print("Initializing Slider at position: ",bbox)
         self._format_str = format_str
-        self._t_vert_frac = 0.6   # fraction of slider that is for title
+        self._t_horiz_fact = 0.6   # fraction of slider that is for title
+        self._t_vert_frac = 0.15
         self._slider_width_px = 10
-
+        self._orient = orient
         self._range = range
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
 
-        self._calc_dims()
-
+        if orient == 'horizontal':
+            self._calc_dims_horiz()
+        else:
+            self._calc_dims_vert()
+       
         self._moused_over = False
         self._held = False
         if default is None:
@@ -141,8 +159,8 @@ class Slider(Tool):
         """
         return self._range[0] + self._slider_pos * (self._range[1] - self._range[0])
 
-    def _calc_dims(self):
-        self._y_midline = int((self._bbox['y'][1] * self._t_vert_frac + self._bbox['y'][0] * (1 - self._t_vert_frac)))
+    def _calc_dims_horiz(self):
+        self._y_midline = int((self._bbox['y'][1] * self._t_horiz_fact + self._bbox['y'][0] * (1 - self._t_horiz_fact)))
         # title position
         self._text_bbox = {'x': (self._bbox['x'][0]+self._spacing_px, self._bbox['x'][1]-self._spacing_px),
                            'y': [self._bbox['y'][0]+self._spacing_px, self._y_midline]}
@@ -164,45 +182,72 @@ class Slider(Tool):
 
         self._slider_bbox = {'x': [self._s_left, self._s_right],
                              'y': [self._s_top, self._s_bottom]}
+        
+    def _calc_dims_vert(self):
+        self._x_midline = int((self._bbox['x'][1]  +  self._bbox['x'][0])/2)
+        slider_top_y = int((self._bbox['y'][0] + self._spacing_px) * (1 - self._t_vert_frac) + self._bbox['y'][1] * self._t_vert_frac)
+        # title position
+        self._text_bbox = {'x': [self._bbox['x'][0]+self._spacing_px, self._bbox['x'][1]-self._spacing_px],
+                           'y': [self._bbox['y'][0]+self._spacing_px,slider_top_y]}
+        # test font size with random value
+        test_val = self._range[1]
+        test_str = self._txt_name + self._format_str % (test_val,)
+        self._font_size, _ = calc_font_size([test_str], self._text_bbox, self._font, 0)
+        title_dims, baseline = cv2.getTextSize(test_str, self._font, self._font_size, 1)
+        pad = (self._text_bbox['y'][1] - self._text_bbox['y'][0] - title_dims[1]) // 2
+        title_y = self._text_bbox['y'][0] + title_dims[1] + pad
+        self._title_pos = (self._text_bbox['x'][0] + self._spacing_px, title_y)
+        # slider dims
+        self._s_left = self._bbox['x'][0] + self._spacing_px
+        self._s_right = self._bbox['x'][1] - self._spacing_px
+        self._s_top = slider_top_y + self._spacing_px
+        self._s_bottom = self._bbox['y'][1] - self._spacing_px
+        tab_half_width = int(0.35 * (self._s_right - self._s_left))
+        self._slider_tab_x_span = self._x_midline - tab_half_width, self._x_midline + tab_half_width
+
+        self._slider_bbox = {'x': [self._s_left, self._s_right],
+                             'y': [self._s_top, self._s_bottom]}    
 
     def _render(self, img):
         """
         Render the slider.
         """
-        p0 = (self._bbox['x'][0], self._bbox['y'][0])
-        p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        if False:  # debug graphics
-            # text bbox
-            cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
-                          (self._text_bbox['x'][1], self._text_bbox['y'][1]), COLORS['red'].tolist(), 1)
-            # midline in violet
-            cv2.line(img, (self._bbox['x'][0], self._y_midline),
-                     (self._bbox['x'][1], self._y_midline), COLORS['violet'].tolist(), 1)
-            # slider bbox in turquoise
-            cv2.rectangle(img, (self._slider_bbox['x'][0], self._slider_bbox['y'][0]),
-                          (self._slider_bbox['x'][1], self._slider_bbox['y'][1]), COLORS['turquoise'].tolist(), 1)
-
-        # bbox, in border color
-        # cv2.rectangle(img, p0, p1, self._colors['border'], 2)
-
-        # title
-        val = self.get_value()
-        slider_str = self._txt_name + self._format_str % (val,)
-        cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
-        # slider bar
-        slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
-        cv2.line(img, (self._s_left, slider_y), (self._s_right, slider_y), self._colors['idle'], 1)
-        # slider tab
-        slider_xpos = int(self._slider_pos * (self._s_right - self._s_left)) + self._s_left - self._slider_width_px // 2
-
         tab_color = self._colors['tab']
         if self._held:
             tab_color = self._colors['held']
         elif self._moused_over:
             tab_color = self._colors['mouseover']
+        """
+        def _draw_bbox(bbox, color_name):
+            p0 = (bbox['x'][0], bbox['y'][0])
+            p1 = (bbox['x'][1], bbox['y'][1])
+            cv2.rectangle(img, p0, p1, COLORS[color_name].tolist(), 1)
+        _draw_bbox(self._bbox, 'red')
+        _draw_bbox(self._text_bbox, 'green')
+        _draw_bbox(self._slider_bbox, 'blue')
+        """
+        # title
+        val = self.get_value()
+        slider_str = self._txt_name + self._format_str % (val,)
 
-        img[self._slider_bbox['y'][0]:self._slider_bbox['y'][1],
-            slider_xpos: slider_xpos + self._slider_width_px] = np.array(tab_color, dtype=np.uint8)
+        cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
+        # slider bar
+        if self._orient == 'horizontal':
+            slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
+            cv2.line(img, (self._s_left, slider_y), (self._s_right, slider_y), self._colors['idle'], 1)
+        
+            # slider tab
+            slider_xpos = int(self._slider_pos * (self._s_right - self._s_left)) + self._s_left - self._slider_width_px // 2
+
+            
+            img[self._slider_bbox['y'][0]:self._slider_bbox['y'][1],
+                slider_xpos: slider_xpos + self._slider_width_px] = np.array(tab_color, dtype=np.uint8)
+        else:
+            cv2.line(img, (self._x_midline, self._s_top), (self._x_midline, self._s_bottom), self._colors['idle'], 1)
+            # slider tab
+            slider_ypos = int(self._slider_pos * (self._s_bottom - self._s_top)) + self._s_top - self._slider_width_px // 2
+            img[slider_ypos: slider_ypos + self._slider_width_px,
+                self._slider_tab_x_span[0]:self._slider_tab_x_span[1]] = np.array(tab_color, dtype=np.uint8)
 
     def _mouse_click(self, x, y):
         """
@@ -211,7 +256,7 @@ class Slider(Tool):
         # print("Slider mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
-            self._move_slider(x)
+            self._move_slider(x, y)
             return True
 
     def _mouse_move(self, x, y):
@@ -222,7 +267,7 @@ class Slider(Tool):
         if bbox_contains(self._bbox, x, y):
             self._moused_over = True
         if self._held:
-            self._move_slider(x)
+            self._move_slider(x , y)
             return True
         return False
 
@@ -230,14 +275,20 @@ class Slider(Tool):
         self._held = False
         # print("Slider mouse unclick")
 
-    def _move_slider(self, x):
+    def _move_slider(self, x,y):
         """
         Move the slider to the new position.
         """
         old_pos = self._slider_pos
-        rel_x = (x - self._s_left) / (self._s_right - self._s_left)
-        rel_x = np.clip(rel_x, 0, 1)
-        self._slider_pos = rel_x
+        if self._orient == 'horizontal':
+            rel_x = (x - self._s_left) / (self._s_right - self._s_left)
+            rel_x = np.clip(rel_x, 0, 1)
+            self._slider_pos = rel_x
+        else:
+            rel_y = (y - self._s_top) / (self._s_bottom - self._s_top)
+            rel_y = np.clip(rel_y, 0, 1)
+            self._slider_pos = rel_y
+
         if old_pos != self._slider_pos and self._callback is not None:
             self._callback(self.get_value())
 
@@ -299,13 +350,6 @@ class Button(Tool):
         x0, x1 = self._bbox['x']
         y0, y1 = self._bbox['y']
         self._text_pos = (x0 + (x1 - x0 - text_dims[0]) // 2, y0 + (y1 - y0 + text_dims[1]) // 2)
-        if self._text=='Run':
-            print("Run Button:")
-            print("\tbbox:",self._bbox)
-            print("\tspacing_px:",self._spacing_px)
-            print("\tborder_indent:",self._border_indent)
-            print("\ttext_bbox:",self._text_bbox)
-            print('\ttext_pos:',self._text_pos)
 
         # now shrink the box horizontally to fit the text (make it match the vertical spacing)
         extra_x =self._text_bbox['x'][1] - self._text_bbox['x'][0] - text_dims[0]
@@ -372,7 +416,6 @@ class ToggleButton(Button):
         """
         Check if the click is within the button.
         """
-        print("ToggleButton mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = False
             self._state = not self._state

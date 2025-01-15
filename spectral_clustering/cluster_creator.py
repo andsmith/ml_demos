@@ -49,7 +49,8 @@ class ClusterCreator(object):
 
     def __init__(self, size=(640*2, 800)):
         logging.info('Initializing Cluster Creator')
-        self._size = size
+        self.size = size
+        self.bbox = {'x': (0, size[0]), 'y': (0, size[1])}
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + WINDOW_LAYOUT['colors']['bkg']
         window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
         self.windows = {}  # WINDOW_TYPES[k]: WINDOW_TYPES[k](window_layout[k], self) for k in self.APP_WINDOWS}

@@ -195,9 +195,32 @@ def vsplit_bbox(bbox, weights):
     top = y[0]
     weights = np.array(weights) / np.sum(weights)
     for w in weights:
-        bottom = top + w * total_height
+        bottom = (top + w * total_height)
         bboxes.append({'x': x, 'y': (top, bottom)})
         top = bottom
+    return bboxes
+
+def indent_bbox(bbox, n_px):
+    return {'x': (bbox['x'][0] + n_px, bbox['x'][1] - n_px),
+            'y': (bbox['y'][0] + n_px, bbox['y'][1] - n_px)}
+
+def hsplit_bbox(bbox, weights):
+    """
+    Split the bounding box horizontally, with relative widths given by weights.
+    :param bbox: dict(x=(left, right), y=(top, bottom))
+    :param weights: list of positive floats
+    :return: list of bounding boxes, from left to right
+    """
+    x = bbox['x']
+    y = bbox['y']
+    total_width = x[1] - x[0]
+    bboxes = []
+    left = x[0]
+    weights = np.array(weights) / np.sum(weights)
+    for w in weights:
+        right = int(left + w * total_width)
+        bboxes.append({'x': (left, right), 'y': y})
+        left = right
     return bboxes
 
 def _test_vsplit_bbox():
