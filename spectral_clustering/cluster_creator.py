@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraph, SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
+from spectral import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
 from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
@@ -44,10 +44,10 @@ class ClusterCreator(object):
                    Windows.clustering,
                    Windows.sim_matrix,
                    Windows.eigenvectors,
-                   Windows.graph_stats,
+                   Windows.rand_proj,
                    Windows.spectrum]
 
-    def __init__(self, size=(640*2, 800)):
+    def __init__(self, size=(1350, 800)):
         logging.info('Initializing Cluster Creator')
         self.size = size
         self.bbox = {'x': (0, size[0]), 'y': (0, size[1])}
@@ -101,24 +101,18 @@ class ClusterCreator(object):
             y0, y1 = window['y']
             window_layout[window_kind] = {'x': (int(x0 * size[0]), int(x1 * size[0])),
                                           'y': (int(y0 * size[1]), int(y1 * size[1]))}
-        # adjust sim_matrix window and it's neighbor
+        # adjust sim_matrix window and the toolbar to the left of it
         sim_window_k = Windows.sim_matrix
-        sim_neighbor_k = [w for w in layout if (layout[w]['y'] == layout[sim_window_k]['y']) and
-                          (w != 'sim_matrix') and
-                          (layout[sim_window_k]['x'][1] == layout[w]['x'][0])]
-        if len(sim_neighbor_k) == 0:
-            raise ValueError("No window with y=%s and x[1]=%f in layout." %
-                             (layout[sim_window_k]['y'], layout[sim_window_k]['x'][1]))
-        sim_neighbor_k = sim_neighbor_k[0]
+        sim_neighbor_k = Windows.toolbar
 
         sim_height = window_layout[sim_window_k]['y'][1] - window_layout[sim_window_k]['y'][0]
-        new_x = window_layout[sim_window_k]['x'][0] + sim_height
+        new_x = window_layout[sim_window_k]['x'][1] - sim_height
         print("Adjusting sim matrix window from %i pixels to %i." %
               (window_layout[sim_window_k]['x'][1] - window_layout[sim_window_k]['x'][0], sim_height))
         print("Adjusting %s window from %i pixels to %i." % (sim_neighbor_k,
               window_layout[sim_neighbor_k]['x'][1] - window_layout[sim_neighbor_k]['x'][0], sim_height))
-        window_layout[sim_window_k]['x'] = (window_layout[sim_window_k]['x'][0], new_x)
-        window_layout[sim_neighbor_k]['x'] = (new_x, window_layout[sim_neighbor_k]['x'][1])
+        window_layout[sim_window_k]['x'] = (new_x,window_layout[sim_window_k]['x'][1])
+        window_layout[sim_neighbor_k]['x'] = (window_layout[sim_neighbor_k]['x'][0], new_x)
 
         return window_layout
 
@@ -218,7 +212,7 @@ class ClusterCreator(object):
         self.windows[Windows.clustering].clear()
         self.windows[Windows.sim_matrix].clear()
         self.windows[Windows.eigenvectors].clear()
-        self.windows[Windows.graph_stats].clear()
+        self.windows[Windows.rand_proj].clear()
         self.windows[Windows.spectrum].clear()
 
         with self._similarity_graph['lock']:

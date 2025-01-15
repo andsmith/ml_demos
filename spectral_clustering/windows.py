@@ -21,7 +21,7 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.spectrum: "Spectrum",
                 Windows.eigenvectors: "Eigenvectors",
                 Windows.sim_matrix: "Similarity matrix",
-                Windows.graph_stats: "Edge weightstats"}
+                Windows.rand_proj: "Random projection"}
 
 
 class Window(ABC):
@@ -583,9 +583,9 @@ class EigenvectorsWindow(PlotWindow):
         pass
 
 
-class GraphStatsWindow(Window):
+class RandProjWindow(Window):
     def __init__(self, bbox, app):
-        super().__init__(Windows.graph_stats, bbox, app)
+        super().__init__(Windows.rand_proj, bbox, app)
         self._stats = None
 
     def clear(self):
@@ -598,4 +598,4 @@ WINDOW_TYPES = {Windows.ui: UiWindow,
                 Windows.spectrum: SpectrumWindow,
                 Windows.eigenvectors: EigenvectorsWindow,
                 Windows.sim_matrix: SimMatrixWindow,
-                Windows.graph_stats: GraphStatsWindow}
+                Windows.rand_proj: RandProjWindow}

@@ -5,16 +5,18 @@ from enum import IntEnum
 from util import vsplit_bbox
 """
 Windows are laid out rougly:
-|---------------------------------------------------|
-|  Adding clusters ("UI")         |  spectrum       |
-|  (click to add points)          |-----------------|
-|                                 |  eigenvectors   |
-|---------------------------------|-----------------|
-|  sim_matrix  | graph_stats      |  clustering     |
-|---------------------------------------------------|
-| toolbar                                           |
-|---------------------------------------------------|
++---------------------+----------+----------+
+|  "UI window"        |          |          |
+|  (click to add and  | spectrum |e-vectors |
+|   modify clusters)  |          |          |
+|                     +----------+----------|
++------------+--------+          |          |
+|  tollbar   |  sim   | randproj | clusters |
+|            | matrix |          |          |
++------------+--------+----------+----------+
 """
+
+
 
 
 class Windows(IntEnum):
@@ -25,25 +27,27 @@ class Windows(IntEnum):
     spectrum = 1
     eigenvectors = 2
     sim_matrix = 3
-    graph_stats = 4
+    rand_proj = 4
     clustering = 5
     toolbar = 6
 
+h_div = 0.4  # relative x position of the  vertical dividing line between UI and spectrum
+h_mid = (h_div+1.)/2.  # x position between spectrum and eigenvectors
 
-WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, .667),  # scale from unit square to window size
-                                          'y': (0, .5)},
-                             Windows.toolbar: {'x': (0, .667),
+WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit square to window size
+                                          'y': (0, .75)},
+                             Windows.toolbar: {'x': (0, .45),
                                                'y': (.75, 1)},
-                             Windows.spectrum: {'x': (.667, 1),  # move a bit in for a slider
-                                                'y': (0, .333)},
-                             Windows.eigenvectors: {'x': (.667, 1),
-                                                    'y': (.333, .667)},
-                             Windows.sim_matrix: {'x': (0, .25),
-                                                  'y': (.5, .75)},  # will be made square regardless of window size
-                             Windows.graph_stats: {'x': (.25, .666),
-                                                   'y': (.5, .75)},
-                             Windows.clustering: {'x': (.667, 1),
-                                                  'y': (.667, 1)}},
+                             Windows.spectrum: {'x': (h_div, h_mid),  # move a bit in for a slider
+                                                'y': (0, .5)},
+                             Windows.eigenvectors: {'x': (h_mid, 1),
+                                                    'y': (0, .5)},
+                             Windows.sim_matrix: {'x': (.45, h_div),
+                                                  'y': (.75, 1)},  # will be made square regardless of window size
+                             Windows.rand_proj: {'x': (h_div, h_mid),
+                                                   'y': (.5, 1)},
+                             Windows.clustering: {'x': (h_mid, 1),
+                                                  'y': (.5, 1)}},
                  'colors': {'bkg': COLORS['white'],
                             'border': COLORS['gray'],
                             'active_border': COLORS['black'],
