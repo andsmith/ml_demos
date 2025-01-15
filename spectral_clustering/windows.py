@@ -4,7 +4,7 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, apply_colormap, get_good_point_size
+from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
@@ -12,7 +12,7 @@ from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
 from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
-from plotting import SpectrumPlot
+from plot_to_img import PlotRenderer
 
 
 WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
@@ -472,30 +472,56 @@ class SimMatrixWindow(Window):
                 self._img_bbox['x'][0]:self._img_bbox['x'][0]+self._s] = self._image_rgb_resized
 
 
-class SpectrumWindow(Window):
-    def __init__(self,  bbox, app):
-        super().__init__(Windows.spectrum, bbox, app)
-        self._n_to_plot = 10
-        self._spec_plot = SpectrumPlot(app, bbox, "Eigenvalues", max_plot=self._n_to_plot,
-                                       visible=True, title_v_frac=.15)
+class PlotWindow(Window, ABC):
+    def __init__(self,  kind, bbox, app):
+        super().__init__(kind, bbox, app)
+        w, h = bbox['x'][1] - bbox['x'][0], bbox['y'][1] - bbox['y'][0]
+        self._plotter = PlotRenderer((w, h))
+        self._disp_img = None
+        self._values = None
 
     def render(self, img, active=False):
-        self.render_box(img, active=active)  # remove?
+        if self._disp_img is None:
+            self.render_box(img, active=active)  # remove?
+            self.render_title(img)
+        else:
+            add_sub_image(img, self._disp_img, self.bbox)
 
-        self._spec_plot.render(img)
-
-    def update_eigenvalues(self, eigvals):
-        self._spec_plot.set_values(eigvals)
+    def set_values(self, values):
+        self._values = values
+        self._refresh()
 
     def clear(self):
-        self._spec_plot.clear()
+        self._values = None
+        self._disp_img = None
+
+    @abstractmethod
+    def _refresh(self):
+        # set self._disp_img
+        pass
 
 
-class EigenvectorsWindow(Window):
+class SpectrumWindow(PlotWindow):
+    def __init__(self, bbox, app):
+        super().__init__(Windows.spectrum, bbox, app)
+        self._n_to_plot = 30
+
+    def _refresh(self):
+        fig, ax = self._plotter.get_axis()
+        ax.plot(self._values[:self._n_to_plot], 'o-')
+        # draw a vertical red line at k+.5
+        x_k = self.app.windows[Windows.toolbar].get_value('k') + 0.5
+        ax.axvline(x=x_k, color='r', linestyle='-')
+        ax.set_title("Eigenvalues")
+        self._disp_img = self._plotter.render_fig(fig)
+
+
+class EigenvectorsWindow(PlotWindow):
     def __init__(self, bbox, app):
         super().__init__(Windows.eigenvectors, bbox, app)
+        self._n_to_plot = 30
 
-    def clear(self):
+    def _refresh(self):
         pass
 
 

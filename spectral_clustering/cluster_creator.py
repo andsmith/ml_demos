@@ -178,22 +178,6 @@ class ClusterCreator(object):
         else:
             update_sim_graph_thread()
 
-    def _do_clustering(self, points):
-        """
-        Cluster the points with the given algorithm.
-        """
-        algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
-        n_clusters = self.windows[Windows.toolbar].get_value('k')
-
-        if algorithm_name == 'K-means':
-            return KMeansAlgorithm(n_clusters).cluster(points)
-
-        elif algorithm_name in ('Unnormalized', 'Normalized'):
-            sa = SpectralAlgorithm(n_clusters, self._similarity_graph['graph'])
-            return sa.get_clusters()
-        else:
-            raise ValueError(f"Invalid algorithm name: {algorithm_name}")
-
     def recompute_clustering(self):
         """
         Recompute the clustering:
@@ -201,11 +185,25 @@ class ClusterCreator(object):
             * cluster data w/current settings
             * update cluster window w/results
         """
+        algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
         n_clusters = self.windows[Windows.toolbar].get_value('k')
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
         # print("Recomputing with %i points, %i clusters, %i nearest neighbors, and algorithm %s" % (n_points, n_clusters, n_nearest, algorithm_name))
-        cluster_ids = self._do_clustering(self._points)
+
+        if algorithm_name == 'K-means':
+            cluster_ids = KMeansAlgorithm(n_clusters).cluster(self._points)
+
+        elif algorithm_name in ('Unnormalized', 'Normalized'):
+            sa = SpectralAlgorithm(n_clusters, self._similarity_graph['graph'])
+            cluster_ids =  sa.get_clusters()
+            values, vectors = sa.get_eigens()
+            self.windows[Windows.spectrum].set_values(values)
+            self.windows[Windows.eigenvectors].set_values(vectors)
+        else:
+            raise ValueError(f"Invalid algorithm name: {algorithm_name}")
+
+
         unit_points = unscale_coords(self.windows[Windows.ui].bbox, self._points)
         self.windows[Windows.clustering].update(unit_points, cluster_ids, self._cluster_colors)
 

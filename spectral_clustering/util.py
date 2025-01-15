@@ -217,6 +217,42 @@ def _test_vsplit_bbox():
     plt.show()
 
 
+def get_tic_positions(n, max_val, pixel_range):
+    """
+    With an axis spanning pixel_range pixels, where should the tic marks be?
+    :param n: number of tic marks (approximate)
+    :param max_val: maximum value on the axis (0 is minimum)
+    :param pixel_range: number of pixels the axis spans
+    """
+    mag_val = np.floor(np.log10(max_val))
+    step = 10 ** mag_val
+    # find the step size
+    while max_val / step < n:
+        step /= 2
+    # find the first tic mark
+    first_tic = np.ceil(max_val / step) * step
+    # find the last tic mark
+    last_tic = np.floor(0 / step) * step
+    # get the values
+    tic_values = np.arange(first_tic, last_tic - step, -step)
+    # scale to pixel range
+    tic_positions = (tic_values / max_val) * pixel_range
+    return {'values':tic_values,
+            'pos_px': tic_positions,
+            'n': len(tic_values)}
+
+
+def add_sub_image(img, sub_img, bbox):
+    """
+    Blit the sub_image over the image in the bbox.
+    The image may be smaller than the bbox, it goes in the top left corner.
+    """
+    x0, x1 = bbox['x']
+    y0, y1 = bbox['y']
+    sub_img = sub_img[:y1-y0, :x1-x0]
+    img[y0:y0+sub_img.shape[0], x0:x0+sub_img.shape[1]] = sub_img
+
+
 if __name__ == '__main__':
     _test_vsplit_bbox()
 

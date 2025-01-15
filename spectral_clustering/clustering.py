@@ -77,7 +77,7 @@ class SpectralAlgorithm(ClusteringAlgorithm):
 
         # sort by eigenvalues
         idx = eigvals.argsort()
-        eigvals = eigvals[idx]
+        self._eigvals = eigvals[idx]
         eigvecs = eigvecs[:, idx]
 
         # get the first k eigenvectors
@@ -90,7 +90,9 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         # cluster
         self._cluster_ids = self._kmeans.labels_
 
-
+    def get_eigens(self):
+        return self._eigvals, self._eigvecs
+    
     def cluster(self, x):
         return self._cluster_ids
     
