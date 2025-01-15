@@ -217,15 +217,15 @@ class Slider(Tool):
             tab_color = self._colors['held']
         elif self._moused_over:
             tab_color = self._colors['mouseover']
-        """
+        
         def _draw_bbox(bbox, color_name):
             p0 = (bbox['x'][0], bbox['y'][0])
             p1 = (bbox['x'][1], bbox['y'][1])
             cv2.rectangle(img, p0, p1, COLORS[color_name].tolist(), 1)
-        _draw_bbox(self._bbox, 'red')
-        _draw_bbox(self._text_bbox, 'green')
-        _draw_bbox(self._slider_bbox, 'blue')
-        """
+        #_draw_bbox(self._bbox, 'red')
+        #_draw_bbox(self._text_bbox, 'green')
+        #_draw_bbox(self._slider_bbox, 'blue')
+        
         # title
         val = self.get_value()
         slider_str = self._txt_name + self._format_str % (val,)
@@ -347,15 +347,10 @@ class Button(Tool):
         self._font_size, _ = calc_font_size([self._text], self._text_bbox, self._font, self._border_indent)
         
         text_dims = cv2.getTextSize(self._text, self._font, self._font_size, 1)[0]
-        x0, x1 = self._bbox['x']
-        y0, y1 = self._bbox['y']
+        x0, x1 = self._text_bbox['x']
+        y0, y1 = self._text_bbox['y']
         self._text_pos = (x0 + (x1 - x0 - text_dims[0]) // 2, y0 + (y1 - y0 + text_dims[1]) // 2)
 
-        # now shrink the box horizontally to fit the text (make it match the vertical spacing)
-        extra_x =self._text_bbox['x'][1] - self._text_bbox['x'][0] - text_dims[0]
-        extra_y = self._text_bbox['y'][1] - self._text_bbox['y'][0] - text_dims[1]
-        self._text_bbox['x'][0] += extra_x // 2 - extra_y//2
-        self._text_bbox['x'][1] -= extra_x // 2 - extra_y//2
 
 
     def _render(self, img):
@@ -366,7 +361,7 @@ class Button(Tool):
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
         color = self._get_button_text_color()
         # bbox
-        # cv2.rectangle(img, p0, p1, self._colors['idle'], 1)
+        #  cv2.rectangle(img, p0, p1, COLORS['orange'].tolist(), 1)
 
         # text box
         cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),

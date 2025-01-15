@@ -331,27 +331,27 @@ class ToolsWindow(WindowMouseManager, Window):
                                              # no callback, updates when Run button is clicked
                                              'K (clusters)', lambda _: None,
                                              range=[2, 25], default=5, format_str="=%i"),
-                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_clustering),
-                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear),
+                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_clustering, border_indent=0),
+                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
 
                       # Only one of these three is on at a time:
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
                                               SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.NN],
                                               self.app.update_sim_graph,
-                                              range=[1, 20], default=5, format_str="=%i", visible=False, spacing_px=5),
+                                              range=[1, 20], default=5, format_str="=%i", visible=False),
                       Tools.nn_toggle: ToggleButton(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_toggle], indented_bbox),
                                                     'Mutual',
                                                     self.app.update_sim_graph,
-                                                    default=True, visible=False, spacing_px=5, border_indent=0),
+                                                    default=True, visible=False, spacing_px=5, border_indent=2),
 
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
                                                    SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
                                                    self.app.update_sim_graph,
-                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True, spacing_px=5),
+                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL],
                                                  self.app.update_sim_graph,
-                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False, spacing_px=5)}
+                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
