@@ -12,6 +12,9 @@ from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
 from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
+from plotting import SpectrumPlot
+
+
 WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.toolbar: "Toolbar",
                 Windows.clustering: "Clusters",
@@ -312,7 +315,7 @@ class ToolsWindow(Window):
                                                    self.app.update_sim_graph,
                                                    range=[1., 50], default=25, format_str="=%.3f", visible=True, spacing_px=5),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
-                                                 SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL], 
+                                                 SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL],
                                                  self.app.update_sim_graph,
                                                  range=[1., 50], default=25, format_str="=%.3f", visible=False, spacing_px=5)}
 
@@ -325,12 +328,12 @@ class ToolsWindow(Window):
         """
         # print("Changing sim param visibility based on", param_name)
         # print("which should be one of:  %s" % self._sim_param_names.values())
-        turn_on_toggle=False
+        turn_on_toggle = False
         for param_kind in self._sim_kind_names:
             if self._sim_kind_names[param_kind] == kind_name:
                 self.tools[param_kind].set_visible(True)
-                if param_kind==Tools.nn_slider:
-                    turn_on_toggle=True
+                if param_kind == Tools.nn_slider:
+                    turn_on_toggle = True
             else:
                 self.tools[param_kind].set_visible(False)
 
@@ -394,7 +397,7 @@ class ToolsWindow(Window):
             return self.tools[Tools.sim_graph_radio].get_value()
         elif param == 'k':
             return int(self.tools[Tools.k_slider].get_value())
-        elif param =='mutual':
+        elif param == 'mutual':
             return self.tools[Tools.nn_toggle].get_value()
         else:
             raise ValueError(f"Invalid parameter: {param}")
@@ -472,27 +475,28 @@ class SimMatrixWindow(Window):
 class SpectrumWindow(Window):
     def __init__(self,  bbox, app):
         super().__init__(Windows.spectrum, bbox, app)
+        self._n_to_plot = 10
+        self._spec_plot = SpectrumPlot(app, bbox, "Eigenvalues", max_plot=self._n_to_plot,
+                                       visible=True, title_v_frac=.15)
 
     def render(self, img, active=False):
-        """
-        Render the window onto the image.
-        (override for specific window types)
-        """
-        self.render_box(img, active=active)
-        self.render_title(img)
+        self.render_box(img, active=active)  # remove?
 
+        self._spec_plot.render(img)
 
-    def clear   (self):
-        pass
+    def update_eigenvalues(self, eigvals):
+        self._spec_plot.set_values(eigvals)
+
+    def clear(self):
+        self._spec_plot.clear()
+
 
 class EigenvectorsWindow(Window):
     def __init__(self, bbox, app):
         super().__init__(Windows.eigenvectors, bbox, app)
 
     def clear(self):
-        pass    
-
-
+        pass
 
 
 class GraphStatsWindow(Window):
@@ -500,7 +504,7 @@ class GraphStatsWindow(Window):
         super().__init__(Windows.graph_stats, bbox, app)
         self._stats = None
 
-    def clear   (self):
+    def clear(self):
         self._stats = None
 
 

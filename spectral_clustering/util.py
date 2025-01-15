@@ -100,12 +100,14 @@ def get_ellipse_points(center, p0, p1, n_points):
 def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
     """
     Calculate the largest font size to fit the text in the bbox.
-    :param lines: list of strings, one per line
+    :param lines: list of strings, one per line, or a single string
     :param bbox: dict(x=(x0, x1), y=(y0, y1))
     :param font: cv2 font constant
     :param item_spacing_px: int, vertical spacing between lines, left and right horizontal spacing within box.
     :param n_extra_v_spaces: int, number of extra item_spacing_px to add to the bottom.
     """
+    if isinstance(lines, str):
+        lines = [lines]
     font_sizes = np.linspace(.2, 3.0, 100)[::-1]
 
     text_area_width = bbox['x'][1] - bbox['x'][0] - item_spacing_px * 2

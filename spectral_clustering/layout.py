@@ -123,3 +123,11 @@ TOOLBAR_LAYOUT[Tools.epsilon_slider] = three_boxes[0]
 TOOLBAR_LAYOUT[Tools.sigma_slider] = three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_slider] = three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_toggle] = three_boxes[2]
+
+
+PLOT_LAYOUT = {'axis_spacing': 5,
+               'font': cv2.FONT_HERSHEY_SIMPLEX,
+               'title_color': COLORS['gray'],
+               'axis_color': COLORS['black'],
+               'tick_color':COLORS['gray']
+               }
