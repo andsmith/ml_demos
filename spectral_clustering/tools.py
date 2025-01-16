@@ -525,7 +525,7 @@ class RadioButtons(Tool):
         """
         p0 = (self._bbox['x'][0], self._bbox['y'][0])
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
-        # cv2.rectangle(img, p0, p1, self._colors['unselected'], 1)
+        #cv2.rectangle(img, p0, p1, self._colors['unselected'], 1)  # draw bbox
         cv2.putText(img, self._txt_name, self._title_pos, self._font,
                     self._font_size, self._colors['unselected'])
         cv2.line(img, self._line_coords[0], self._line_coords[1], self._colors['unselected'])

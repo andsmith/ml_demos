@@ -4,7 +4,8 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image, hsplit_bbox, indent_bbox, plot_eigenvecs
+from util import (scale_bbox, plot_clustering, get_good_point_size, add_sub_image, 
+                  hsplit_bbox, indent_bbox, plot_eigenvecs, add_alpha)
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
@@ -328,7 +329,7 @@ class ToolsWindow(WindowMouseManager, Window):
                                                      default_selection=1, spacing_px=7),
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
                                                     'Algorithm', lambda x: None,    # no callback, updates when Run button is clicked
-                                                    options=['Unnormalized', 'Normalized', 'K-means'],
+                                                    options=['Spectral', 'K-means'],
                                                     default_selection=0, spacing_px=7),
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
                                                           'Sim Graph', callback=self._change_sim_param_visibility,
@@ -343,7 +344,10 @@ class ToolsWindow(WindowMouseManager, Window):
                                              # no callback, updates when Run button is clicked
                                              'K (clusters)', lambda _: None,
                                              range=[2, 25], default=5, format_str="=%i"),
-                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_clustering, border_indent=0),
+                      Tools.f_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.f_slider], indented_bbox),
+                                                'F (eigenvectors)', lambda _: None,
+                                                range=[1, 50], default=5, format_str="=%i"),
+                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_spectrum, border_indent=0),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
 
                       # Only one of these three is on at a time:
@@ -419,37 +423,12 @@ class ToolsWindow(WindowMouseManager, Window):
             return self.tools[Tools.sim_graph_radio].get_value()
         elif param == 'k':
             return int(self.tools[Tools.k_slider].get_value())
+        elif param == 'f':
+            return int(self.tools[Tools.f_slider].get_value())
         elif param == 'mutual':
             return self.tools[Tools.nn_toggle].get_value()
         else:
             raise ValueError(f"Invalid parameter: {param}")
-
-
-class ClustersWindow(Window):
-    def __init__(self,  bbox, app):
-        super().__init__(Windows.clustering, bbox, app)
-        w, h = self.bbox['x'][1] - self.bbox['x'][0], self.bbox['y'][1] - self.bbox['y'][0]
-        self._bkg_color = + WINDOW_LAYOUT['colors']['bkg']
-        self._blank = np.zeros((h, w, 3), np.uint8) + self._bkg_color  # only redraw after updates
-        cv2.rectangle(self._blank, (self.margin_px, self.margin_px),
-                      (w - self.margin_px, h - self.margin_px),
-                      WINDOW_LAYOUT['colors']['border'].tolist(), 2)
-        self._frame = self._blank.copy()
-
-    def update(self, points, cluster_ids, colors):
-        """
-        Update the cluster window with new points and cluster assignments.
-        """
-        self._frame = self._blank.copy()
-        render_clustering(self._frame, points, cluster_ids, colors, margin_px=self.margin_px)
-
-    def clear(self):
-        self._frame = self._blank.copy()
-
-    def render(self, img, active=False):
-        img[self.bbox['y'][0]:self.bbox['y'][1],
-            self.bbox['x'][0]:self.bbox['x'][1]] = self._frame
-        self.render_title(img)
 
 
 class SimMatrixWindow(Window):
@@ -538,6 +517,31 @@ class PlotWindow(Window, ABC):
         pass
 
 
+class ClustersWindow(PlotWindow):
+    def __init__(self,  bbox, app):
+        super().__init__(Windows.clustering, bbox, app)
+        self._bbox_size = (bbox['x'][1] - bbox['x'][0], bbox['y'][1] - bbox['y'][0])
+    def _init_tools(self):
+        pass
+
+    def _refresh(self):
+        if self._values is None:
+            return
+        
+        fig, axes = self._plotter.get_axis(1, 1)
+        colors = self._values['colors']
+        points = self._values['points']
+        cluster_ids = self._values['cluster_ids']
+        k = self.app.windows[Windows.toolbar].get_value('k')
+
+        colors4 = add_alpha(colors, 0.5) / 255.
+        plot_clustering(axes, points, colors4, cluster_ids, image_size=self._bbox_size,alpha=0.5)
+        # add title
+        axes.set_title("Clustering (k=%i)" % k)
+        fig.tight_layout()
+        self._disp_img = self._plotter.render_fig(fig)
+        
+
 class SpectrumWindow(WindowMouseManager, PlotWindow):
     def __init__(self, bbox, app):
         self._n_to_plot = 10
@@ -565,8 +569,8 @@ class SpectrumWindow(WindowMouseManager, PlotWindow):
             return
         fig, ax = self._plotter.get_axis()
         ax.plot(self._values[:self._n_to_plot], 'o-')
-        # draw a vertical red line at k+.5
-        x_k = self.app.windows[Windows.toolbar].get_value('k') - 0.5
+        # draw a vertical red line at f
+        x_k = self.app.windows[Windows.toolbar].get_value('f') - 0.5
         ax.axvline(x=x_k, color='r', linestyle='-')
         ax.set_title("Eigenvalues")
         self._disp_img = self._plotter.render_fig(fig)
@@ -604,7 +608,7 @@ class EigenvectorsWindow(PlotWindow):
 
     def _refresh(self):
         n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
-        k = self.app.windows[Windows.toolbar].get_value('k')
+        k = self.app.windows[Windows.toolbar].get_value('f')
         fig, axes = self._plotter.get_axis(n_to_plot, 1)
         colors = self.app.windows[Windows.ui].get_cluster_color_ids()
         plot_eigenvecs(fig, axes, self._values, n_to_plot, k, colors=colors)

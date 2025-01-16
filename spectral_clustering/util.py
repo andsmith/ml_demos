@@ -322,6 +322,14 @@ def test_get_good_markersizes():
     print("All tests passed!")
 
     
+def add_alpha(colors, alpha):
+    """
+    Add an alpha channel to the colors.
+    :param colors: M x 3 array of colors
+    :param alpha: float in [0, 1]
+    :return: M x 4 array of colors
+    """
+    return np.concatenate([colors, np.ones((colors.shape[0], 1)) * alpha], axis=1)
 
 
 
@@ -338,7 +346,7 @@ def plot_clustering(ax, points, colors, cluster_ids, image_size, alpha=.5):
     point_sizes = _get_good_markersizes(cluster_sizes, image_size)
     for i in id_list:
         cluster_points = points[cluster_ids == i]
-        print("Plotting cluster %i with %i points, markersize %i"%(i, len(cluster_points), point_sizes[i]))
+        #print("Plotting cluster %i with %i points, markersize %i"%(i, len(cluster_points), point_sizes[i]))
         ax.scatter(cluster_points[:, 0], cluster_points[:, 1], c=[colors[i]], s=point_sizes[i], alpha=alpha)
     ax.set_aspect('equal')
     ax.axis('off')
