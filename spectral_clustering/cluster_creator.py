@@ -182,16 +182,20 @@ class ClusterCreator(object):
         Called when run button is clicked (because similarity graph has changed).
         This will also update the clustering.
         """
-        algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
-
-        if algorithm_name == 'K-means':
+        # if no data, don't do anything
+        if self._points is None or self._points.shape[0] == 0: 
+            print("Can't cluster without data...")
             return
-        elif algorithm_name == 'Spectral':
+        algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
+        n_features = self.windows[Windows.toolbar].get_value('f')
+        if algorithm_name == 'Spectral':
             self._spectrum =  SpectralAlgorithm(self._similarity_graph['graph'])
             values, vectors = self._spectrum.get_eigens()
             self.windows[Windows.spectrum].set_values(values)
             self.windows[Windows.eigenvectors].set_values(vectors)
-        else:
+            self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+        elif algorithm_name not in ['K-means']:
+            # algorithms that don't need the eigendecomposition
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
         
         self.recompute_clustering()
@@ -209,8 +213,8 @@ class ClusterCreator(object):
             cluster_ids = ka.cluster(self._points)
         elif algorithm_name == 'Spectral':
             if self._spectrum is None:
-                # self.recompute_spectrum()  # too slow to automatically recompute
-                return
+                self.recompute_spectrum()  # too slow to automatically recompute?
+                #return
             cluster_ids = self._spectrum.cluster(n_clusters, n_features)
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
@@ -264,7 +268,8 @@ class ClusterCreator(object):
                 self.show_graph = not self.show_graph
                 print("Show graph: %s" % self.show_graph)
             elif k == ord(HOTKEYS['recalculate clustering']):
-                self.recompute_clustering()
+                print("Hotkey recompute")
+                self.recompute_spectrum()
             elif k == ord(HOTKEYS['print hotkeys']):
                 self._print_hotkeys()
             elif self._active_window_name is not None:

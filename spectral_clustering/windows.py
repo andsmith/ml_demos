@@ -4,8 +4,9 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import (scale_bbox, plot_clustering, get_good_point_size, add_sub_image, 
-                  hsplit_bbox, indent_bbox, plot_eigenvecs, add_alpha)
+from util import (scale_bbox, get_good_point_size, add_sub_image,
+                  hsplit_bbox, indent_bbox, vsplit_bbox)
+from mpl_plots import plot_clustering, plot_eigenvecs, add_alpha
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
@@ -181,7 +182,7 @@ class UiWindow(Window):
         ids = []
         for color_id, cluster in enumerate(self._clusters):
             colors.append(cluster.get_color()[::-1])
-            ids.append(np.ones(cluster.get_n_pts()) * color_id)
+            ids.append(np.ones(cluster.get_n_pts()).astype(int) * color_id)
         return {'ids': np.hstack(ids), 'colors': np.vstack(colors)}
 
     def set_graph(self, new_sim_graph):
@@ -345,8 +346,8 @@ class ToolsWindow(WindowMouseManager, Window):
                                              'K (clusters)', lambda _: None,
                                              range=[2, 25], default=5, format_str="=%i"),
                       Tools.f_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.f_slider], indented_bbox),
-                                                'F (eigenvectors)', lambda _: None,
-                                                range=[1, 50], default=5, format_str="=%i"),
+                                             'F (features)', lambda _: None,
+                                             range=[1, 50], default=5, format_str="=%i"),
                       Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_spectrum, border_indent=0),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
 
@@ -475,13 +476,18 @@ class SimMatrixWindow(Window):
 
 
 class PlotWindow(Window, ABC):
-    def __init__(self,  kind, bbox, app, tool_frac=0.0):
+    def __init__(self,  kind, bbox, app, tool_frac=0.0, split='h'):
         """
-        Plot on the left, tool area to the right, split proportional to tool_frac.
+        Plot on the left, tool area to the right/below, split proportional to tool_frac.
         """
         super().__init__(kind, bbox, app)
+        if split == 'h':
+            self._plot_bbox, self._tool_bbox = hsplit_bbox(bbox, [1-tool_frac, tool_frac])
+        elif split == 'v':
+            self._plot_bbox, self._tool_bbox = vsplit_bbox(bbox, [1-tool_frac, tool_frac])
+        else:
+            raise ValueError(f"Invalid split: {split}")
 
-        self._plot_bbox, self._tool_bbox = hsplit_bbox(bbox, [1-tool_frac, tool_frac])
         self._tool_bbox = indent_bbox(self._tool_bbox, self.margin_px)
         w = self._plot_bbox['x'][1] - self._plot_bbox['x'][0]
         h = self._plot_bbox['y'][1] - self._plot_bbox['y'][0]
@@ -489,6 +495,7 @@ class PlotWindow(Window, ABC):
 
         self._disp_img = None
         self._values = None
+        self.tools={} # dict with values are all the tool objects to render (after disp_img)
         self._init_tools()
 
     def render(self, img, active=False):
@@ -498,17 +505,22 @@ class PlotWindow(Window, ABC):
         else:
             add_sub_image(img, self._disp_img, self._plot_bbox)
 
+            # render tools:
+            for tool in self.tools:
+                self.tools[tool].render(img)
+
     def set_values(self, values):
         self._values = values
-        self._refresh()
+        self.refresh()
 
     def clear(self):
         self._values = None
         self._disp_img = None
 
     @abstractmethod
-    def _refresh(self):
+    def refresh(self):
         # set self._disp_img
+        # only called when self._values is set (by default) to create a new display image.
         pass
 
     @abstractmethod
@@ -521,13 +533,14 @@ class ClustersWindow(PlotWindow):
     def __init__(self,  bbox, app):
         super().__init__(Windows.clustering, bbox, app)
         self._bbox_size = (bbox['x'][1] - bbox['x'][0], bbox['y'][1] - bbox['y'][0])
+
     def _init_tools(self):
         pass
 
-    def _refresh(self):
+    def refresh(self):
         if self._values is None:
             return
-        
+
         fig, axes = self._plotter.get_axis(1, 1)
         colors = self._values['colors']
         points = self._values['points']
@@ -535,12 +548,12 @@ class ClustersWindow(PlotWindow):
         k = self.app.windows[Windows.toolbar].get_value('k')
 
         colors4 = add_alpha(colors, 0.5) / 255.
-        plot_clustering(axes, points, colors4, cluster_ids, image_size=self._bbox_size,alpha=0.5)
+        plot_clustering(axes, points, colors4, cluster_ids, image_size=self._bbox_size, alpha=0.5)
         # add title
         axes.set_title("Clustering (k=%i)" % k)
         fig.tight_layout()
         self._disp_img = self._plotter.render_fig(fig)
-        
+
 
 class SpectrumWindow(WindowMouseManager, PlotWindow):
     def __init__(self, bbox, app):
@@ -564,7 +577,7 @@ class SpectrumWindow(WindowMouseManager, PlotWindow):
         self.update_n_plot(n)
         self.app.windows[Windows.eigenvectors].update_n_plot(n)
 
-    def _refresh(self):
+    def refresh(self):
         if self._values is None:
             return
         fig, ax = self._plotter.get_axis()
@@ -575,17 +588,9 @@ class SpectrumWindow(WindowMouseManager, PlotWindow):
         ax.set_title("Eigenvalues")
         self._disp_img = self._plotter.render_fig(fig)
 
-    def render(self, img, active=False):
-        # render plot
-        super().render(img, active=active)
-
-        # render tools:
-        for tool in self.tools:
-            self.tools[tool].render(img)
-
     def update_n_plot(self, n):
         self._n_to_plot = int(n)
-        self._refresh()
+        self.refresh()
 
     def get_n_to_plot(self):
         return self._n_to_plot
@@ -606,7 +611,7 @@ class EigenvectorsWindow(PlotWindow):
     def _init_tools(self):
         pass
 
-    def _refresh(self):
+    def refresh(self):
         n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
         k = self.app.windows[Windows.toolbar].get_value('f')
         fig, axes = self._plotter.get_axis(n_to_plot, 1)
@@ -616,16 +621,97 @@ class EigenvectorsWindow(PlotWindow):
 
     def update_n_plot(self, n):
         self._n_to_plot = int(n)
-        self._refresh()
+        self.refresh()
 
 
-class RandProjWindow(Window):
+class RandProjWindow(WindowMouseManager, PlotWindow):
+    """
+    Project the data in feature space down to two random axes,
+    plot it as a clustering with original colors.
+    Use a slider to control noise added to the points,
+    and a button to generate new random axes.
+    """
+
     def __init__(self, bbox, app):
-        super().__init__(Windows.rand_proj, bbox, app)
-        self._stats = None
+        # self._values will be the data to project, an N x F array
+        self._noise = 0.1
+        self._noise_offsets = None  # 2d, scale by _noise and add to data after projecting
+        self._axes = None  # 2xf, orthogonal vectors in feature space
+        # calls WindowMouseManager.__init__
+        super().__init__()
+        # calls PlotWindow.__init__
+        super(WindowMouseManager, self).__init__(Windows.rand_proj, bbox,
+                                                 app, tool_frac=OTHER_TOOL_LAYOUT['rand_proj_button_h_frac'],
+                                                 split='v')
+        self._bbox_size = (bbox['x'][1] - bbox['x'][0], bbox['y'][1] - bbox['y'][0])
+
+    def _init_tools(self):
+        """
+        Random Projection window has two controls:
+            - a button to generate 2 random orthoganal vectors in feature space
+            - a slider to control the noise added to each point
+        """
+        self._slider_bbox, self._button_bbox = hsplit_bbox(self._tool_bbox, [3, 1])
+        self.tools = {'noise_slider': Slider(self._slider_bbox, 'noise', self._update_noise, orient='horizontal',
+                                              range=[0, 1], default=self._noise, format_str="=%.2f", visible=True),
+                       'project_button': Button(self._button_bbox, 'randomize', self._remake_axes, visible=True)}
+
+    def _update_noise(self, noise):
+        self._noise = noise
+        self.refresh()
+
+    def set_values(self, values):
+        """
+        Override to create noise vector every time we
+        get a new set of feature vectors.
+        """
+        self._values = values
+        self._noise_offsets = np.random.randn(self._values.shape[0]*2).reshape(-1, 2)
+        self._remake_axes()
+        self.tools['noise_slider'].set_visible(True)
+        self.tools['project_button'].set_visible(True)
+        self.refresh()
+
+    def _remake_axes(self):
+        if self._values is None:
+            return
+        # make random axes, orthogonal in feature space
+        self._axes = np.random.randn(2, self._values.shape[1])
+        # normalize lengths
+        self._axes[0] /= np.linalg.norm(self._axes[0])
+        self._axes[1] -= self._axes[1] @ self._axes[0] * self._axes[0]
+        self._axes[1] /= np.linalg.norm(self._axes[1])
+        # check orthogonality
+        err= np.abs(np.sum(self._axes[0] * self._axes[1])) 
+        if err> 1e-6:
+            raise ValueError("Axes are not orthogonal!?")
+        self.refresh()
+
+    def refresh(self):
+        if self._values is None:
+            return
+        points = self._values @ self._axes.T
+        noisy_points = points + self._noise_offsets * self._noise * .1
+        fig, ax = self._plotter.get_axis()
+        colors = self.app.windows[Windows.ui].get_cluster_color_ids()
+        #import ipdb; ipdb.set_trace()
+
+        plot_clustering(ax, noisy_points, colors['colors']/255., colors['ids'], image_size=self._bbox_size,alpha=0.5)
+        # since clusters will be on the border if there are many connected components, move everything in by a percentage
+        marg_frac = 0.025
+        x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
+        w, h = x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]
+        ax.set_xlim(x_lim[0] - marg_frac*w, x_lim[1] + marg_frac*w)
+        ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h) 
+        ax.set_title("Random Projection")
+        self._disp_img = self._plotter.render_fig(fig)
 
     def clear(self):
-        self._stats = None
+        super().clear()
+        self._axes = None
+        self._noise_offsets = None
+        self.tools['noise_slider'].set_visible(True)
+        self.tools['project_button'].set_visible(True)
 
 
 WINDOW_TYPES = {Windows.ui: UiWindow,

@@ -30,21 +30,22 @@ class Windows(IntEnum):
     toolbar = 6
 
 
-h_div = 0.4  # relative x position of the  vertical dividing line between UI and spectrum
+h_div = 0.5  # relative x position of the  vertical dividing line between UI and spectrum
 h_mid = (h_div+1.)/2.  # x position between spectrum and eigenvectors
 
+
 WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit square to window size
-                                          'y': (0, .75)},
+                                          'y': (0, .66)},
                              Windows.toolbar: {'x': (0, .45),
-                                               'y': (.75, 1)},
-                             Windows.spectrum: {'x': (h_div, h_mid),  # move a bit in for a slider
+                                               'y': (.66, 1)},
+                             Windows.spectrum: {'x': (h_div, h_mid),  # move a bit in for a slider ***
                                                 'y': (0, .5)},
                              Windows.eigenvectors: {'x': (h_mid, 1),
                                                     'y': (0, .5)},
                              Windows.sim_matrix: {'x': (.45, h_div),
-                                                  'y': (.75, 1)},  # will be made square regardless of window size
+                                                  'y': (.66, 1)},  # will be made square regardless of window size
                              Windows.rand_proj: {'x': (h_div, h_mid),
-                                                 'y': (.5, 1)},
+                                                 'y': (.5, 1)},  # move up a bit for a button and a slider ****
                              Windows.clustering: {'x': (h_mid, 1),
                                                   'y': (.5, 1)}},
                  'colors': {'bkg': COLORS['white'],
@@ -61,7 +62,8 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit sq
                  'font_thickness': 1}
 
 
-OTHER_TOOL_LAYOUT = {'spectrum_slider_w_frac': .14,  # portion of the window for the slider
+OTHER_TOOL_LAYOUT = {'spectrum_slider_w_frac': .14,  # portion of the window for the slider ***
+                     'rand_proj_button_h_frac': .16,  # portion of the window for the button ****
                      }
 """
 Toolbar layout roughly 3 columns:
@@ -82,7 +84,7 @@ Toolbar layout roughly 3 columns:
 Where [sim-par] is a custom toolbar bbox area for the similarity parameter(s).  See SIM_PARAM below.
 """
 
-
+# Tools in the toolbar (and not others) are enumerated here:
 class Tools(IntEnum):
     """
     Enum for the tools in the toolbar.
@@ -128,7 +130,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .33),  # scale from unit square to
 # (A) Fill in the sliders for the number of features, clusters, and points
 slider_area = {'x': (.512, 1),
                'y': (.5, 1)}
-top, middle, bottom =  vsplit_bbox(slider_area, [1, 1, 1])
+top, middle, bottom =  vsplit_bbox(slider_area, [1, 1, 1], integer=False)
 TOOLBAR_LAYOUT[Tools.f_slider] = top
 TOOLBAR_LAYOUT[Tools.k_slider] = middle
 TOOLBAR_LAYOUT[Tools.n_pts_slider] = bottom

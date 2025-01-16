@@ -131,7 +131,7 @@ class Slider(Tool):
         :param format_str: Format string for the value display:  label + format_str % (value,) 
         """
         super().__init__(bbox, label, callback, visible, spacing_px)
-        print("Initializing Slider at position: ",bbox)
+        print("Initializing Slider '%s' at position: %s"%(label,bbox))
         self._format_str = format_str
         self._t_horiz_fact = 0.6   # fraction of slider that is for title
         self._t_vert_frac = 0.15
