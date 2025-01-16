@@ -168,14 +168,20 @@ def sample_canonical_ellipse(n, minor, random_state, empty_frac=0.):
     """
     rands = random_state.uniform(0, 1, (n, 2))
     angles = rands[:,0] * np.pi * 2
-    radii = np.sqrt(rands[:,1])
+    radii= rands[:,1]
+    if empty_frac>0:
+        # is this slowing things down?
+        radii = (1-np.sqrt(1-empty_frac)* radii) 
+    radii = np.sqrt(radii)  #xform for circular dist.
     x = radii * np.cos(angles)
     y = radii * np.sin(angles) * minor
 
     return np.hstack([x[:, None], y[:, None]])
+
 def rotate_points(points, angle):
     """
     Rotate points by angle.
+    TODO: THis is slow, remove need for canonical+rotation
     """
     rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
                            [np.sin(angle), np.cos(angle)]])
@@ -322,10 +328,10 @@ def add_sub_image(img, sub_img, bbox):
     sub_img = sub_img[:y1-y0, :x1-x0]
     img[y0:y0+sub_img.shape[0], x0:x0+sub_img.shape[1]] = sub_img
 
-def test_sample_canonical_ellipse():
+def test_sample_canonical_ellipse(empty_frac=0):
     n = 1000
     random_state = np.random.RandomState(0)
-    points = sample_canonical_ellipse(n, .3, random_state)
+    points = sample_canonical_ellipse(n, .3, random_state, empty_frac)
     plt.scatter(points[:, 0], points[:, 1], s=10,alpha=.9)
     plt.show()
 
@@ -346,5 +352,6 @@ def test_sample_elipse():
 
 
 if __name__ == '__main__':
-    test_sample_canonical_ellipse()
-    test_sample_elipse()        
+    test_sample_canonical_ellipse(empty_frac=.667)
+    test_sample_canonical_ellipse(empty_frac=0)
+    #test_sample_elipse()        
