@@ -149,6 +149,7 @@ def bbox_contains(box, x, y):
 
 def get_good_point_size(n_points, bbox):
     # TODO: make this scale wrt bbox size
+    # returns: number of pixels
     if n_points > 10000:
         pts_size = 2
     elif n_points > 1000:
@@ -287,6 +288,60 @@ def make_data(n):
     data = np.random.rand(n, n)
     return data
 
+def _get_good_markersizes(sizes, img_size, density=0.8):
+    """
+    The goal is to have a certain fraction of the canvas colored by points.
+    Make each cluster cover approximately the same area, so scale marker sizes
+    by the square root of the number of points.   (i.e. assume no overlapping
+    points, but plot them anyway.)  
+        NOTE:  this is too big, return sqrt(area)
+
+    :param sizes: list of integers, number of points in each cluster
+    :param img_size: tuple of integers, w,h of pixels to cover
+    :param density: float, fraction of the canvas to be covered by points
+    :return: list of integers, marker sizes for each cluster
+    """
+    sizes = np.array(sizes)
+    total_points = np.sum(sizes)
+    n_clusters = len(sizes)
+
+    # pixels squared per cluster
+    px2_per_cluster = img_size[0] * img_size[1] * density / n_clusters 
+    area_per_marker = px2_per_cluster / sizes
+
+    return np.sqrt(area_per_marker)
+
+
+def test_get_good_markersizes():
+    sizes = [10, 20]
+    img_size = (100, 100)
+    markersizes = _get_good_markersizes(sizes, img_size, density=0.5)
+    print(markersizes)
+    assert markersizes[0] == 5
+    assert markersizes[1] == 7
+    print("All tests passed!")
+
+    
+
+
+
+def plot_clustering(ax, points, colors, cluster_ids, image_size, alpha=.5):
+    """
+    Plot the points colored by cluster.
+    :param ax: matplotlib axis object
+    :param points: N x 2 array of points
+    :param colors: M x 3 array of colors
+    :param cluster_ids: N array of integers in [0, M-1]
+    """
+    id_list = np.unique(cluster_ids)
+    cluster_sizes = [np.sum(cluster_ids == i) for i in id_list]
+    point_sizes = _get_good_markersizes(cluster_sizes, image_size)
+    for i in id_list:
+        cluster_points = points[cluster_ids == i]
+        print("Plotting cluster %i with %i points, markersize %i"%(i, len(cluster_points), point_sizes[i]))
+        ax.scatter(cluster_points[:, 0], cluster_points[:, 1], c=[colors[i]], s=point_sizes[i], alpha=alpha)
+    ax.set_aspect('equal')
+    ax.axis('off')
 
 def plot_eigenvecs(fig,axes, vecs, n_max, k, colors=None, *args, **kwargs):
     """
@@ -347,7 +402,37 @@ def test_plot_eigenvecs():
     plot_eigenvecs(fig,axes,data, 8, 3  , colors={'colors': colors, 'ids': ids})
     plt.show()
 
-if __name__ == "__main__":
-    test_plot_eigenvecs()
+def test_plot_clustering():
+    cluster_size_range = (2, 600)
+    #cluster_sizes = [1, 2, 5, 10, 100, 500, 1000, 10000]
+    n_clusters = 10#len(cluster_sizes)  #8
 
+    points,ids = [],[]
+    for c_id in range(n_clusters):
+        n = np.random.randint(*cluster_size_range) # cluster_sizes[c_id]
+        center = np.random.randn(2)*7
+        sigma = np.random.rand(1)*2
+        points.append(np.random.randn(n, 2)*sigma + center)
+        ids.append(np.ones(n, dtype=np.int32)*c_id)
+    colors = get_n_disp_colors(n_clusters) / 255.
+    points = np.concatenate(points)
+    ids = np.concatenate(ids)
+    print(points.shape, ids.shape, colors.shape)
+    print(colors)
+    print(ids)
+    print(points)
+    fig_size = (5,5)
+    dpi = 100
+    _, axes = plt.subplots(1, 1, figsize=(5, 5), dpi=dpi)
+    img_size = (fig_size[0]*dpi, fig_size[1]*dpi)
+
+    plot_clustering(axes,points, colors, ids,img_size)
+    plt.title("Clustering")
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    #test_plot_eigenvecs()
+    test_plot_clustering()
+    #test_get_good_markersizes()
     print("All tests passed!")
