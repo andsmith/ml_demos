@@ -81,11 +81,11 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         eigvecs = eigvecs[:, idx]
 
         # get the first k eigenvectors
-        self._eigvecs = eigvecs[:, :self._k]
+        self._eigvecs = eigvecs
 
         # kmeans on eigenvectors
         self._kmeans = KMeans(n_clusters=self._k)
-        self._kmeans.fit(self._eigvecs)
+        self._kmeans.fit(self._eigvecs[:, :self._k])
 
         # cluster
         self._cluster_ids = self._kmeans.labels_

@@ -17,20 +17,14 @@ class PlotRenderer(object):
         ax.plot ...
         img = plot.render_fig(fig)    
     """
-    def __init__(self, size, *args, **kwargs):
+    def __init__(self, size):
         """
         :param size: (width, height) of the images to create
-        :param title: title of the plot
-        :param args: arguments to pass to the plot
-        :param kwargs: keyword arguments to pass to the plot
-
         """
         self._size = size
         self._values = None
         self._visible = True
         self._disp_img = None
-        self._args, self._kwargs = args, kwargs
-        print("PlotRenderer: size={}, args={}, kwargs={}".format(size, args, kwargs))
 
     def _get_fig_size(self):
         """
@@ -41,8 +35,8 @@ class PlotRenderer(object):
         fig_height = height / MONITOR_DPI
         return fig_width, fig_height
     
-    def get_axis(self):
-        fig, ax= plt.subplots(figsize=self._get_fig_size(), dpi=MONITOR_DPI)
+    def get_axis(self, n_rows=1, n_cols=1):
+        fig, ax= plt.subplots(n_rows, n_cols,figsize=self._get_fig_size(), dpi=MONITOR_DPI)
         return fig, ax
     
     def render_fig(self, fig, bgr=False):

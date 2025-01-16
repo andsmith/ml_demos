@@ -52,7 +52,9 @@ class Cluster(ABC):
                         'ctrl_mouse_over': COLORS['red'].tolist(),
                         'ctrl_held': COLORS['neon green'].tolist()}
         self._refresh()
-        print("Created cluster %s" % (self._ctrl,))
+
+    def get_color(self):
+        return self._color
 
     @abstractmethod
     def _generate(self, n):
@@ -73,6 +75,9 @@ class Cluster(ABC):
     def set_n_pts(self, n):
         self._n = n
         self._refresh()
+
+    def get_n_pts(self):
+        return self._n
 
     def start_adjusting(self):
         if self._ctrl_mouse_over is None:

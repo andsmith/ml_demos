@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 def image_from_floats(floats, small=None, big=None):
     small = floats.min()  if small is None else small
@@ -278,7 +279,75 @@ def add_sub_image(img, sub_img, bbox):
     img[y0:y0+sub_img.shape[0], x0:x0+sub_img.shape[1]] = sub_img
 
 
-if __name__ == '__main__':
-    _test_vsplit_bbox()
+
+def make_data(n):
+    """
+    Return an N x N matrix.
+    """
+    data = np.random.rand(n, n)
+    return data
+
+
+def plot_eigenvecs(fig,axes, vecs, n_max, k, colors=None, *args, **kwargs):
+    """
+    Plot the first n_max eigenvectors aranged vertically.
+    Draw a red line between plots k and k+1.
+    :param axes: list of n_max axes objects
+    :param vecs: eigenvectors, N x N matrix
+    :param n_max: number of eigenvectors to plot
+    :param k: draw a line after this many plots 
+    :param colors: dictionary with:
+        'colors': list of M colors [r, g, b] in [0, 255]
+        'ids': list of N integers in [0, M-1]
+        If this is present, draw component j of each eigenvector in colors['colors'][colors['ids'][j]]
+    """
+    if axes is None or fig is None:
+        fig, axes = plt.subplots(n_max, 1, figsize=(5, 5))
+    
+    fixed_colors = [c/255. for c in colors['colors']]
+
+    comps_by_color = {i: np.where(colors['ids'] == i)[0] for i in range(len(colors['colors']))}
+
+
+    for i in range(n_max):
+        if colors is None:
+            axes[i].plot(vecs[:, i])
+        else:
+            for c_i, color in enumerate(fixed_colors):
+                # if points are ever out of order (i.e. not contiguous in color), this will look messed up, use 'o' or '.' instead then.
+                axes[i].plot(comps_by_color[c_i], vecs[:, i][comps_by_color[c_i]],color=color, *args, **kwargs)
+
+        axes[i].set_xticks([])
+        axes[i].set_yticks([])
+        axes[i].tick_params(axis='y', labelsize=6)
+        axes[i].set_ylabel("%i" % i, fontsize=8)
+        for pos in ['right', 'top', 'bottom', 'left']: 
+            axes[i].spines[pos].set_visible(False)
+    fig.suptitle('Eigenvectors')
+    fig.tight_layout(rect=[0, 0, 1, 1])
+
+    # Draw lines between plots k-1 and k
+    if k > 0 and k < n_max:
+        above_bbox = axes[k-1].get_position()
+        below_bbox = axes[k].get_position()
+        line_y = (above_bbox.y1 + below_bbox.y0) / 2
+        fig.add_artist(plt.Line2D((0, 1), (line_y, line_y), color='red', linewidth=1))
+    
+
+def test_plot_eigenvecs():
+    from colors import COLORS
+    data = make_data(100)
+    colors = [COLORS['red']/255.,
+              COLORS['green']/255.,
+              COLORS['blue']/255.]
+    ids = np.zeros(100, dtype=np.int32)
+    ids[34:67] = 1
+    ids[67:] = 2
+    fig, axes = plt.subplots(8, 1, figsize=(5, 5))
+    plot_eigenvecs(fig,axes,data, 8, 3  , colors={'colors': colors, 'ids': ids})
+    plt.show()
+
+if __name__ == "__main__":
+    test_plot_eigenvecs()
 
     print("All tests passed!")

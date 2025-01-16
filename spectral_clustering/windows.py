@@ -4,7 +4,7 @@ Handle sub-windows for the cluster creator app.
 import numpy as np
 from abc import ABC, abstractmethod
 import cv2
-from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image, hsplit_bbox, indent_bbox
+from util import scale_bbox, apply_colormap, get_good_point_size, add_sub_image, hsplit_bbox, indent_bbox, plot_eigenvecs
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
@@ -170,6 +170,18 @@ class UiWindow(Window):
         text_pos = (self.bbox['x'][0] + self.margin_px*2, self.bbox['y'][0] + self.margin_px*2 + status_height)
         cv2.putText(img, status, text_pos, WINDOW_LAYOUT['font'], WINDOW_LAYOUT['font_size'], self.colors['font'].tolist(
         ), WINDOW_LAYOUT['font_thickness'], cv2.LINE_AA)
+
+    def get_cluster_color_ids(self):
+        """
+        :returns: dict(ids=[cluster id list], colors=[color list])
+        where each cluster id corresponds to a color in the color list
+        """
+        colors = []
+        ids = []
+        for color_id, cluster in enumerate(self._clusters):
+            colors.append(cluster.get_color()[::-1])
+            ids.append(np.ones(cluster.get_n_pts()) * color_id)
+        return {'ids': np.hstack(ids), 'colors': np.vstack(colors)}
 
     def set_graph(self, new_sim_graph):
         # just created from current set of points, so
@@ -437,6 +449,7 @@ class ClustersWindow(Window):
     def render(self, img, active=False):
         img[self.bbox['y'][0]:self.bbox['y'][1],
             self.bbox['x'][0]:self.bbox['x'][1]] = self._frame
+        self.render_title(img)
 
 
 class SimMatrixWindow(Window):
@@ -525,19 +538,27 @@ class PlotWindow(Window, ABC):
         pass
 
 
-class SpectrumWindow(WindowMouseManager,PlotWindow):
+class SpectrumWindow(WindowMouseManager, PlotWindow):
     def __init__(self, bbox, app):
         self._n_to_plot = 10
         super().__init__()
-        super(WindowMouseManager,self).__init__(Windows.spectrum, bbox, app, tool_frac=OTHER_TOOL_LAYOUT['spectrum_slider_w_frac'])
-        
+        super(WindowMouseManager, self).__init__(Windows.spectrum, bbox,
+                                                 app, tool_frac=OTHER_TOOL_LAYOUT['spectrum_slider_w_frac'])
+
     def _init_tools(self):
         # init slider
-        slider = Slider(self._tool_bbox, 'n', self.update_n_plot, orient='vertical',
-                              range=[1, 50], default=self._n_to_plot, format_str="=%i",
-                              spacing_px=0,
-                              visible=False)
-        self.tools = {'n':slider}
+        slider = Slider(self._tool_bbox, 'n', self._update_notifications, orient='vertical',
+                        range=[1, 20], default=self._n_to_plot, format_str="=%i",
+                        spacing_px=0,
+                        visible=False)
+        self.tools = {'n': slider}
+
+    def _update_notifications(self, n):
+        """
+        We own this control, so we need to update anyone else who needs it.
+        """
+        self.update_n_plot(n)
+        self.app.windows[Windows.eigenvectors].update_n_plot(n)
 
     def _refresh(self):
         if self._values is None:
@@ -562,6 +583,9 @@ class SpectrumWindow(WindowMouseManager,PlotWindow):
         self._n_to_plot = int(n)
         self._refresh()
 
+    def get_n_to_plot(self):
+        return self._n_to_plot
+
     def set_values(self, values):
         super().set_values(values)
         self.tools['n'].set_visible(True)
@@ -574,13 +598,21 @@ class SpectrumWindow(WindowMouseManager,PlotWindow):
 class EigenvectorsWindow(PlotWindow):
     def __init__(self, bbox, app):
         super().__init__(Windows.eigenvectors, bbox, app, tool_frac=0)  # no tools
-        self._n_to_plot = 30
 
     def _init_tools(self):
         pass
 
     def _refresh(self):
-        pass
+        n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
+        k = self.app.windows[Windows.toolbar].get_value('k')
+        fig, axes = self._plotter.get_axis(n_to_plot, 1)
+        colors = self.app.windows[Windows.ui].get_cluster_color_ids()
+        plot_eigenvecs(fig, axes, self._values, n_to_plot, k, colors=colors)
+        self._disp_img = self._plotter.render_fig(fig)
+
+    def update_n_plot(self, n):
+        self._n_to_plot = int(n)
+        self._refresh()
 
 
 class RandProjWindow(Window):

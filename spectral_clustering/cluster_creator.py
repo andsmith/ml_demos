@@ -35,6 +35,7 @@ from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
            'toggle cluster controls': ' ',
+           'recalculate clustering': 'r',
            'quit': 'q'}
 
 
@@ -65,7 +66,7 @@ class ClusterCreator(object):
         self._cluster_colors = None  # update only when K changes
         self._clicked_pos = None
         self.show_cluster_ctrls = True
-        self.show_graph = True
+        self.show_graph = False
         self._fps_info = {'last_time': time.perf_counter(),
                           'n_frames': 0,
                           'update_sec': 2.0}
@@ -245,8 +246,11 @@ class ClusterCreator(object):
             elif k == ord(HOTKEYS['toggle graph view']):
                 self.show_graph = not self.show_graph
                 print("Show graph: %s" % self.show_graph)
+            elif k == ord(HOTKEYS['recalculate clustering']):
+                self.recompute_clustering()
             elif self._active_window_name is not None:
                 self.windows[self._active_window_name].keypress(k)
+
 
             # update fps
             self._fps_info['n_frames'] += 1
