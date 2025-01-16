@@ -4,12 +4,14 @@ import matplotlib.pyplot as plt
 import logging
 from scipy.interpolate import interp1d
 
+
 def image_from_floats(floats, small=None, big=None):
-    small = floats.min()  if small is None else small
-    big =  floats.max() if big is None else big
-    
+    small = floats.min() if small is None else small
+    big = floats.max() if big is None else big
+
     values = (floats - small) / (big - small) * 255
     return values.astype(np.uint8)
+
 
 def apply_colormap(floats, colormap=cv2.COLORMAP_JET):
     """
@@ -21,10 +23,12 @@ def apply_colormap(floats, colormap=cv2.COLORMAP_JET):
     image = image_from_floats(floats)
     return cv2.applyColorMap(image, colormap)
 
+
 def test_image_from_floats():
     image = np.random.randn(100, 100)
     image_uint8 = image_from_floats(image)
     cv2.imwrite('test_image_from_floats.png', image_uint8)
+
 
 def scale_bbox(bbox_rel, bbox_abs):
     """
@@ -44,6 +48,7 @@ def scale_bbox(bbox_rel, bbox_abs):
             'y': (int(y0_abs + y0 * (y1_abs - y0_abs)),
                   int(y0_abs + y1 * (y1_abs - y0_abs)))}
 
+
 def unscale_coords(bbox, coords):
     """
     Get relative coordinates of a point from absolute coordinates.
@@ -55,6 +60,7 @@ def unscale_coords(bbox, coords):
     y0, y1 = bbox['y']
     return np.array([(coords[:, 0] - x0) / (x1 - x0),
                      (coords[:, 1] - y0) / (y1 - y0)]).T
+
 
 def test_bbox_scaling():
     bbox_rel = {'x': (.1, .9), 'y': (.1, .9)}
@@ -73,16 +79,17 @@ def get_n_disp_colors(n):
     if n < 5:
         logging.info("Making primary colors")
         colors = np.array([[0, 0, 0], [0, 0, 1], [0, 1, 0], [1, 0, 0]])
-        colors= colors[:n]
-    elif n< 27:
+        colors = colors[:n]
+    elif n < 27:
         logging.info("Making 27 colors")
         colors = np.array([[r, g, b] for r in [0, .5, 1.0] for g in [0, .5, 1.0] for b in [0, .5, 1.0]])
-        colors= colors[:n]
+        colors = colors[:n]
     else:
         logging.info("Making random colors")
         colors = np.random.rand(n, 3) * .5 + .2
     colors = (colors * 255).astype(np.uint8)
     return colors
+
 
 def get_ellipse_points(center, p0, p1, n_points):
     """
@@ -99,6 +106,7 @@ def get_ellipse_points(center, p0, p1, n_points):
     points = np.array([center[0] + major_axis * np.cos(angle) * np.cos(angles) - minor_axis * np.sin(angle) * np.sin(angles),
                        center[1] + major_axis * np.sin(angle) * np.cos(angles) + minor_axis * np.cos(angle) * np.sin(angles)]).T
     return points
+
 
 def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, search_range=(.1, 10)):
     """
@@ -143,11 +151,12 @@ def bbox_contains(box, x, y):
     :param y: float or np.array of same length as x
     :return: bool or np.array of bools
     """
-    if isinstance(x,np.ndarray):
+    if isinstance(x, np.ndarray):
         x_valid = np.logical_and(box['x'][0] <= x, x <= box['x'][1])
         y_valid = np.logical_and(box['y'][0] <= y, y <= box['y'][1])
         return np.logical_and(x_valid, y_valid)
     return box['x'][0] <= x <= box['x'][1] and box['y'][0] <= y <= box['y'][1]
+
 
 def get_good_point_size(n_points, bbox):
     # TODO: make this scale wrt bbox size
@@ -162,21 +171,23 @@ def get_good_point_size(n_points, bbox):
         pts_size = 5
     return pts_size
 
+
 def sample_canonical_ellipse(n, minor, random_state, empty_frac=0.):
     """
     Sample an ellipse at the origin with major axis 1, and no rotation
     """
     rands = random_state.uniform(0, 1, (n, 2))
-    angles = rands[:,0] * np.pi * 2
-    radii= rands[:,1]
-    if empty_frac>0:
+    angles = rands[:, 0] * np.pi * 2
+    radii = rands[:, 1]
+    if empty_frac > 0:
         # is this slowing things down?
-        radii = (1-np.sqrt(1-empty_frac)* radii) 
-    radii = np.sqrt(radii)  #xform for circular dist.
+        radii = (1-np.sqrt(1-empty_frac) * radii)
+    radii = np.sqrt(radii)  # xform for circular dist.
     x = radii * np.cos(angles)
     y = radii * np.sin(angles) * minor
 
     return np.hstack([x[:, None], y[:, None]])
+
 
 def rotate_points(points, angle):
     """
@@ -186,6 +197,7 @@ def rotate_points(points, angle):
     rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
                            [np.sin(angle), np.cos(angle)]])
     return np.dot(points, rot_matrix.T)
+
 
 def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     """
@@ -197,12 +209,13 @@ def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     # get the angle of the major axis
     angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
     # get the points on the ellipse
-    ratio =  minor_axis / major_axis
+    ratio = minor_axis / major_axis
     points_canonical = sample_canonical_ellipse(n, ratio, random_state, empty_frac)
     points_scaled = points_canonical * major_axis
     points_rotated = rotate_points(points_scaled, angle)
     points = points_rotated + np.array(center)
     return points
+
 
 def sample_ellipse_old(center, p0, p1, n, random_state, empty_frac=0.):
     """
@@ -218,17 +231,16 @@ def sample_ellipse_old(center, p0, p1, n, random_state, empty_frac=0.):
     # transform radii rands so points will be uniformly distributed in the ellipse
     angles_and_radii_rands[:, 1] = (angles_and_radii_rands[:, 1])**2
 
-
     angles = angles_and_radii_rands[:, 0] * 2 * np.pi
     rad_rands = angles_and_radii_rands[:, 1]
-    if empty_frac>0:
-        rad_rands *= (1-empty_frac) 
-    radii  = 1.-(rad_rands)
-
+    if empty_frac > 0:
+        rad_rands *= (1-empty_frac)
+    radii = 1.-(rad_rands)
 
     points = np.array([center[0] + major_axis * radii * np.cos(angle) * np.cos(angles) - minor_axis * radii * np.sin(angle) * np.sin(angles),
                        center[1] + major_axis * radii * np.sin(angle) * np.cos(angles) + minor_axis * radii * np.cos(angle) * np.sin(angles)]).T
     return points
+
 
 def vsplit_bbox(bbox, weights, integer=True):
     """
@@ -251,9 +263,11 @@ def vsplit_bbox(bbox, weights, integer=True):
         top = bottom
     return bboxes
 
+
 def indent_bbox(bbox, n_px):
     return {'x': (bbox['x'][0] + n_px, bbox['x'][1] - n_px),
             'y': (bbox['y'][0] + n_px, bbox['y'][1] - n_px)}
+
 
 def hsplit_bbox(bbox, weights, integer=True):
     """
@@ -275,6 +289,7 @@ def hsplit_bbox(bbox, weights, integer=True):
         bboxes.append({'x': (left, right), 'y': y})
         left = right
     return bboxes
+
 
 def _test_vsplit_bbox():
     import matplotlib.pyplot as plt
@@ -313,7 +328,7 @@ def get_tic_positions(n, max_val, pixel_range):
     tic_values = np.arange(first_tic, last_tic - step, -step)
     # scale to pixel range
     tic_positions = (tic_values / max_val) * pixel_range
-    return {'values':tic_values,
+    return {'values': tic_values,
             'pos_px': tic_positions,
             'n': len(tic_values)}
 
@@ -328,11 +343,12 @@ def add_sub_image(img, sub_img, bbox):
     sub_img = sub_img[:y1-y0, :x1-x0]
     img[y0:y0+sub_img.shape[0], x0:x0+sub_img.shape[1]] = sub_img
 
+
 def test_sample_canonical_ellipse(empty_frac=0):
     n = 1000
     random_state = np.random.RandomState(0)
     points = sample_canonical_ellipse(n, .3, random_state, empty_frac)
-    plt.scatter(points[:, 0], points[:, 1], s=10,alpha=.9)
+    plt.scatter(points[:, 0], points[:, 1], s=10, alpha=.9)
     plt.show()
 
 
@@ -343,7 +359,7 @@ def test_sample_elipse():
     n = 1000
     random_state = np.random.RandomState(0)
     points = sample_ellipse(center, p0, p1, n, random_state)
-    plt.scatter(points[:, 0], points[:, 1], s=10,alpha=.9)
+    plt.scatter(points[:, 0], points[:, 1], s=10, alpha=.9)
     # now plot the actual ellipse
     n_interp = 10000
     points = get_ellipse_points(center, p0, p1, n_interp)
@@ -351,7 +367,56 @@ def test_sample_elipse():
     plt.show()
 
 
+def sample_gaussian(center, p0, p1, n, random_state):
+    """
+    Sample points from a gaussian with params
+    :param center: center of the gaussian
+    :param p0: endpoint of axis 1
+    :param p1: endpoint of axis 2
+    :param n: number of points to sample
+    :param random_state:  numpy random state for reproducibility
+    """
+    # get the major and minor axes
+    major_axis = np.linalg.norm(p0 - center)
+    minor_axis = np.linalg.norm(p1 - center)
+    # get the angle of the major axis
+    angle = -np.arctan2(p0[1] - center[1], p0[0] - center[0])
+    # get the covariance matrix
+    cov = np.array([[major_axis**2, 0], [0, minor_axis**2]])
+    # rotate the covariance matrix
+    rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                           [np.sin(angle), np.cos(angle)]])
+    cov = np.dot(rot_matrix.T, np.dot(cov, rot_matrix))
+    
+
+    points = random_state.multivariate_normal(center, cov, n)
+    return points
+
+
+def test_sample_gaussian():
+    n = 10000
+    center = 10, 7.5
+    p0_offset = np.array((2, 2))
+    p1_offset = np.array((-7, 1))
+    p0 = np.array(center) + p0_offset
+    p1 = np.array(center) + p1_offset
+    r0 = np.linalg.norm(p0_offset)
+    r1 = np.linalg.norm(p1_offset)
+
+    points = sample_gaussian(center, p0, p1, n, np.random.RandomState(0))
+    # plot points
+    plt.scatter(points[:, 0], points[:, 1], s=10, alpha=.1)
+    # plot ellipse around sigma, 2*sigma
+    n_interp = 1000
+    points = get_ellipse_points(center, p0, p1, n_interp)
+    plt.plot(points[:, 0], points[:, 1], lw=3,color='r')
+    points = get_ellipse_points(center, p0 + p0_offset, p1+p1_offset, n_interp)
+    plt.plot(points[:, 0], points[:, 1], lw=3, color='g')
+    plt.show()
+
+
 if __name__ == '__main__':
-    test_sample_canonical_ellipse(empty_frac=.667)
-    test_sample_canonical_ellipse(empty_frac=0)
-    #test_sample_elipse()        
+    # test_sample_canonical_ellipse(empty_frac=.667)
+    # test_sample_canonical_ellipse(empty_frac=0)
+    # test_sample_elipse()
+    test_sample_gaussian()

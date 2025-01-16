@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 import cv2
 from colors import COLORS
-from util import bbox_contains, get_ellipse_points, sample_ellipse
+from util import bbox_contains, get_ellipse_points, sample_ellipse, sample_gaussian
 
 
 class CtrlPt(IntEnum):
@@ -48,7 +48,7 @@ class Cluster(ABC):
         self._color = (np.random.rand(3)*128).astype(np.uint8).tolist()
         self._ctrl_held = CtrlPt.p1
         self._ctrl_mouse_over = None
-        self._colors = {'ctrl_idle': COLORS['gray'].tolist(),
+        self._colors = {'ctrl_idle': COLORS['cyan'].tolist(),
                         'ctrl_mouse_over': COLORS['red'].tolist(),
                         'ctrl_held': COLORS['neon green'].tolist()}
         self._refresh()
@@ -235,5 +235,18 @@ class AnnularCluster(EllipseCluster):
         return points
 
 
+class GaussianCluster(Cluster):
+    def __init__(self, x, y, n, bbox):
+        super().__init__(x, y, n, bbox)
+
+    def _generate(self, n):
+        self._random_state = np.random.RandomState(self._rnd_seed)
+        points = sample_gaussian(self._ctrl[CtrlPt.center],
+                                 self._ctrl[CtrlPt.p0],
+                                 self._ctrl[CtrlPt.p1], n, self._random_state,)
+        return points
+
+
 CLUSTER_TYPES = {'Ellipse': EllipseCluster,
-                 'Annulus': AnnularCluster}
+                 'Annulus': AnnularCluster,
+                 'Gaussian': GaussianCluster}

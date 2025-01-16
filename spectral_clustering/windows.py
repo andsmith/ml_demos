@@ -326,7 +326,7 @@ class ToolsWindow(WindowMouseManager, Window):
 
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
                                                      'Cluster Type', lambda x: None,  # no callback, updates when user starts a new cluster
-                                                     options=['Gauss', 'Ellipse', 'Annulus'],
+                                                     options=['Gaussian', 'Ellipse', 'Annulus'],
                                                      default_selection=1, spacing_px=7),
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
                                                     'Algorithm', lambda x: None,    # no callback, updates when Run button is clicked
