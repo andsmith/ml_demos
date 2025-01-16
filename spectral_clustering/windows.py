@@ -75,7 +75,7 @@ class Window(ABC):
 
         cv2.putText(img, self._txt['name'], pos, self._txt['font'], self._txt['font_size'],
                     self._txt['color'], self._txt['font_thickness'], cv2.LINE_AA)
-
+        
     def render_box(self, img, active=False):
         """
         Render the window box.
@@ -348,8 +348,10 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.f_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.f_slider], indented_bbox),
                                              'F (features)', self._update_f_slider,
                                              range=[2, 20], default=3, format_str="=%i"),
-                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_spectrum, border_indent=0),
-                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
+                      Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run',
+                                                callback=self.app.recompute_spectrum, border_indent=1),
+                      Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', 
+                                                 callback=self.app.clear, border_indent=1),
 
                       # Only one of these three is on at a time:
                       Tools.nn_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.nn_slider], indented_bbox),
@@ -376,9 +378,9 @@ class ToolsWindow(WindowMouseManager, Window):
         self.app.recompute_clustering(False)
 
     def _update_f_slider(self, f):
+        self.app.recompute_clustering(True)
         self.app.windows[Windows.spectrum].refresh()
         self.app.windows[Windows.eigenvectors].refresh()
-        self.app.recompute_clustering(True)
 
 
 
@@ -387,8 +389,6 @@ class ToolsWindow(WindowMouseManager, Window):
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
         kind_name:  name of the kind of similarity graph to show sliders for.
         """
-        # print("Changing sim param visibility based on", param_name)
-        # print("which should be one of:  %s" % self._sim_param_names.values())
         turn_on_toggle = False
         for param_kind in self._sim_kind_names:
             if self._sim_kind_names[param_kind] == kind_name:
@@ -402,8 +402,6 @@ class ToolsWindow(WindowMouseManager, Window):
             self.tools[Tools.nn_toggle].set_visible(True)
         else:
             self.tools[Tools.nn_toggle].set_visible(False)
-
-        # print("Tool sim_param visibility:", [self.tools[k]._visible for k in self._sim_param_names])
 
         self.app.update_sim_graph()
 
@@ -685,7 +683,6 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         Override to create noise vector every time we
         get a new set of feature vectors.
         """
-        print("Updating Rnd proj")
         self._values = values
         self._noise_offsets = np.random.randn(self._values.shape[0]*2).reshape(-1, 2)
         self._remake_axes()

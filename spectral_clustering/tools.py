@@ -8,6 +8,7 @@ from colors import COLORS
 from util import bbox_contains, calc_font_size
 from abc import ABC, abstractmethod
 from layout import Tools
+import logging
 
 COLOR_OPTIONS = {'unselected': COLORS['black'],
                  'selected': COLORS['black'],
@@ -86,7 +87,6 @@ class Tool(ABC):
             return self._mouse_unclick(x, y)
 
     def set_visible(self, visible):
-        print("Tool %s set visible to %s" % (self._txt_name, visible))
         self._visible = visible
 
     def move_to(self, bbox):
@@ -131,7 +131,7 @@ class Slider(Tool):
         :param format_str: Format string for the value display:  label + format_str % (value,) 
         """
         super().__init__(bbox, label, callback, visible, spacing_px)
-        print("Initializing Slider '%s' at position: %s"%(label,bbox))
+        logging.info("Initializing Slider '%s' at position: %s"%(label,bbox))
         self._format_str = format_str
         self._t_horiz_fact = 0.6   # fraction of slider that is for title
         self._t_vert_frac = 0.15
@@ -236,7 +236,7 @@ class Slider(Tool):
         val = self.get_value()
         slider_str = self._txt_name + self._format_str % (val,)
 
-        cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'])
+        cv2.putText(img, slider_str, self._title_pos, self._font, self._font_size, self._colors['idle'],1, cv2.LINE_AA)
         # slider bar
         if self._orient == 'horizontal':
             slider_y = (self._slider_bbox['y'][0] + self._slider_bbox['y'][1]) // 2
@@ -259,7 +259,6 @@ class Slider(Tool):
         """
         Check if the click is within the slider.
         """
-        # print("Slider mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
             self._move_slider(x, y)
@@ -279,7 +278,6 @@ class Slider(Tool):
 
     def _mouse_unclick(self, x, y):
         self._held = False
-        # print("Slider mouse unclick")
 
     def _move_slider(self, x,y):
         """
@@ -324,6 +322,7 @@ class Button(Tool):
         self._held = False
         self._colors = {c_opt: COLOR_OPTIONS[c_opt].tolist() for c_opt in COLOR_OPTIONS}
         self._calc_dims()
+        logging.info("Initialized Button '%s' at position: %s"%(label,bbox))
 
     def _get_button_text_color(self):
         """
@@ -372,13 +371,12 @@ class Button(Tool):
         # text box
         cv2.rectangle(img, (self._text_bbox['x'][0], self._text_bbox['y'][0]),
                       (self._text_bbox['x'][1], self._text_bbox['y'][1]), self._colors['idle'], 1)
-        cv2.putText(img, self._text, self._text_pos, self._font, self._font_size, color)
+        cv2.putText(img, self._text, self._text_pos, self._font, self._font_size, color, 1, cv2.LINE_AA)
 
     def _mouse_click(self, x, y):
         """
         Check if the click is within the button.
         """
-        # print("Button mouse click")
         if bbox_contains(self._bbox, x, y):
             self._held = True
             return True
@@ -472,10 +470,9 @@ class RadioButtons(Tool):
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._texts = texts if texts is not None else options
         self._options = options
-
-        print("Title: ", self._txt_name)
-        print("Options: ", self._options)
-        print("Texts: ", self._texts)
+        logging.info("Initialized RadioButtons '%s' at position: %s"%(title,bbox))
+        logging.info("\toptions: %s"% self._options)
+        logging.info("\ttexts: %s"% self._texts)
 
         self._title = title
         self._bbox = bbox
@@ -533,7 +530,7 @@ class RadioButtons(Tool):
         p1 = (self._bbox['x'][1], self._bbox['y'][1])
         #cv2.rectangle(img, p0, p1, self._colors['unselected'], 1)  # draw bbox
         cv2.putText(img, self._txt_name, self._title_pos, self._font,
-                    self._font_size, self._colors['unselected'])
+                    self._font_size, self._colors['unselected'],1, cv2.LINE_AA)
         cv2.line(img, self._line_coords[0], self._line_coords[1], self._colors['unselected'])
         for i, text_pos in enumerate(self._text_pos):
             if i == self._selected_ind:
@@ -545,7 +542,7 @@ class RadioButtons(Tool):
                 color = self._colors['mouseover']
             else:
                 color = self._colors['unselected']
-            cv2.putText(img, self._texts[i], text_pos, self._font, self._font_size, color)
+            cv2.putText(img, self._texts[i], text_pos, self._font, self._font_size, color, 1, cv2.LINE_AA)
 
     def _get_item_at(self, y):
         """
@@ -561,7 +558,6 @@ class RadioButtons(Tool):
         Check if the click is within the radio buttons.
         :
         """
-        # print("RadioButtons mouse click")
         if bbox_contains(self._bbox, x, y):
             ind = self._get_item_at(y)
             if ind is not None:
@@ -593,7 +589,6 @@ class RadioButtons(Tool):
         return self._options[self._selected_ind]
 
     def _mouse_unclick(self, x, y):
-        # print("RadioButtons mouse unclick")
         pass
 
     def get_selection(self, name=False):

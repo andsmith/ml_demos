@@ -35,6 +35,7 @@ from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
            'toggle cluster controls': ' ',
+           'clear': 'c',
            'recalculate clustering': 'r',
            'quit': 'q',
            'print hotkeys': 'h'}
@@ -57,8 +58,8 @@ class ClusterCreator(object):
         window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
         self.windows = {}  # WINDOW_TYPES[k]: WINDOW_TYPES[k](window_layout[k], self) for k in self.APP_WINDOWS}
         for k in self.APP_WINDOWS:
-            print("Initializing window %s" % WINDOW_NAMES[k])
-            print("\tLayout: %s" % window_layout[k])
+            logging.info("Initializing window %s" % WINDOW_NAMES[k])
+            logging.info("\tLayout: %s" % window_layout[k])
             self.windows[k] = WINDOW_TYPES[k](window_layout[k], self)
 
         self._active_window_name = None  # Mouse is over this window
@@ -111,9 +112,9 @@ class ClusterCreator(object):
 
         sim_height = window_layout[sim_window_k]['y'][1] - window_layout[sim_window_k]['y'][0]
         new_x = window_layout[sim_window_k]['x'][1] - sim_height
-        print("Adjusting sim matrix window from %i pixels to %i." %
+        logging.info("Adjusting sim matrix window from %i pixels to %i." %
               (window_layout[sim_window_k]['x'][1] - window_layout[sim_window_k]['x'][0], sim_height))
-        print("Adjusting %s window from %i pixels to %i." % (sim_neighbor_k,
+        logging.info("Adjusting %s window from %i pixels to %i." % (sim_neighbor_k,
               window_layout[sim_neighbor_k]['x'][1] - window_layout[sim_neighbor_k]['x'][0], sim_height))
         window_layout[sim_window_k]['x'] = (new_x,window_layout[sim_window_k]['x'][1])
         window_layout[sim_neighbor_k]['x'] = (window_layout[sim_neighbor_k]['x'][0], new_x)
@@ -133,7 +134,7 @@ class ClusterCreator(object):
         self.windows[Windows.spectrum].clear()
         self.windows[Windows.eigenvectors].clear()
         self.windows[Windows.rand_proj].clear()
-        
+
 
     def update_sim_graph(self, param_val=None, asynch=False):
         """
@@ -143,16 +144,17 @@ class ClusterCreator(object):
         IF asynch:
           if the sim graph is already being updated, stop it and start a new one.
         """
-        print("Recomputing similarity graph...")
+        # logging.info("Recomputing similarity graph...")  # re-enable if changed so this doesn't update every frame
         def update_sim_graph_thread():
             # first, clear the current graph so it doesn't render while we're updating it
-            #print("Updating similarity graph with %i points in thread: %s " % (self._points.shape[0], get_ident()))
+            #logging.info("Updating similarity graph with %i points in thread: %s " % (self._points.shape[0], get_ident()))
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = None
 
             unit_points = self._points  # unscale_coords(self.windows[Windows.ui].bbox, self._points)
             if unit_points.shape[0] == 0:
-                print("No points to cluster.")
+                logging.info("No points to cluster.")
+                self.windows[Windows.ui].set_graph(None)
                 return
             
             graph_kind = self.windows[Windows.toolbar].get_value('sim_graph')
@@ -174,14 +176,14 @@ class ClusterCreator(object):
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)
                 self.windows[Windows.ui].set_graph(sim_graph)
-            #print("\tDone updating similarity graph in thread:  ", get_ident())
+            #logging.info("\tDone updating similarity graph in thread:  ", get_ident())
         if asynch:
             with self._similarity_graph['lock']:
                 if self._similarity_graph['thread'] is not None:
                     self._similarity_graph['thread'].join()
                 self._similarity_graph['thread'] = Thread(target=update_sim_graph_thread)
                 self._similarity_graph['thread'].start()
-            # print("Started similarity graph thread:  ", get_ident())
+            # logging.info("Started similarity graph thread:  ", get_ident())
         else:
             update_sim_graph_thread()
 
@@ -190,10 +192,10 @@ class ClusterCreator(object):
         Called when run button is clicked (because similarity graph has changed).
         This will also update the clustering.
         """
-        print("Recomputing spectrum...")
+        logging.info("Recomputing spectrum...")
         # if no data, don't do anything
         if self._points is None or self._points.shape[0] == 0: 
-            print("Can't cluster without data...")
+            logging.info("Can't cluster without data...")
             return
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
         n_features = self.windows[Windows.toolbar].get_value('f')
@@ -215,7 +217,7 @@ class ClusterCreator(object):
         Update windows:  clustering, rand_proj
         :param new_eigenvectors: whether the eigenvectors have changed
         """       
-        print("Recomputing clustering...")
+        logging.info("Recomputing clustering...")
         n_clusters = self.windows[Windows.toolbar].get_value('k')
         n_features = self.windows[Windows.toolbar].get_value('f')
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
@@ -280,15 +282,16 @@ class ClusterCreator(object):
                 break
             elif k == ord(HOTKEYS['toggle cluster controls']):
                 self.show_cluster_ctrls = not self.show_cluster_ctrls
-                print("Show cluster controls: %s" % self.show_cluster_ctrls)
+                logging.info("Show cluster controls: %s" % self.show_cluster_ctrls)
             elif k == ord(HOTKEYS['toggle graph view']):
                 self.show_graph = not self.show_graph
-                print("Show graph: %s" % self.show_graph)
+                logging.info("Show graph: %s" % self.show_graph)
             elif k == ord(HOTKEYS['recalculate clustering']):
-                print("Hotkey recompute")
                 self.recompute_spectrum()
             elif k == ord(HOTKEYS['print hotkeys']):
                 self._print_hotkeys()
+            elif k == ord(HOTKEYS['clear']):
+                self.clear()
             elif self._active_window_name is not None:
                 self.windows[self._active_window_name].keypress(k)
 
@@ -298,7 +301,7 @@ class ClusterCreator(object):
             elapsed = time.perf_counter() - self._fps_info['last_time']
             if elapsed > self._fps_info['update_sec']:
                 fps = self._fps_info['n_frames'] / elapsed
-                print(f'fps: {fps:.2f}')
+                logging.info(f'fps: {fps:.2f}')
                 self._fps_info['last_time'] = time.perf_counter()
                 self._fps_info['n_frames'] = 0
 
