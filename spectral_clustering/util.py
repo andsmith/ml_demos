@@ -2,6 +2,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import logging
+from scipy.interpolate import interp1d
 
 def image_from_floats(floats, small=None, big=None):
     small = floats.min()  if small is None else small
@@ -161,6 +162,25 @@ def get_good_point_size(n_points, bbox):
         pts_size = 5
     return pts_size
 
+def sample_canonical_ellipse(n, minor, random_state, empty_frac=0.):
+    """
+    Sample an ellipse at the origin with major axis 1, and no rotation
+    """
+    rands = random_state.uniform(0, 1, (n, 2))
+    angles = rands[:,0] * np.pi * 2
+    radii = np.sqrt(rands[:,1])
+    x = radii * np.cos(angles)
+    y = radii * np.sin(angles) * minor
+
+    return np.hstack([x[:, None], y[:, None]])
+def rotate_points(points, angle):
+    """
+    Rotate points by angle.
+    """
+    rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
+                           [np.sin(angle), np.cos(angle)]])
+    return np.dot(points, rot_matrix.T)
+
 def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     """
     Generate N random points inside the ellipse.
@@ -171,7 +191,27 @@ def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     # get the angle of the major axis
     angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
     # get the points on the ellipse
+    ratio =  minor_axis / major_axis
+    points_canonical = sample_canonical_ellipse(n, ratio, random_state, empty_frac)
+    points_scaled = points_canonical * major_axis
+    points_rotated = rotate_points(points_scaled, angle)
+    points = points_rotated + np.array(center)
+    return points
+
+def sample_ellipse_old(center, p0, p1, n, random_state, empty_frac=0.):
+    """
+    Generate N random points inside the ellipse.
+    """
+    # get the major and minor axes
+    major_axis = np.linalg.norm(p0 - center)
+    minor_axis = np.linalg.norm(p1 - center)
+    # get the angle of the major axis
+    angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
+    # get the points on the ellipse
     angles_and_radii_rands = random_state.uniform(0, 1, (n, 2))
+    # transform radii rands so points will be uniformly distributed in the ellipse
+    angles_and_radii_rands[:, 1] = (angles_and_radii_rands[:, 1])**2
+
 
     angles = angles_and_radii_rands[:, 0] * 2 * np.pi
     rad_rands = angles_and_radii_rands[:, 1]
@@ -282,3 +322,29 @@ def add_sub_image(img, sub_img, bbox):
     sub_img = sub_img[:y1-y0, :x1-x0]
     img[y0:y0+sub_img.shape[0], x0:x0+sub_img.shape[1]] = sub_img
 
+def test_sample_canonical_ellipse():
+    n = 1000
+    random_state = np.random.RandomState(0)
+    points = sample_canonical_ellipse(n, .3, random_state)
+    plt.scatter(points[:, 0], points[:, 1], s=10,alpha=.9)
+    plt.show()
+
+
+def test_sample_elipse():
+    center = np.array([0, 0])
+    p0 = np.array([1, 1])
+    p1 = np.array([-2, 2])
+    n = 1000
+    random_state = np.random.RandomState(0)
+    points = sample_ellipse(center, p0, p1, n, random_state)
+    plt.scatter(points[:, 0], points[:, 1], s=10,alpha=.9)
+    # now plot the actual ellipse
+    n_interp = 10000
+    points = get_ellipse_points(center, p0, p1, n_interp)
+    plt.plot(points[:, 0], points[:, 1], lw=2)
+    plt.show()
+
+
+if __name__ == '__main__':
+    test_sample_canonical_ellipse()
+    test_sample_elipse()        
