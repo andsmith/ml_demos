@@ -158,6 +158,12 @@ class Slider(Tool):
         Return the current value.
         """
         return self._range[0] + self._slider_pos * (self._range[1] - self._range[0])
+    
+    def set_value(self, val):
+        """
+        Set the value of the slider.
+        """
+        self._slider_pos = (val - self._range[0]) / (self._range[1] - self._range[0])
 
     def _calc_dims_horiz(self):
         self._y_midline = int((self._bbox['y'][1] * self._t_horiz_fact + self._bbox['y'][0] * (1 - self._t_horiz_fact)))

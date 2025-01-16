@@ -331,22 +331,22 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
                                                     'Algorithm', lambda x: None,    # no callback, updates when Run button is clicked
                                                     options=['Spectral', 'K-means'],
-                                                    default_selection=0, spacing_px=7),
+                                                    default_selection=0, spacing_px=9),
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
                                                           'Sim Graph', callback=self._change_sim_param_visibility,
                                                           options=[self._sim_kind_names[Tools.nn_slider],
                                                                    self._sim_kind_names[Tools.epsilon_slider],
                                                                    self._sim_kind_names[Tools.sigma_slider]],
-                                                          default_selection=1, spacing_px=7),
+                                                          default_selection=1, spacing_px=9),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
                                                  'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,
                                                  range=[5, 2000], default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
                                              # no callback, updates when Run button is clicked
-                                             'K (clusters)', lambda _: None,
+                                             'K (clusters)', self._update_k_slider,
                                              range=[2, 20], default=3, format_str="=%i"),
                       Tools.f_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.f_slider], indented_bbox),
-                                             'F (features)', lambda _: None,
+                                             'F (features)', self._update_f_slider,
                                              range=[2, 20], default=3, format_str="=%i"),
                       Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_spectrum, border_indent=0),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
@@ -371,6 +371,16 @@ class ToolsWindow(WindowMouseManager, Window):
                                                  range=[1., 500], default=100, format_str="=%.3f", visible=False)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
+
+    def _update_k_slider(self, k):
+        self.app.recompute_clustering(False)
+
+    def _update_f_slider(self, f):
+        self.app.windows[Windows.spectrum].refresh()
+        self.app.windows[Windows.eigenvectors].refresh()
+        self.app.recompute_clustering(True)
+
+
 
     def _change_sim_param_visibility(self, kind_name):
         """
@@ -497,7 +507,7 @@ class PlotWindow(Window, ABC):
 
         self._disp_img = None
         self._values = None
-        self.tools={} # dict with values are all the tool objects to render (after disp_img)
+        self.tools = {}  # dict with values are all the tool objects to render (after disp_img)
         self._init_tools()
 
     def render(self, img, active=False):
@@ -583,9 +593,15 @@ class SpectrumWindow(WindowMouseManager, PlotWindow):
         if self._values is None:
             return
         fig, ax = self._plotter.get_axis()
+
+        n_features = self.app.windows[Windows.toolbar].get_value('f') 
+        if self._n_to_plot < n_features:
+            self._n_to_plot = n_features
+
+
         ax.plot(self._values[:self._n_to_plot], 'o-')
         # draw a vertical red line at f
-        x_k = self.app.windows[Windows.toolbar].get_value('f') - 0.5
+        x_k = n_features - 0.5
         ax.axvline(x=x_k, color='r', linestyle='-')
         ax.set_title("Eigenvalues")
         self._disp_img = self._plotter.render_fig(fig)
@@ -614,6 +630,8 @@ class EigenvectorsWindow(PlotWindow):
         pass
 
     def refresh(self):
+        if self._values is None:
+            return
         n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
         k = self.app.windows[Windows.toolbar].get_value('f')
         fig, axes = self._plotter.get_axis(n_to_plot, 1)
@@ -655,8 +673,8 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         """
         self._slider_bbox, self._button_bbox = hsplit_bbox(self._tool_bbox, [3, 1])
         self.tools = {'noise_slider': Slider(self._slider_bbox, 'noise', self._update_noise, orient='horizontal',
-                                              range=[0, 1], default=self._noise, format_str="=%.2f", visible=True),
-                       'project_button': Button(self._button_bbox, 'randomize', self._remake_axes, visible=True)}
+                                             range=[0, 1], default=self._noise, format_str="=%.2f", visible=True),
+                      'project_button': Button(self._button_bbox, 'randomize', self._remake_axes, visible=True)}
 
     def _update_noise(self, noise):
         self._noise = noise
@@ -667,6 +685,7 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         Override to create noise vector every time we
         get a new set of feature vectors.
         """
+        print("Updating Rnd proj")
         self._values = values
         self._noise_offsets = np.random.randn(self._values.shape[0]*2).reshape(-1, 2)
         self._remake_axes()
@@ -684,8 +703,8 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         self._axes[1] -= self._axes[1] @ self._axes[0] * self._axes[0]
         self._axes[1] /= np.linalg.norm(self._axes[1])
         # check orthogonality
-        err= np.abs(np.sum(self._axes[0] * self._axes[1])) 
-        if err> 1e-6:
+        err = np.abs(np.sum(self._axes[0] * self._axes[1]))
+        if err > 1e-6:
             raise ValueError("Axes are not orthogonal!?")
         self.refresh()
 
@@ -696,15 +715,15 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         noisy_points = points + self._noise_offsets * self._noise * .1
         fig, ax = self._plotter.get_axis()
         colors = self.app.windows[Windows.ui].get_cluster_color_ids()
-        #import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
 
-        plot_clustering(ax, noisy_points, colors['colors']/255., colors['ids'], image_size=self._bbox_size,alpha=0.5)
+        plot_clustering(ax, noisy_points, colors['colors']/255., colors['ids'], image_size=self._bbox_size, alpha=0.5)
         # since clusters will be on the border if there are many connected components, move everything in by a percentage
         marg_frac = 0.025
         x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
         w, h = x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]
         ax.set_xlim(x_lim[0] - marg_frac*w, x_lim[1] + marg_frac*w)
-        ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h) 
+        ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h)
         ax.set_title("Random Projection")
         self._disp_img = self._plotter.render_fig(fig)
 

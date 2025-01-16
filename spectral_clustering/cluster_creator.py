@@ -122,11 +122,18 @@ class ClusterCreator(object):
 
     def update_points(self):
         """
-        Get new points from the UI window.
+        Get new points from the UI window and update the similarity graph & clustering
         """
         # print("Main thread updating points")
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph()
+
+        # other windows are no longer valid, so clear their data
+        self.windows[Windows.clustering].clear()
+        self.windows[Windows.spectrum].clear()
+        self.windows[Windows.eigenvectors].clear()
+        self.windows[Windows.rand_proj].clear()
+        
 
     def update_sim_graph(self, param_val=None, asynch=False):
         """
@@ -136,6 +143,7 @@ class ClusterCreator(object):
         IF asynch:
           if the sim graph is already being updated, stop it and start a new one.
         """
+        print("Recomputing similarity graph...")
         def update_sim_graph_thread():
             # first, clear the current graph so it doesn't render while we're updating it
             #print("Updating similarity graph with %i points in thread: %s " % (self._points.shape[0], get_ident()))
@@ -182,6 +190,7 @@ class ClusterCreator(object):
         Called when run button is clicked (because similarity graph has changed).
         This will also update the clustering.
         """
+        print("Recomputing spectrum...")
         # if no data, don't do anything
         if self._points is None or self._points.shape[0] == 0: 
             print("Can't cluster without data...")
@@ -198,13 +207,15 @@ class ClusterCreator(object):
             # algorithms that don't need the eigendecomposition
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
         
-        self.recompute_clustering()
+        self.recompute_clustering(True)
 
-    def recompute_clustering(self):
+    def recompute_clustering(self, new_eigenvectors=False):
         """     
         Called when spectrum is recomputed or arguments to clustering algorithm are changed.
         Update windows:  clustering, rand_proj
+        :param new_eigenvectors: whether the eigenvectors have changed
         """       
+        print("Recomputing clustering...")
         n_clusters = self.windows[Windows.toolbar].get_value('k')
         n_features = self.windows[Windows.toolbar].get_value('f')
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
@@ -216,6 +227,12 @@ class ClusterCreator(object):
                 self.recompute_spectrum()  # too slow to automatically recompute?
                 #return
             cluster_ids = self._spectrum.cluster(n_clusters, n_features)
+            # May have changed n_features since last time, so 
+            # update rand_proj window.  (other windows look it up)
+            if new_eigenvectors:
+                _, vectors = self._spectrum.get_eigens()
+                self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
             self._cluster_colors = get_n_disp_colors(n_clusters)
