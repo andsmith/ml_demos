@@ -4,7 +4,7 @@ from scipy.spatial.distance import pdist, squareform
 from sklearn.neighbors import NearestNeighbors
 import cv2
 from enum import IntEnum
-from util import image_from_floats
+from util import image_from_floats, apply_colormap
 from abc import ABC, abstractmethod
 
 
@@ -30,9 +30,10 @@ class SimilarityGraph(object):
         """
         Construct a similarity graph from points in the unit square.
         :param points: 2D numpy array of points
+        :param colormap: colormap to use for the similarity matrix image
         """
         self._points = points
-        self._mat, self._img = self._build()
+        self._mat = self._build()
 
     @abstractmethod
     def _build(self):
@@ -56,8 +57,9 @@ class SimilarityGraph(object):
     def get_matrix(self):
         return self._mat
 
-    def get_image(self):
-        return self._img
+    @abstractmethod
+    def make_img(self,colormap=None):
+        pass
 
 
 class EpsilonSimGraph(SimilarityGraph):
@@ -75,9 +77,13 @@ class EpsilonSimGraph(SimilarityGraph):
         dists = squareform(pdist(self._points))
         sim_matrix = np.zeros(dists.shape)
         sim_matrix[dists < self._epsilon] = 1
-        img = image_from_floats(sim_matrix, 0, 1)
+        return sim_matrix
+    
+    def make_img(self,colormap=None):
+        
+        img = image_from_floats(self._mat, 0, 1)
         img = cv2.merge([img, img, img])
-        return sim_matrix, img
+        return img
 
 
 class FullSimGraph(SimilarityGraph):
@@ -86,7 +92,17 @@ class FullSimGraph(SimilarityGraph):
         super().__init__(points)
 
     def _build(self):
-        raise NotImplementedError("Full similarity graph not implemented yet.")
+        """
+        Build the similarity matrix using the full similarity function.
+        """
+        dists = squareform(pdist(self._points))
+        sim_matrix = np.exp(-dists**2 / (2*self._sigma**2))
+        return sim_matrix
+    
+    def make_img(self,colormap=None):
+        img = apply_colormap(self._mat, colormap)
+        return img
+        
 
 
 class NNSimGraph(SimilarityGraph):
@@ -102,7 +118,7 @@ class NNSimGraph(SimilarityGraph):
         self._mutual = mutual
         super().__init__(points)
 
-    def _build(self ):
+    def _build(self):
         """
         Build the similarity matrix using K-nearest neighbors, i.e.
         two points are connected if they are among each other's K-nearest neighbors.
@@ -117,9 +133,11 @@ class NNSimGraph(SimilarityGraph):
             edge_mat = np.logical_and(edge_mat, edge_mat.T)
         else:
             edge_mat = np.logical_or(edge_mat, edge_mat.T)
-        img = image_from_floats(edge_mat, 0, 1)
+        return edge_mat
+    def make_img(self, colormap=None):
+        img = image_from_floats(self._mat, 0, 1)
         img = cv2.merge([img, img, img])
-        return edge_mat, img
+        return img
 
 
 # labels for slider param for different simgraph types

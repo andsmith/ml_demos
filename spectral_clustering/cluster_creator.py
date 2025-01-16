@@ -149,7 +149,7 @@ class ClusterCreator(object):
             
             graph_kind = self.windows[Windows.toolbar].get_value('sim_graph')
             if graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]:
-                sigma = self.windows[Windows.toolbar].get_value['sigma']
+                sigma = self.windows[Windows.toolbar].get_value('sigma')
                 sim_graph = FullSimGraph(unit_points, sigma)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN]:
                 n_nearest = self.windows[Windows.toolbar].get_value('n_nearest')

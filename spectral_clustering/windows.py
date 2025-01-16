@@ -344,10 +344,10 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
                                              # no callback, updates when Run button is clicked
                                              'K (clusters)', lambda _: None,
-                                             range=[2, 25], default=5, format_str="=%i"),
+                                             range=[2, 20], default=3, format_str="=%i"),
                       Tools.f_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.f_slider], indented_bbox),
                                              'F (features)', lambda _: None,
-                                             range=[1, 50], default=5, format_str="=%i"),
+                                             range=[2, 20], default=3, format_str="=%i"),
                       Tools.run_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.run_button], indented_bbox), 'Run', callback=self.app.recompute_spectrum, border_indent=0),
                       Tools.clear_button: Button(scale_bbox(TOOLBAR_LAYOUT[Tools.clear_button], indented_bbox), 'Clear', callback=self.app.clear, border_indent=0),
 
@@ -368,7 +368,7 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL],
                                                  self.app.update_sim_graph,
-                                                 range=[1., 50], default=25, format_str="=%.3f", visible=False)}
+                                                 range=[1., 500], default=100, format_str="=%.3f", visible=False)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
@@ -420,6 +420,8 @@ class ToolsWindow(WindowMouseManager, Window):
             return int(self.tools[Tools.n_pts_slider].get_value())
         elif param == 'epsilon':
             return self.tools[Tools.epsilon_slider].get_value()
+        elif param == 'sigma':
+            return self.tools[Tools.sigma_slider].get_value()
         elif param == 'sim_graph':
             return self.tools[Tools.sim_graph_radio].get_value()
         elif param == 'k':
@@ -454,7 +456,7 @@ class SimMatrixWindow(Window):
         """
         self._m = sim_mat.get_matrix()
         # img_full = image_from_floats(self._m)
-        img_full = sim_mat.get_image()
+        img_full = sim_mat.make_img(self._colormap)
         img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
