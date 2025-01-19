@@ -5,15 +5,14 @@ from enum import IntEnum
 from util import hsplit_bbox, vsplit_bbox
 """
 Windows are laid out rougly:
-+---------------------+----------+----------+
-|  "UI window"        |          |          |
-|  (click to add and  | spectrum |e-vectors |
-|   modify clusters)  |          |          |
-|                     +----------+----------|
-+------------+--------+          |          |
-|  tollbar   |  sim   | randproj | clusters |
-|            | matrix |          |          |
-+------------+--------+----------+----------+
++---------------------+
+|  "UI window"        |
+|  (click to add and  |
+|   modify clusters)  |
+|                     +
++------------+--------+
+|      toolbar        |
++------------+--------+
 """
 
 
@@ -22,32 +21,25 @@ class Windows(IntEnum):
     Enum for the windows in the layout.
     """
     ui = 0
-    spectrum = 1
-    eigenvectors = 2
-    sim_matrix = 3
-    rand_proj = 4
-    clustering = 5
-    toolbar = 6
+    toolbar = 2
 
 
-h_div = 0.5  # relative x position of the  vertical dividing line between UI and spectrum
-h_mid = (h_div+1.)/2.  # x position between spectrum and eigenvectors
+WINDOW_LAYOUT = {# scale from unit square to window size
+                 "ui_windows": {Windows.ui: {'x': (0, 1),  
+                                          'y': (0, .75)},
+                             Windows.toolbar: {'x': (0, 1),
+                                               'y': (.75, 1)}, },
 
-
-WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit square to window size
-                                          'y': (0, .66)},
-                             Windows.toolbar: {'x': (0, .45),
-                                               'y': (.66, 1)},
-                             Windows.spectrum: {'x': (h_div, h_mid),  # move a bit in for a slider ***
-                                                'y': (0, .5)},
-                             Windows.eigenvectors: {'x': (h_mid, 1),
-                                                    'y': (0, .5)},
-                             Windows.sim_matrix: {'x': (.45, h_div),
-                                                  'y': (.66, 1)},  # will be made square regardless of window size
-                             Windows.rand_proj: {'x': (h_div, h_mid),
-                                                 'y': (.5, 1)},  # move up a bit for a button and a slider ****
-                             Windows.clustering: {'x': (h_mid, 1),
-                                                  'y': (.5, 1)}},
+                 # matplotlib subplot layout for intermediate values
+                 'plots': {'spectrum': (1, 1),
+                           'rand_proj': (1, 2),
+                           'sim_matrix': (2, 1),
+                           'weight_stats': (2, 2), },
+                           
+                 # matplotlib subplot layout for results
+                 'results': {'clustering': (1, 1), },
+                 'eigenvectors': {'eigenvectors': (1, 1), },
+                
                  'colors': {'bkg': COLORS['white'],
                             'border': COLORS['gray'],
                             'active_border': COLORS['black'],
@@ -85,6 +77,8 @@ Where [sim-par] is a custom toolbar bbox area for the similarity parameter(s).  
 """
 
 # Tools in the toolbar (and not others) are enumerated here:
+
+
 class Tools(IntEnum):
     """
     Enum for the tools in the toolbar.
@@ -94,13 +88,13 @@ class Tools(IntEnum):
     k_slider = 2    # number of clusters
     f_slider = 11    # number of features (eigenvectors)
     n_pts_slider = 3  # number of points per cluster
-    run_button = 4  
+    run_button = 4
     clear_button = 5
-    alg_radio = 6 # which clustering algorithm to use
+    alg_radio = 6  # which clustering algorithm to use
 
     nn_slider = 7  # param for nn similarity graph, number of neighbors
-    nn_toggle = 10 # param for nn similarity graph, whether to AND or OR neighbors
-    epsilon_slider = 8 # param for epsilon similarity graph
+    nn_toggle = 10  # param for nn similarity graph, whether to AND or OR neighbors
+    epsilon_slider = 8  # param for epsilon similarity graph
     sigma_slider = 9  # param for full similarity graph
 
 
@@ -130,7 +124,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .33),  # scale from unit square to
 # (A) Fill in the sliders for the number of features, clusters, and points
 slider_area = {'x': (.512, 1),
                'y': (.5, 1)}
-top, middle, bottom =  vsplit_bbox(slider_area, [1, 1, 1], integer=False)
+top, middle, bottom = vsplit_bbox(slider_area, [1, 1, 1], integer=False)
 TOOLBAR_LAYOUT[Tools.f_slider] = top
 TOOLBAR_LAYOUT[Tools.k_slider] = middle
 TOOLBAR_LAYOUT[Tools.n_pts_slider] = bottom

@@ -1,6 +1,136 @@
+"""
+Class for output windows, using matplotlib.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 from util import get_n_disp_colors
+from layout import WINDOW_LAYOUT
+
+
+class ValuesWindow(object):
+    """
+    Class for displaying:
+        * Spectrum,
+        * random projections,
+        * Similarity matrix, and
+        * Edge weight statistics
+        """
+
+    def __init__(self, app, n_to_plot, f_to_use, init_noise=0):
+        self._app = app
+        self._sim_graph = None
+        self._plot_params = {'f': f_to_use,
+                             'n': n_to_plot,
+                             'noise': init_noise}
+        self._setup_figs()
+
+    def _setup_figs(self):
+        self._subplot_inds = WINDOW_LAYOUT['plots']
+        n_rows = np.max([v for v in self._subplot_inds.values()])  # max number of rows needed
+        n_cols = len(set(v for v in self._subplot_inds.values()))
+        self._fig, self._axes = plt.subplots(n_rows, n_cols)
+
+    def _update_features(self):
+        self._features = self._e_vects[:, :self._plot_params['f']]
+
+    def update_sim_graph(self, sim_graph, eigenvalues, eigenvectors):
+        self._sim_graph = sim_graph
+        self._e_vals= eigenvalues
+        self._e_vecs = eigenvectors
+        self._update_features()
+        self._refresh()
+
+    def update_plot_param(self, param, val):
+        if param not in self._plot_params:
+            raise ValueError("Invalid parameter: %s" % param)
+        self._plot_params[param] = val
+        
+        self._refresh()
+
+    def _refresh(self):
+        self._plot_spectrum( self._axes[self._subplot_inds['spectrum']])
+        self._plot_randproj(self._fig,self._axes[self._subplot_inds['rand_proj']])
+        self._plot_sim_matrix(self._axes[self._subplot_inds['sim_matrix']])
+        self._plot_weight_stats(self._axes[self._subplot_inds['weight_stats']])
+
+        self._fig.tight_layout(rect=[0, 0, 1, 1])
+
+    def _plot_spectrum(self, ax):
+        if self._sim_graph is None:
+            return
+        n_features = self._app.toolbar.get_value('f')
+        if self._n_to_plot < n_features:
+            self._n_to_plot = n_features
+        ax.plot(self._e_vals[:self._n_to_plot], 'o-')
+        # draw a vertical red line at f
+        x_k = n_features - 0.5
+        ax.axvline(x=x_k, color='r', linestyle='-')
+        ax.set_title("Spectrum")
+
+    def _plot_sim_matrix(self, ax):
+        if self._sim_graph is None:
+            return
+
+        img = self._sim_graph.get_sim_matrix()
+        ax.imshow(img, cmap='viridis', interpolation='nearest')
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title("Similarity matrix")
+
+    def _plot_weight_stats(self, ax):
+        if self._sim_graph is None:
+            return
+        weights = self._sim_graph.get_matrix().reshape(-1)
+        ax.hist(weights, bins=100)
+        ax.set_title("Edge weight statistics")
+
+
+    def _remake_axes(self):
+        if self._features is None:
+            return
+        # make random axes, orthogonal in feature space
+        self._axes = np.random.randn(2, self._features.shape[1])
+        # normalize lengths
+        self._axes[0] /= np.linalg.norm(self._axes[0])
+        self._axes[1] -= self._axes[1] @ self._axes[0] * self._axes[0]
+        self._axes[1] /= np.linalg.norm(self._axes[1])
+        # check orthogonality
+        err = np.abs(np.sum(self._axes[0] * self._axes[1]))
+        if err > 1e-6:
+            raise ValueError("Axes are not orthogonal!?")
+        self.refresh()
+
+    def _plot_randproj(self, fig, ax):
+        if self._sim_graph is None:
+            return
+        points = self._features @ self._axes.T
+        noisy_points = points + self._noise_offsets * self._noise * .1
+        colors = self.app.ui_window.get_cluster_color_ids()
+        # import ipdb; ipdb.set_trace()
+
+        plot_clustering(ax, noisy_points, colors['colors']/255., colors['ids'], image_size=self._bbox_size, alpha=0.5)
+        # since clusters will be on the border if there are many connected components, move everything in by a percentage
+        marg_frac = 0.025
+        x_lim, y_lim = ax.get_xlim(), ax.get_ylim()
+        w, h = x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]
+        ax.set_xlim(x_lim[0] - marg_frac*w, x_lim[1] + marg_frac*w)
+        ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h)
+        ax.set_title("Random Projection")
+        self._disp_img = self._plotter.render_fig(fig)
+
+
+
+
+class ResultsWindow(object):
+    pass
+class EigenvectorsWindow(object):
+    
+    def _plot_eigenvectors(self, fig, ax):
+        if self._sim_graph is None:
+            return
+        plot_eigenvecs(fig, ax, self._e_vecs, n_max=self._n_to_plot,
+                       k=self._f_to_use, colors=self._app.ui_window.get_cluster_color_ids())
 
 
 def make_data(n):
@@ -111,8 +241,6 @@ def plot_eigenvecs(fig, axes, vecs, n_max, k, colors=None, *args, **kwargs):
         axes[i].set_ylabel("%i" % i, fontsize=8)
         for pos in ['right', 'top', 'bottom', 'left']:
             axes[i].spines[pos].set_visible(False)
-    fig.suptitle('Eigenvectors')
-    fig.tight_layout(rect=[0, 0, 1, 1])
 
     # Draw lines between plots k-1 and k
     if k > 0 and k < n_max:
@@ -151,8 +279,8 @@ def test_plot_clustering():
         colors = get_n_disp_colors(n_clusters) / 255.
         points = np.concatenate(points)
         ids = np.concatenate(ids)
-        print("Plotting points(%s), ids(%s), and colors(%s)." %(points.shape, ids.shape, colors.shape))
-        
+        print("Plotting points(%s), ids(%s), and colors(%s)." % (points.shape, ids.shape, colors.shape))
+
         fig_size = (5, 5)
         dpi = 100
         _, axes = plt.subplots(1, 1, figsize=(5, 5), dpi=dpi)
@@ -167,7 +295,49 @@ def test_plot_clustering():
     _n_clusters(2)
     _n_clusters(1)
 
+
+class FakeToolbar(object):
+    def get_value(self, which):
+        if which == 'f':
+            return 10
+        elif which == 'k':
+            return 4
+
+
+class FakeUiWindow(object):
+    def __init__(self, n):
+        self._n = n
+
+    def get_cluster_color_ids(self):
+        ids = np.ones(self._n, dtype=np.int32)
+        colors = np.array([[128, 255, 255], ], dtype=np.uint8)
+        return {'ids': ids, 'colors': colors}
+
+
+class FakeApp(object):
+    def __init__(self, pts):
+        self.toolbar = FakeToolbar()
+        self.ui_window = FakeUiWindow(pts.shape[0])
+
+def test_values_window():
+
+    from similarity import FullSimGraph
+    from clustering import SpectralAlgorithm
+    # test_plot_eigenvecs()
+    # test_plot_clustering()
+    n = 100
+    points = np.random.randn(n*2, 2)
+    sg = FullSimGraph(points, sigma=0.025)
+    app = FakeApp(points)
+    sa = SpectralAlgorithm(sg)
+    
+
+    window = ValuesWindow(app, 10, 3)
+    e_vals, e_vecs = sa.get_eigens()
+    window.update_sim_graph(sg,e_vals, e_vecs)
+    plt.show()
+
+
 if __name__ == "__main__":
-    test_plot_eigenvecs()
-    test_plot_clustering()
+    test_values_window()
     print("All tests passed!")

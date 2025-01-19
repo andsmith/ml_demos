@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
+from similarity import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
 from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',

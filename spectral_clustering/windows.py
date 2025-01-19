@@ -6,14 +6,14 @@ from abc import ABC, abstractmethod
 import cv2
 from util import (scale_bbox, get_good_point_size, add_sub_image,
                   hsplit_bbox, indent_bbox, vsplit_bbox)
-from mpl_plots import plot_clustering, plot_eigenvecs, add_alpha
+from windows_mpl import plot_clustering, plot_eigenvecs, add_alpha
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, OTHER_TOOL_LAYOUT, Windows, Tools
 from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
-from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
+from similarity import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
 from plot_to_img import PlotRenderer
 
 
@@ -463,9 +463,9 @@ class SimMatrixWindow(Window):
         :param sim_mat: spectral.SimilarityGraph instance
         """
         self._m = sim_mat.get_matrix()
-        # img_full = image_from_floats(self._m)
+        # img_full = image_from_floats(self._m)r
         img_full = sim_mat.make_img(self._colormap)
-        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
+        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_LINEAR)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
 
