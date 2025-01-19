@@ -126,6 +126,7 @@ class ClusterCreator(object):
         Get new points from the UI window and update the similarity graph & clustering
         """
         # print("Main thread updating points")
+        import ipdb; ipdb.set_trace()
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph()
 
@@ -152,6 +153,7 @@ class ClusterCreator(object):
                 self._similarity_graph['graph'] = None
 
             unit_points = self._points  # unscale_coords(self.windows[Windows.ui].bbox, self._points)
+            import ipdb; ipdb.set_trace()
             if unit_points.shape[0] == 0:
                 logging.info("No points to cluster.")
                 self.windows[Windows.ui].set_graph(None)

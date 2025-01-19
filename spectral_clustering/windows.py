@@ -322,7 +322,9 @@ class ToolsWindow(WindowMouseManager, Window):
         # What are the kinds of sim graphs that can be selected:
         self._sim_kind_names = {Tools.nn_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN],
                                 Tools.epsilon_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON],
-                                Tools.sigma_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]}
+                                Tools.sigma_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL],
+                                Tools.alpha_slider: SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.SOFT_NN]}
+                                
 
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
                                                      'Cluster Type', lambda x: None,  # no callback, updates when user starts a new cluster
@@ -335,6 +337,7 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.sim_graph_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.sim_graph_radio], indented_bbox),
                                                           'Sim Graph', callback=self._change_sim_param_visibility,
                                                           options=[self._sim_kind_names[Tools.nn_slider],
+                                                                   self._sim_kind_names[Tools.alpha_slider],
                                                                    self._sim_kind_names[Tools.epsilon_slider],
                                                                    self._sim_kind_names[Tools.sigma_slider]],
                                                           default_selection=1, spacing_px=9),
@@ -370,7 +373,11 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL],
                                                  self.app.update_sim_graph,
-                                                 range=[1., 500], default=100, format_str="=%.3f", visible=False)}
+                                                 range=[1., 500], default=100, format_str="=%.3f", visible=False),
+                      Tools.alpha_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.alpha_slider], indented_bbox),
+                                                 SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.SOFT_NN],
+                                                 self.app.update_sim_graph,
+                                                 range=[0, 5.], default=1., format_str="=%.3f", visible=False)}
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
@@ -465,7 +472,7 @@ class SimMatrixWindow(Window):
         self._m = sim_mat.get_matrix()
         # img_full = image_from_floats(self._m)
         img_full = sim_mat.make_img(self._colormap)
-        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_NEAREST)
+        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_CUBIC)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
 

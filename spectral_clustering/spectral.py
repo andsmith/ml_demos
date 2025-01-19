@@ -12,6 +12,7 @@ class SimilarityGraphTypes(IntEnum):
     EPSILON = 0
     NN = 1
     FULL = 2
+    SOFT_NN =3
 
 
 def get_kind_from_name(names, name):
@@ -103,7 +104,52 @@ class FullSimGraph(SimilarityGraph):
         img = apply_colormap(self._mat, colormap)
         return img
         
+class SoftNNSimGraph(SimilarityGraph):
+    """
+    Construct a similarity graph S[i,j]:
+       
+       Let R[i,j] be the rank of point j in the sorted list of distances from point i, and
+       let W[i,j] = R[i,j]) ^ -alpha be the weight of the directed edge from i to j.
+       
+       Then the similarity between i and j is given by:
 
+           S[i,j] = W[i,j] + W[j,i] if additive, or 
+                  = W[i,j] * W[j,i] if multiplicative.
+          
+    """
+    
+    def __init__(self, points, alpha, additive=True):
+        """
+        Construct a similarity graph using K-nearest neighbors.
+        :param points: 2D numpy array of points
+        :param k: number of nearest neighbors
+        :param alpha: exponent for the weight function
+        :param additive: if True, use additive weights, otherwise use multiplicative weights
+        """
+        self._alpha = alpha
+        self._additive = additive
+        super().__init__(points)
+
+    def _build(self):
+        dists = squareform(pdist(self._points))
+        np.fill_diagonal(dists, np.inf)  # set diagonal to inf to ignore self-distances
+        orders = np.argsort(dists, axis=1)
+        weights = np.zeros_like(dists)
+        n = dists.shape[0]
+        for row in range(n):
+            weights[row,orders[row,:-1]] = (1.0 / np.arange(1, n)) ** self._alpha
+
+        
+        if self._additive:
+            sim_matrix = weights + weights.T
+        else:
+            sim_matrix = weights * weights.T
+
+        return sim_matrix
+    
+    def make_img(self,colormap=None):
+        img = apply_colormap(self._mat, colormap)
+        return img
 
 class NNSimGraph(SimilarityGraph):
     def __init__(self, points, k, mutual):
@@ -134,6 +180,7 @@ class NNSimGraph(SimilarityGraph):
         else:
             edge_mat = np.logical_or(edge_mat, edge_mat.T)
         return edge_mat
+    
     def make_img(self, colormap=None):
         img = image_from_floats(self._mat, 0, 1)
         img = cv2.merge([img, img, img])
@@ -142,9 +189,34 @@ class NNSimGraph(SimilarityGraph):
 
 # labels for slider param for different simgraph types
 SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
+                        SimilarityGraphTypes.SOFT_NN: "A-nearest",
                         SimilarityGraphTypes.EPSILON: "Epsilon",
                         SimilarityGraphTypes.FULL: "Sigma"}
 # simgraph type menu options
 SIMGRAPH_KIND_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
+                       SimilarityGraphTypes.SOFT_NN: "A-nearest",
                        SimilarityGraphTypes.EPSILON: "Epsilon",
                        SimilarityGraphTypes.FULL: "Full"}
+
+
+def test_soft_nn_sim():
+    points = np.random.rand(1000, 2)
+    sim_graph_add = SoftNNSimGraph(points, alpha=.01, additive=True)
+    sim_graph_mul = SoftNNSimGraph(points, alpha=.01, additive=False)
+   
+    import matplotlib.pyplot as plt
+    plt.subplot(2,2,1)
+    plt.imshow(sim_graph_add.make_img())
+    plt.subplot(2,2,2)
+    plt.imshow(sim_graph_mul.make_img())
+    plt.subplot(2,2,3)
+    for i in range(points.shape[0]):
+        # plot each with its index
+        plt.text(points[i,0], points[i,1], str(i), fontsize=12, ha='center')
+    plt.subplot(2,2,4)
+    counts, bins = np.histogram(sim_graph_add.get_matrix().flatten(), bins=50)
+    plt.plot((bins[:-1] + bins[1:])/2., counts)
+    plt.show()
+
+if __name__ == "__main__":
+    test_soft_nn_sim()  

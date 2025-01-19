@@ -102,6 +102,7 @@ class Tools(IntEnum):
     nn_toggle = 10 # param for nn similarity graph, whether to AND or OR neighbors
     epsilon_slider = 8 # param for epsilon similarity graph
     sigma_slider = 9  # param for full similarity graph
+    alpha_slider = 12  # param for soft_nn graph
 
 
 button_indent = 0.02
@@ -119,6 +120,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .33),  # scale from unit square to
                   Tools.epsilon_slider:  None,  # fill these in below (B)
                   Tools.sigma_slider: None,
                   Tools.nn_slider: None,
+                  Tools.alpha_slider: None,
                   Tools.nn_toggle: None,
 
                   Tools.run_button: {'x': (button_indent, button_indent+.16),
@@ -145,6 +147,7 @@ left, right = hsplit_bbox(sim_param_area, [2.5, 1.4], integer=False)
 TOOLBAR_LAYOUT[Tools.epsilon_slider] = sim_param_area  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.sigma_slider] = sim_param_area  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_slider] = left  # three_boxes[0]
+TOOLBAR_LAYOUT[Tools.alpha_slider] = left  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_toggle] = right  # three_boxes[2]
 
 
