@@ -11,8 +11,8 @@ import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
 from clustering import render_clustering, KMeansAlgorithm
 from colors import COLORS
-from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, OTHER_TOOL_LAYOUT, Windows, Tools
-from clusters import EllipseCluster, AnnularCluster, CLUSTER_TYPES
+from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, OTHER_TOOL_LAYOUT,APP_CONFIG, Windows, Tools
+from clusters import CLUSTER_TYPES
 from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
 from plot_to_img import PlotRenderer
 
@@ -328,7 +328,7 @@ class ToolsWindow(WindowMouseManager, Window):
 
         self.tools = {Tools.kind_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.kind_radio], indented_bbox),
                                                      'Cluster Type', lambda x: None,  # no callback, updates when user starts a new cluster
-                                                     options=['Gaussian', 'Ellipse', 'Annulus'],
+                                                     options=['Gaussian', 'Ellipse', 'Annulus', 'Sierpinski'],
                                                      default_selection=1, spacing_px=7),
                       Tools.alg_radio: RadioButtons(scale_bbox(TOOLBAR_LAYOUT[Tools.alg_radio], indented_bbox),
                                                     'Algorithm', lambda x: None,    # no callback, updates when Run button is clicked
@@ -343,7 +343,8 @@ class ToolsWindow(WindowMouseManager, Window):
                                                           default_selection=1, spacing_px=9),
                       Tools.n_pts_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.n_pts_slider], indented_bbox),
                                                  'Num Pts', self.app.windows[Windows.ui].n_pts_slider_callback,
-                                                 range=[5, 2000], default=100, format_str="=%i"),
+                                                 range=[5, APP_CONFIG['max_pts_per_cluster']], 
+                                                 default=100, format_str="=%i"),
                       Tools.k_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.k_slider], indented_bbox),
                                              # no callback, updates when Run button is clicked
                                              'K (clusters)', self._update_k_slider,
@@ -582,7 +583,7 @@ class SpectrumWindow(WindowMouseManager, PlotWindow):
     def _init_tools(self):
         # init slider
         slider = Slider(self._tool_bbox, 'n', self._update_notifications, orient='vertical',
-                        range=[1, 20], default=self._n_to_plot, format_str="=%i",
+                        range=[1, 40], default=self._n_to_plot, format_str="=%i",
                         spacing_px=0,
                         visible=False)
         self.tools = {'n': slider}
@@ -639,7 +640,7 @@ class EigenvectorsWindow(PlotWindow):
             return
         n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
         k = self.app.windows[Windows.toolbar].get_value('f')
-        fig, axes = self._plotter.get_axis(n_to_plot, 1)
+        fig, axes = self._plotter.get_axis(n_to_plot, 1, sharex=True, sharey=True)
         colors = self.app.windows[Windows.ui].get_cluster_color_ids()
         plot_eigenvecs(fig, axes, self._values, n_to_plot, k, colors=colors)
         self._disp_img = self._plotter.render_fig(fig)

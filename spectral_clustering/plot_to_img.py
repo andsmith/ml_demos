@@ -35,8 +35,9 @@ class PlotRenderer(object):
         fig_height = height / MONITOR_DPI
         return fig_width, fig_height
     
-    def get_axis(self, n_rows=1, n_cols=1):
-        fig, ax= plt.subplots(n_rows, n_cols,figsize=self._get_fig_size(), dpi=MONITOR_DPI)
+    def get_axis(self, n_rows=1, n_cols=1, sharex=False, sharey=False):
+        fig, ax= plt.subplots(n_rows, n_cols,figsize=self._get_fig_size(), dpi=MONITOR_DPI,
+                              sharex=sharex, sharey=sharey)
         return fig, ax
     
     def render_fig(self, fig, bgr=False):

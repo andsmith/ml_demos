@@ -157,3 +157,6 @@ PLOT_LAYOUT = {'axis_spacing': 5,
                'axis_color': COLORS['black'],
                'tick_color': COLORS['gray']
                }
+
+
+APP_CONFIG = {'max_pts_per_cluster': 3000,}
