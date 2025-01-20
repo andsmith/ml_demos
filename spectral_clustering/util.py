@@ -206,6 +206,12 @@ def sample_ellipse(center, p0, p1, n, random_state, empty_frac=0.):
     # get the major and minor axes
     major_axis = np.linalg.norm(p0 - center)
     minor_axis = np.linalg.norm(p1 - center)
+    # degenerate cases
+    if major_axis == 0:
+        if minor_axis == 0:
+            return np.tile(center, (n, 1))
+        else:
+            p0, p1 = p1, p0
     # get the angle of the major axis
     angle = np.arctan2(p0[1] - center[1], p0[0] - center[0])
     # get the points on the ellipse
@@ -381,15 +387,19 @@ def sample_gaussian(center, p0, p1, n, random_state):
     minor_axis = np.linalg.norm(p1 - center)
     # get the angle of the major axis
     angle = -np.arctan2(p0[1] - center[1], p0[0] - center[0])
-    # get the covariance matrix
-    cov = np.array([[major_axis**2, 0], [0, minor_axis**2]])
+    # get the covariance matrix, but scale so major axis is 1.0.
+    min_a = minor_axis /major_axis
+    maj_a = 1.0
+    cov = np.array([[maj_a, 0], [0, min_a]])
+
     # rotate the covariance matrix
     rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
                            [np.sin(angle), np.cos(angle)]])
-    cov = np.dot(rot_matrix.T, np.dot(cov, rot_matrix))
+    cov = np.dot(cov, rot_matrix)
     
 
-    points = random_state.multivariate_normal(center, cov, n)
+    points = random_state.multivariate_normal(np.zeros(2), np.eye(2), n)
+    points = np.dot( points, cov) * major_axis + center  # covary, scale and translate
     return points
 
 

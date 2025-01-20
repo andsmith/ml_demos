@@ -632,7 +632,7 @@ class EigenvectorsWindow(PlotWindow):
             return
         n_to_plot = self.app.windows[Windows.spectrum].get_n_to_plot()
         k = self.app.windows[Windows.toolbar].get_value('f')
-        fig, axes = self._plotter.get_axis(n_to_plot, 1)
+        fig, axes = self._plotter.get_axis(n_to_plot, 1, sharex=True, sharey=True)
         colors = self.app.windows[Windows.ui].get_cluster_color_ids()
         plot_eigenvecs(fig, axes, self._values, n_to_plot, k, colors=colors)
         self._disp_img = self._plotter.render_fig(fig)
