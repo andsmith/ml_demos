@@ -399,7 +399,7 @@ def sample_gaussian(center, p0, p1, n, random_state):
     
 
     points = random_state.multivariate_normal(np.zeros(2), np.eye(2), n)
-    points = np.dot( points, cov) * major_axis + center  # covary, scale and translate
+    points = np.dot( points, cov) * major_axis + center  # co-vary, scale and translate
     return points
 
 

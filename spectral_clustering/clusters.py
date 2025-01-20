@@ -7,6 +7,7 @@ from enum import IntEnum
 import cv2
 from colors import COLORS
 from util import bbox_contains, get_ellipse_points, sample_ellipse, sample_gaussian
+from layout import APP_CONFIG
 
 
 class CtrlPt(IntEnum):
@@ -39,6 +40,7 @@ class Cluster(ABC):
     def __init__(self, x, y, n, bbox):
         pos = np.array([x, y])
         self._n = n
+        self._n_max = APP_CONFIG['max_pts_per_cluster']
         self._bbox = bbox
         self._ctrl = {CtrlPt.center: pos,
                       CtrlPt.p0: pos,
@@ -51,6 +53,11 @@ class Cluster(ABC):
         self._colors = {'ctrl_idle': COLORS['cyan'].tolist(),
                         'ctrl_mouse_over': COLORS['red'].tolist(),
                         'ctrl_held': COLORS['neon green'].tolist()}
+
+        # control points are scaled together, but start all at the same point, so the first motion
+        # away from that point will use this aspect ratio
+        self._default_aspect = 1.0
+
         self._refresh()
 
     def get_color(self):
@@ -129,8 +136,8 @@ class Cluster(ABC):
                 r0 = np.linalg.norm(self._ctrl[CtrlPt.p0] - self._ctrl[CtrlPt.center])
                 r1 = np.linalg.norm(self._ctrl[CtrlPt.p1] - self._ctrl[CtrlPt.center])
                 r0_new = np.linalg.norm(p0_new - self._ctrl[CtrlPt.center])
-                aspect = r1 / r0 if r0 > 5 else 1.0
-                r1_new = r0_new * aspect
+                aspect = r1 / r0 if r0 > 5 else self._default_aspect
+                r1_new = r0_new * -aspect    # hack to make p1 upwards w/Sierpinski, irrelevant for others
                 theta_0_new = np.arctan2(p0_new[1] - self._ctrl[CtrlPt.center][1],
                                          p0_new[0] - self._ctrl[CtrlPt.center][0])
                 theta_1_new = theta_0_new + np.pi/2.
@@ -153,6 +160,45 @@ class Cluster(ABC):
             raise ValueError("No control point held to drag")
 
         self._refresh()
+        
+    @staticmethod
+    def _draw_line(img, center, p, color):
+        # Draw a line on one side of the center point
+        cv2.line(img, (int(center[0]), int(center[1])),
+                 (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
+
+    @staticmethod
+    def _draw_symm_line(img, center, p, color):
+        # Draw a line on either side of the center point
+        cv2.line(img, (int(center[0]), int(center[1])),
+                 (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
+        cv2.line(img, (int(center[0]), int(center[1])),
+                 (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
+
+    def _render_control_lines(self, img):
+        # draw axes
+        Cluster._draw_symm_line(img,self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
+        Cluster._draw_symm_line(img,self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
+
+        # draw ellipse
+        pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
+        cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)
+    
+    def _render_control_pts(self, img):
+        # draw control points, in this order:
+        draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
+        draw_size_multipliers = [1.0, 1.5, 1.00]
+
+        for ctrl, size_mul in zip(draw_pts, draw_size_multipliers):
+            pos = self._ctrl[ctrl]
+            color = self._colors['ctrl_idle']
+            if ctrl == self._ctrl_mouse_over:
+                color = self._colors['ctrl_mouse_over']
+            elif ctrl == self._ctrl_held:
+                color = self._colors['ctrl_held']
+
+            pos_screen = int(pos[0]), int(pos[1])
+            cv2.circle(img, pos_screen, int(DRAW_PT_SIZE*size_mul), color, -1, cv2.LINE_AA)
 
     def render(self, img, show_ctrls, pt_size=3):
         """
@@ -166,18 +212,8 @@ class Cluster(ABC):
         # print("\n")
 
         if show_ctrls:
-            def _draw_symm_line(center, p, color):
-                cv2.line(img, (int(center[0]), int(center[1])),
-                         (int(p[0]), int(p[1]),), color, 1, cv2.LINE_AA)
-                cv2.line(img, (int(center[0]), int(center[1])),
-                         (int(2*center[0]-p[0]), int(2*center[1]-p[1])), color, 1, cv2.LINE_AA)
-                # draw axes
-            _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
-            _draw_symm_line(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
-
-            # draw ellipse
-            pts = get_ellipse_points(self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._ctrl[CtrlPt.p1], 100)
-            cv2.polylines(img, [pts.astype(int)], isClosed=True, color=self._color, thickness=1, lineType=cv2.LINE_AA)
+            self._render_control_lines(img)
+            self._render_control_pts(img)
 
         # draw sample points
         self._points = self._points
@@ -193,22 +229,6 @@ class Cluster(ABC):
                 for pt in pts:
                     px, py = int(pt[0]), int(pt[1])
                     img[py-half_size:py+half_size, px-half_size:px+half_size] = self._color
-
-        if show_ctrls:
-            # draw control points, in this order:
-            draw_pts = [CtrlPt.center, CtrlPt.p0, CtrlPt.p1]
-            draw_size_multipliers = [1.0, 1.5, 1.00]
-
-            for ctrl, size_mul in zip(draw_pts, draw_size_multipliers):
-                pos = self._ctrl[ctrl]
-                color = self._colors['ctrl_idle']
-                if ctrl == self._ctrl_mouse_over:
-                    color = self._colors['ctrl_mouse_over']
-                elif ctrl == self._ctrl_held:
-                    color = self._colors['ctrl_held']
-
-                pos_screen = int(pos[0]), int(pos[1])
-                cv2.circle(img, pos_screen, int(DRAW_PT_SIZE*size_mul), color, -1, cv2.LINE_AA)
 
 
 class EllipseCluster(Cluster):
@@ -247,6 +267,78 @@ class GaussianCluster(Cluster):
         return points
 
 
+class SierpinskiCluster(Cluster):
+    """
+    Generate points in a Sierpinski triangle pattern.
+
+    The points are generated in the rectangle with given center and 
+       points p0 and p1 as the height and width:
+       
+        self._ctrl[CtrlPt.center] is the center of the rectangle.
+        self._ctrl[CtrlPt.p0] is the right corner of the base, moving it scales/rotates the triangle
+        P1 is the top corner, moving it changes the height of the triangle.       
+
+    """
+
+    def __init__(self, x, y, n, bbox):
+        self._init_sierpinski()
+        super().__init__(x, y, n, bbox)
+        self._default_aspect = 1.56444
+
+    def _init_sierpinski(self, burn_in=100):
+        n = APP_CONFIG['max_pts_per_cluster']
+
+        corners = [np.array([-1, -1]), np.array([1, -1]), np.array([0, 1])]
+        points = []
+        pt = np.random.randn(2)
+        for i in range(n + burn_in):
+            pt = (pt + corners[np.random.randint(3)]) / 2
+            if i >= burn_in:
+                points.append(pt)
+
+        self._coords = np.array(points)
+        # move up to fit in [-1, 1] x [0, 1] for easier scaling translation
+        self._coords[:, 1] = (self._coords[:, 1] + 1) / 2
+
+    def _render_control_lines(self, img):
+        SierpinskiCluster._draw_symm_line(img, self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p0], self._color)
+        SierpinskiCluster._draw_line(img, self._ctrl[CtrlPt.center], self._ctrl[CtrlPt.p1], self._color)
+
+
+    def _generate(self, n):
+
+        # vectors from control points to rectangle side midpoints
+        v0 = self._ctrl[CtrlPt.p0] - self._ctrl[CtrlPt.center]
+        v1 = self._ctrl[CtrlPt.p1] - self._ctrl[CtrlPt.center]
+
+        angle0 = -np.arctan2(v0[1], v0[0])
+        x_scale = np.linalg.norm(v0)
+        y_scale = np.linalg.norm(v1)
+        # scale
+        points = self._coords[:n] * np.array([x_scale, -y_scale])
+        # rotate
+        r_mat = np.array([[np.cos(angle0), -np.sin(angle0)],
+                          [np.sin(angle0), np.cos(angle0)]])
+        points = points @ r_mat
+        # translate
+        points = points + self._ctrl[CtrlPt.center]
+
+        return points   
+
+
 CLUSTER_TYPES = {'Ellipse': EllipseCluster,
                  'Annulus': AnnularCluster,
-                 'Gaussian': GaussianCluster}
+                 'Gaussian': GaussianCluster,
+                 'Sierpinski': SierpinskiCluster}
+
+
+def test_sierpinski():
+    import matplotlib.pyplot as plt
+    sierp = SierpinskiCluster(0, 0, 10000, None)
+    pts = sierp._coords
+    plt.scatter(pts[:, 0], pts[:, 1], s=1)
+    plt.show()
+
+
+if __name__ == "__main__":
+    test_sierpinski()
