@@ -51,7 +51,8 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit sq
                                                   'y': (.5, 1)},
                             Windows.rand_proj: {'figsize': (5, 5),  # this is a matplotlib window
                                                 'nrows': 1,
-                                                'ncols': 1, },},
+                                                'ncols': 1, 
+                                                'widget_space': .2  },},
                  'colors': {'bkg': COLORS['white'],
                             'border': COLORS['gray'],
                             'active_border': COLORS['black'],

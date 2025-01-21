@@ -5,6 +5,7 @@ import numpy as np
 from mpl_plots import plot_clustering
 from abc import ABCMeta, abstractmethod
 from util import orthornormalize
+from matplotlib.widgets import Slider, Button
 
 class MPLWindow(metaclass=ABCMeta):
     def __init__(self, app, kind):
@@ -20,6 +21,8 @@ class MPLWindow(metaclass=ABCMeta):
         fig, ax = plt.subplots(nrows=WINDOW_LAYOUT['windows'][self._kind]['nrows'],
                                          ncols=WINDOW_LAYOUT['windows'][self._kind]['ncols'],
                                          figsize=WINDOW_LAYOUT['windows'][self._kind]['figsize'])
+        fig.subplots_adjust(bottom=WINDOW_LAYOUT['windows'][self._kind]['widgit_space'])
+        
         return fig, ax
 
     @abstractmethod
@@ -42,28 +45,52 @@ class RandProjWindow(MPLWindow):
         self._features = None
         self._d = 3
 
+        self._init_widgets()
+
+    def _update_noise(self, noise):
+        self._noise = noise
+        self.refresh()
+
+    def _init_widgets(self):
+        """
+        Add a slider to adjust the noise level and a button to remake the axes.
+        """
+        axcolor = 'lightgoldenrodyellow'
+        ax_noise = plt.axes([0.2, 0.1, 0.3, 0.03], facecolor=axcolor)
+        self._noise_slider = Slider(ax_noise, 'Noise', 0.0, 1.0, valinit=self._noise)
+        self._noise_slider.on_changed(self._update_noise)
+
+        ax_remake = plt.axes([0.7, 0.1, 0.2, 0.04])
+        self._remake_button = Button(ax_remake, 'Randomize', color=axcolor, hovercolor='0.975')
+        self._remake_button.on_clicked(self._remake_axes)
+
     def _init_plot_window(self):
                 
         fig = plt.figure(figsize=WINDOW_LAYOUT['windows'][Windows.rand_proj]['figsize'])
         ax = fig.add_subplot(projection='3d')
+        fig.subplots_adjust(bottom=WINDOW_LAYOUT['windows'][Windows.rand_proj]['widget_space'])
+
         return fig, ax
 
     def clear(self):
         self._features = None
         self._axes = None
         self._noise_offsets = None
-        logging.info("Cleared RandProjWindow.")
+        #logging.info("Cleared RandProjWindow.")
         return super().clear()
     
     def set_features(self, features):
-        logging.info("Setting features in RandProjWindow.")
+        #logging.info("Setting features in RandProjWindow.")
         self._features = features
         self._noise_offsets = np.random.randn(self._features.shape[0]*self._d).reshape(-1, self._d)
         
         self._remake_axes()
         self.refresh()
 
-    def _remake_axes(self):
+    def _remake_axes(self, event=None):
+        """
+        :param event: Button click event (not used, if called from button callback)
+        """
         if self._features is None:
             return
         
@@ -77,7 +104,7 @@ class RandProjWindow(MPLWindow):
         self.refresh()
 
     def refresh(self):
-        logging.info("Refreshing RandProjWindow.")
+        #logging.info("Refreshing RandProjWindow.")
         if self._features is None:
             return
         points = self._features @ self._axes.T
