@@ -17,7 +17,8 @@ from similarity import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND
 from plot_to_img import PlotRenderer
 
 
-WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
+# list of Window objects that get rendered in the main CV2 window
+WINDOW_NAMES = {Windows.ui: "UI",  
                 Windows.toolbar: "Toolbar",
                 Windows.clustering: "Clusters",
                 Windows.spectrum: "Spectrum",
