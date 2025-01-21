@@ -10,6 +10,7 @@ S(x_i,x_j) = & \text{[high value] }  \Leftrightarrow \exists c \in [1, k] \mid x
 S(x_i,x_j) = & \text{[low value] }  \Leftrightarrow \nexists c \in [1, k] \mid x_i, x_j \in P_c.\\
 \end{align*}
 $$
+
 That is, given a similarity function, spectral clustering attempts to find the partitioning that results in objects in the same cluster having high similarity and objects in different clusters having low similiarity.  
 
 The general steps are:
