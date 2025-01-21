@@ -343,7 +343,7 @@ class ClusterCreator(object):
         """
         Return the window that contains the point (x, y).
         """
-        for window_name in self.windows:
+        for window_name in self.APP_WINDOWS:
             if self.windows[window_name].contains(x, y):
                 return window_name
         return None
