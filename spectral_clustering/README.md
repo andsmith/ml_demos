@@ -14,7 +14,7 @@ $$
 That is, given a similarity function, spectral clustering attempts to find the partitioning that results in objects in the same cluster having high similarity and objects in different clusters having low similiarity.  
 
 The general steps are:
-1. Construct a ***similarity graph***, the weighted, undirected graph $W=(V, E)$ where each vertex represents a sample in $X$ and edges (possibly weighted) between vertices are defined by the similiarity function, possibly using one of these ways. :
+1. Construct a ***similarity graph***, the possibly weighted, undirected graph $W=(V, E)$ where each vertex represents a sample in $X$ and edges between vertices are defined by the similiarity function using something like one of these methods:
   - **Epsilon threshold**: Let an edge between vertices $i$ and $j$ exist with weight 1 if $S(x_i, x_j) >\epsilon$, for some threshold $\epsilon$.
   - **N Nearest neighbors**: Let an edge between $i$ and $j$ exist with weight  if vertex $j$ is among the $N$ most similar to vertex $i$ or vice-versa, but not necessarily both.  If the condition is required in both direction, this is called "mutual" nearest neighbors.  
   - **Soft Nearest Neighbors**:  Define the parameter $\alpha$ and define the *directed* graph with weights
