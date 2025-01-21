@@ -23,6 +23,7 @@ Widgets includes buttons for interacting:
 """
 import numpy as np
 from windows import WINDOW_TYPES, WINDOW_NAMES
+from mpl_windows import MPL_WINDOW_NAMES, MPL_WINDOW_TYPES
 import cv2
 import logging
 import time
@@ -49,6 +50,7 @@ class ClusterCreator(object):
                    Windows.eigenvectors,
                    Windows.graph_stats,
                    Windows.spectrum]
+    MPL_WINDOWS = [Windows.rand_proj,]
 
     def __init__(self, size=(1350, 800)):
         logging.info('Initializing Cluster Creator')
@@ -56,11 +58,18 @@ class ClusterCreator(object):
         self.bbox = {'x': (0, size[0]), 'y': (0, size[1])}
         self._bkg = np.zeros((size[1], size[0], 3), np.uint8) + WINDOW_LAYOUT['colors']['bkg']
         window_layout = self._get_layouts(WINDOW_LAYOUT['windows'], size)
-        self.windows = {}  # WINDOW_TYPES[k]: WINDOW_TYPES[k](window_layout[k], self) for k in self.APP_WINDOWS}
+
+        self.windows = {}
+
         for k in self.APP_WINDOWS:
             logging.info("Initializing window %s" % WINDOW_NAMES[k])
             logging.info("\tLayout: %s" % window_layout[k])
             self.windows[k] = WINDOW_TYPES[k](window_layout[k], self)
+
+        for k in self.MPL_WINDOWS:
+            logging.info("Initializing matplotlib window %s" % MPL_WINDOW_NAMES[k])
+            self.windows[k] = MPL_WINDOW_TYPES[k](self)
+
 
         self._active_window_name = None  # Mouse is over this window
         self._clicked_window_name = None  # Mouse was clicked in this window, but may not be over it
@@ -127,6 +136,8 @@ class ClusterCreator(object):
         :param fast_windows_only: if True, update all the non matplotlib windows 
         """
         # print("Main thread updating points")
+        
+
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph(fast_windows_only=fast_windows_only)
 
@@ -134,7 +145,7 @@ class ClusterCreator(object):
         self.windows[Windows.clustering].clear()
         self.windows[Windows.spectrum].clear()
         self.windows[Windows.eigenvectors].clear()
-        ### self.windows[Windows.rand_proj].clear
+        self.windows[Windows.rand_proj].clear()
 
 
     def update_sim_graph(self, param_val=None, asynch=False, fast_windows_only=False):
@@ -215,7 +226,7 @@ class ClusterCreator(object):
             values, vectors = self._spectrum.get_eigens()
             self.windows[Windows.spectrum].set_values(values)
             self.windows[Windows.eigenvectors].set_values(vectors)
-            ### self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+            self.windows[Windows.rand_proj].set_features(vectors[:, :n_features])
         elif algorithm_name not in ['K-means']:
             # algorithms that don't need the eigendecomposition
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
@@ -244,7 +255,7 @@ class ClusterCreator(object):
             # update rand_proj window.  (other windows look it up)
             if new_eigenvectors:
                 _, vectors = self._spectrum.get_eigens()
-                ### self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+                self.windows[Windows.rand_proj].set_features(vectors[:, :n_features])
 
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
@@ -264,7 +275,7 @@ class ClusterCreator(object):
         self.windows[Windows.clustering].clear()
         self.windows[Windows.sim_matrix].clear()
         self.windows[Windows.eigenvectors].clear()
-        ### self.windows[Windows.rand_proj].clear()
+        self.windows[Windows.rand_proj].clear()
         self.windows[Windows.spectrum].clear()
         self.windows[Windows.graph_stats].clear()
 
@@ -324,7 +335,7 @@ class ClusterCreator(object):
         Refresh the windows and return the main frame.
         """
         frame = self._bkg.copy()
-        for window_name in self.windows:
+        for window_name in self.APP_WINDOWS:
             self.windows[window_name].render(frame, active=(window_name == self._active_window_name))
         return frame
 
@@ -332,7 +343,7 @@ class ClusterCreator(object):
         """
         Return the window that contains the point (x, y).
         """
-        for window_name in self.windows:
+        for window_name in self.APP_WINDOWS:
             if self.windows[window_name].contains(x, y):
                 return window_name
         return None

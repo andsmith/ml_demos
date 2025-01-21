@@ -251,7 +251,7 @@ class AnnularCluster(EllipseCluster):
         points = sample_ellipse(self._ctrl[CtrlPt.center],
                                 self._ctrl[CtrlPt.p0],
                                 self._ctrl[CtrlPt.p1], n, self._random_state,
-                                empty_frac=0.5)
+                                empty_frac=0.7)
         return points
 
 

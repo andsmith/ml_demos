@@ -48,7 +48,11 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit sq
                              Windows.graph_stats: {'x': (h_div, h_mid),
                                                  'y': (.5, 1)},  # move up a bit for a button and a slider ****
                              Windows.clustering: {'x': (h_mid, 1),
-                                                  'y': (.5, 1)}},
+                                                  'y': (.5, 1)},
+                            Windows.rand_proj: {'figsize': (5, 5),  # this is a matplotlib window
+                                                'nrows': 1,
+                                                'ncols': 1, 
+                                                'widget_space': .2  },},
                  'colors': {'bkg': COLORS['white'],
                             'border': COLORS['gray'],
                             'active_border': COLORS['black'],
@@ -75,9 +79,9 @@ Toolbar layout roughly 3 columns:
 |   3anulus     3full                        |
 |   4moons                  F=5 (N features) |
 |                           |---+---------|  |
-|             [sim-param]   K=5 (N clust)    | 
+|             [sim-param]   K=5 (N clust)    |
 |             |---+-----|   |---+---------|  |
-|                           N points = 300   |       
+|                           N points = 300   |
 | |run|  |clear|            |-------+-----|  |
 |--------------------------------------------|
 
@@ -95,13 +99,13 @@ class Tools(IntEnum):
     k_slider = 2    # number of clusters
     f_slider = 11    # number of features (eigenvectors)
     n_pts_slider = 3  # number of points per cluster
-    run_button = 4  
+    run_button = 4
     clear_button = 5
-    alg_radio = 6 # which clustering algorithm to use
+    alg_radio = 6  # which clustering algorithm to use
 
     nn_slider = 7  # param for nn similarity graph, number of neighbors
-    nn_toggle = 10 # param for nn similarity graph, whether to AND or OR neighbors
-    epsilon_slider = 8 # param for epsilon similarity graph
+    nn_toggle = 10  # param for nn similarity graph, whether to AND or OR neighbors
+    epsilon_slider = 8  # param for epsilon similarity graph
     sigma_slider = 9  # param for full similarity graph
     alpha_slider = 12  # param for soft_nn graph
     alpha_toggle = 13  # param for soft_nn graph, whether to add or multiply neighbors
@@ -135,7 +139,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .33),  # scale from unit square to
 # (A) Fill in the sliders for the number of features, clusters, and points
 slider_area = {'x': (.512, 1),
                'y': (.5, 1)}
-top, middle, bottom =  vsplit_bbox(slider_area, [1, 1, 1], integer=False)
+top, middle, bottom = vsplit_bbox(slider_area, [1, 1, 1], integer=False)
 TOOLBAR_LAYOUT[Tools.f_slider] = top
 TOOLBAR_LAYOUT[Tools.k_slider] = middle
 TOOLBAR_LAYOUT[Tools.n_pts_slider] = bottom
@@ -163,4 +167,4 @@ PLOT_LAYOUT = {'axis_spacing': 5,
                }
 
 
-APP_CONFIG = {'max_pts_per_cluster': 3000,}
+APP_CONFIG = {'max_pts_per_cluster': 3000, }
