@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SIMGRAPH_KIND_NAMES
+from spectral import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SoftNNSimGraph, SIMGRAPH_KIND_NAMES
 from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
@@ -160,18 +160,22 @@ class ClusterCreator(object):
             graph_kind = self.windows[Windows.toolbar].get_value('sim_graph')
             if graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]:
                 sigma = self.windows[Windows.toolbar].get_value('sigma')
+                logging.info("Making new SimGraph: full with sigma=%f" % sigma)
                 sim_graph = FullSimGraph(unit_points, sigma)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN]:
                 n_nearest = self.windows[Windows.toolbar].get_value('n_nearest')
                 mutual = self.windows[Windows.toolbar].get_value('mutual')
-
+                logging.info("Making new SimGraph: nearest neighbors with n=%i and mutual=%s" % (n_nearest, mutual))   
                 sim_graph = NNSimGraph(unit_points, n_nearest, mutual)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON]:
                 epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon')
+                logging.info("Making new SimGraph: full with epsilon=%f" % epsilon_dist)
                 sim_graph = EpsilonSimGraph(unit_points, epsilon_dist)
-            else:
-                raise ValueError("Invalid similarity graph type: %s" % graph_kind)
-
+            elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.SOFT_NN]:
+                alpha = self.windows[Windows.toolbar].get_value('alpha')
+                additive = not self.windows[Windows.toolbar].get_value('mult')
+                logging.info("Making new SimGraph: soft nearest neighbors with alpha=%f and additive=%s" % (alpha, additive))
+                sim_graph = SoftNNSimGraph(unit_points, alpha, additive)
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = sim_graph
                 self.windows[Windows.sim_matrix].set_graph(sim_graph)

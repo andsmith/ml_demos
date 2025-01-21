@@ -73,7 +73,10 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         self._solve()
 
     def _solve(self):
-        w = self._g.get_matrix()
+        w = self._g.get_matrix().copy()
+        # set diagonal to zero
+        np.fill_diagonal(w, 0)
+        # compute the Laplacian matrix:
         degree_mat = np.sum(w, axis=1)
         laplacian = np.diag(degree_mat) - w
         eigvals, eigvecs = np.linalg.eigh(laplacian)
