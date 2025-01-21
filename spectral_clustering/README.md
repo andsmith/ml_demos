@@ -31,7 +31,7 @@ $$
 W[i,j] = e^{-{S(x_i, x_j)^2}/{2\sigma^2}}, or
 $$
 
-2. Construct the ***Laplacian matrix*** from the edge weight matrix.  The laplacian $L$ is the same as the weight matrix $W$ in the off-diagonal elements, but with the diagonal set to the sum of each row of W (or column, since W is symmetric):
+2. Construct the ***Laplacian matrix*** from the edge weight matrix.  The laplacian $L$ is the same as the weight matrix $W$ in the off-diagonal elements, but with the diagonal set to the negative sum of each row of W (or column, since W is symmetric):
 
 $$
 L[i,j] = W - W\cdot\mathbb{1}_{|W|},
