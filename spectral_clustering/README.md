@@ -97,9 +97,11 @@ Classic cases that confuse K-means are non-convex clusters, for example these co
   ![datasets](/spectral_clustering/assets/contest_points.png)
 
 K-means has no hope of recovering the natural clusters since it relies on convex partitions:
+
   ![datasets](/spectral_clustering/assets/kmeans_fail.png)
 
 whereas spectral clustering can:
+
   ![datasets](/spectral_clustering/assets/spectral_win.png)
 
 
