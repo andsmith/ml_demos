@@ -66,7 +66,7 @@ The tools at the bottom let the user choose:
     * Gaussian - A 2-d multivariate normal with an ellipse at 1-sd.
     * Ellipse - A uniform distribution within the boundary.
     * Annulus - Ring of points.  Experiment with clusters inside clusters (see below).
-    * Sierpinski - The fractal.  Create a set of points for which many possible numbers of clusters are equally valid.  Observe the results in the spectrum.
+    * Sierpinski - The fractal.  Create a set of points for which many possible numbers of clusters (values of $k$) are equally valid.  Observe the results in the spectrum.
 
 * One of the **Sim Graph** types, described in the previous section.  It's parameter area is above the "Run" and "Clear" button.  The image shows the "Full" similarity graph is selected and its parameter $\sigma$ is set to 43.859 (units are raw pixel distances).
 
@@ -90,13 +90,27 @@ This shows the output. At top left, the eignevalues with four near zero correspo
 After the data points are embedded in an F-dimensional space, they are projected down to 3-random (orthogonal) directions in this space and plotted in an interactive window:  
 ![datasets](/spectral_clustering/assets/cluster_randproj.png)
 
+### Hotkeys
+
+```
+      Hotkeys:
+              'g' - toggle graph view
+              ' ' - toggle cluster controls
+              'r' - recalculate clustering
+              'c' - clear
+              'q' - quit
+              'h' - print hotkeys
+```
+Cluster controls are the axis/boundary lines and three control points of each cluster.  See below for an example of "Graph view" on with cluster controls off.
+
+
 ## Things to try:
 
 Classic cases that confuse K-means are non-convex clusters, for example these concentric rings:
 
   ![datasets](/spectral_clustering/assets/contest_points.png)
 
-K-means has no hope of recovering the natural clusters since it relies on convex partitions:
+K-means cannot recover the natural clusters since it relies on convex partitions:
 
   ![datasets](/spectral_clustering/assets/kmeans_fail.png)
 
@@ -107,7 +121,7 @@ whereas spectral clustering can because it looks for partitions that have points
 
 ## The Graph View:
 
-The hotkey 'g' toggles showing the edges that exist between vertices given current paramete values for the binary similarity graph methods, N-neighbors and epsilon.  (It is very slow and not useful for the other two).  For the concentric rings example, using the N-neighbors graph with N=8 and allowing non-mutual neighbors, this looks like:
+The hotkey 'g' toggles showing the edges that exist between vertices given current parameter values for the binary similarity graph methods, N-neighbors and epsilon.  (It is very slow and not useful for the other two).  For the concentric rings example, using the N-neighbors graph with N=8 and allowing non-mutual neighbors, (and with cluster controls off) this looks like:
 
 ![datasets](/spectral_clustering/assets/graph_view.png)
 
