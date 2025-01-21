@@ -583,11 +583,12 @@ class ClustersWindow(PlotWindow):
         points = self._values['points']
         cluster_ids = self._values['cluster_ids']
         k = self.app.windows[Windows.toolbar].get_value('k')
+        alg_name = self.app.windows[Windows.toolbar].get_value('algorithm')
 
         colors4 = add_alpha(colors, 0.5) / 255.
         plot_clustering(axes, points, colors4, cluster_ids, image_size=self._bbox_size, alpha=0.5)
         # add title
-        axes.set_title("Clustering (k=%i)" % k)
+        axes.set_title("%s clustering (k=%i)" % (alg_name, k))
         fig.tight_layout()
         self._disp_img = self._plotter.render_fig(fig)
 

@@ -57,15 +57,15 @@ Where $\mathbb{1}_{|W|}$ is the column vector of 1's with as many entries as $W$
 
 Run:  `> python cluster_creator.py` to start the demo.
 
-  ### The Canvas, Toolbar, and Similarity graph:
+  ### The Canvas, Toolbar, and Similarity graph (weight matrix):
   
 ![datasets](/spectral_clustering/assets/cluster_UI_and_toolbar.png)
 
 The tools at the bottom let the user choose:
-*  A **Cluster Type** to draw a cluster on the canvas.  The central control point can be used to move clusters, the larger peripheral one to resize/rotate it, and the smaller to change the aspect ratio.  The "Num Pts" slider sets all clusters to contain that number of points.  (And new ones will be created with that number.)  Dragging a cluster's center out of bounds will delete that cluster.
+*  A **Cluster Type** to draw a cluster on the canvas.  The center control point can be used to move clusters, the larger axis control point to resize/rotate the cluster, and the smaller to change its aspect ratio.  The "Num Pts" slider sets all clusters to contain that number of points.  (And new ones will be created with that number.)  Dragging a cluster's center out of bounds will delete that cluster.  These four clusters can be added to the canvas:
     * Gaussian - A 2-d multivariate normal with an ellipse at 1-sd.
     * Ellipse - A uniform distribution within the boundary.
-    * Annulus - Ring of points.  Experiment with one cluster inside the other (see below).
+    * Annulus - Ring of points.  Experiment with clusters inside clusters (see below).
     * Sierpinski - The fractal.  Create a set of points for which many possible numbers of clusters are equally valid.  Observe the results in the spectrum.
 
 * One of the **Sim Graph** types, described in the previous section.  It's parameter area is above the "Run" and "Clear" button.  The image shows the "Full" similarity graph is selected and its parameter $\sigma$ is set to 43.859 (units are raw pixel distances).
@@ -100,15 +100,15 @@ K-means has no hope of recovering the natural clusters since it relies on convex
 
   ![datasets](/spectral_clustering/assets/kmeans_fail.png)
 
-whereas spectral clustering can:
+whereas spectral clustering can because it looks for partitions that have points with mutually high similarity:
 
   ![datasets](/spectral_clustering/assets/spectral_win.png)
 
 
 ## The Graph View:
 
-The hotkey 'g' toggles showing the edges that exist between vertices given current paramete values for the binary similarity graph methods, N-neighbors and epsilon.  (It is very slow and not useful for the other two):
+The hotkey 'g' toggles showing the edges that exist between vertices given current paramete values for the binary similarity graph methods, N-neighbors and epsilon.  (It is very slow and not useful for the other two).  For the concentric rings example, using the N-neighbors graph with N=8 and allowing non-mutual neighbors, this looks like:
 
 ![datasets](/spectral_clustering/assets/graph_view.png)
 
-The parameters indicated in the toolbar explain the success of the spectral algorithm:  it succeeded in recovering the three concentric clusters because the values for the algorithm parameters (using an N-nearest sim. graph with N=8 and non-mutual edges allowed) created a graph with no edges between vertices in different clusters, and at least one edge from every point to another point in the same cluster.
+The parameters indicated in the toolbar explain the success of the spectral algorithm:  it succeeded in recovering the three concentric clusters because parameter settings created a graph with only three edges between points in different clusters (so the clusters are easily separable) and where every point has several edges to other points in the same cluster (so there are no stragglers/outliers).
