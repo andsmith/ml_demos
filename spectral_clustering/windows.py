@@ -684,7 +684,7 @@ class GraphStatsWindow(PlotWindow):
         plot_graph_stats(fig,ax, sim_mat.get_matrix())
         self._disp_img = self._plotter.render_fig(fig)
 
-
+'''  Now in mpl_windows:RandProjWindow
 class RandProjWindow(WindowMouseManager, PlotWindow):
     """
     Project the data in feature space down to two random axes,
@@ -774,7 +774,7 @@ class RandProjWindow(WindowMouseManager, PlotWindow):
         self.tools['noise_slider'].set_visible(True)
         self.tools['project_button'].set_visible(True)
 
-
+'''
 WINDOW_TYPES = {Windows.ui: UiWindow,
                 Windows.toolbar: ToolsWindow,
                 Windows.clustering: ClustersWindow,

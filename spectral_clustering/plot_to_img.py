@@ -36,8 +36,10 @@ class PlotRenderer(object):
         return fig_width, fig_height
     
     def get_axis(self, n_rows=1, n_cols=1, sharex=False, sharey=False):
+        plt.ioff()
         fig, ax= plt.subplots(n_rows, n_cols,figsize=self._get_fig_size(), dpi=MONITOR_DPI,
                               sharex=sharex, sharey=sharey)
+        plt.ion()
         return fig, ax
     
     def render_fig(self, fig, bgr=False):

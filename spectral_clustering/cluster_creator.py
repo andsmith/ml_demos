@@ -136,8 +136,7 @@ class ClusterCreator(object):
         :param fast_windows_only: if True, update all the non matplotlib windows 
         """
         # print("Main thread updating points")
-        if not fast_windows_only:
-            import ipdb;ipdb.set_trace()
+        
 
         self._points = self.windows[Windows.ui].get_points()
         self.update_sim_graph(fast_windows_only=fast_windows_only)

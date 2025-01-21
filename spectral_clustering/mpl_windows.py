@@ -4,18 +4,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_plots import plot_clustering
 from abc import ABCMeta, abstractmethod
-
+from util import orthornormalize
 
 class MPLWindow(metaclass=ABCMeta):
     def __init__(self, app, kind):
         self.app = app
         self._kind = kind
-        self._fig, self._ax = plt.subplots(nrows=WINDOW_LAYOUT['windows'][kind]['nrows'],
-                                         ncols=WINDOW_LAYOUT['windows'][kind]['ncols'],
-                                         figsize=WINDOW_LAYOUT['windows'][kind]['figsize'])
+        self._fig, self._ax = self._init_plot_window()        
         self._axes_flat = self._ax.flatten() if isinstance(self._ax, np.ndarray) else [self._ax]
+
         plt.ion()
         plt.show()
+
+    def _init_plot_window(self):
+        fig, ax = plt.subplots(nrows=WINDOW_LAYOUT['windows'][self._kind]['nrows'],
+                                         ncols=WINDOW_LAYOUT['windows'][self._kind]['ncols'],
+                                         figsize=WINDOW_LAYOUT['windows'][self._kind]['figsize'])
+        return fig, ax
 
     @abstractmethod
     def refresh(self):
@@ -34,8 +39,14 @@ class RandProjWindow(MPLWindow):
         self._noise = 0.1
         self._noise_offsets = None  # 2d, scale by _noise and add to data after projecting
         self._axes = None  # 2xf, orthogonal vectors in feature space
-
         self._features = None
+        self._d = 3
+
+    def _init_plot_window(self):
+                
+        fig = plt.figure(figsize=WINDOW_LAYOUT['windows'][Windows.rand_proj]['figsize'])
+        ax = fig.add_subplot(projection='3d')
+        return fig, ax
 
     def clear(self):
         self._features = None
@@ -47,7 +58,7 @@ class RandProjWindow(MPLWindow):
     def set_features(self, features):
         logging.info("Setting features in RandProjWindow.")
         self._features = features
-        self._noise_offsets = np.random.randn(self._features.shape[0]*2).reshape(-1, 2)
+        self._noise_offsets = np.random.randn(self._features.shape[0]*self._d).reshape(-1, self._d)
         
         self._remake_axes()
         self.refresh()
@@ -57,11 +68,8 @@ class RandProjWindow(MPLWindow):
             return
         
         # make random axes, orthogonal in feature space
-        self._axes = np.random.randn(2, self._features.shape[1])
-        # normalize lengths
-        self._axes[0] /= np.linalg.norm(self._axes[0])
-        self._axes[1] -= self._axes[1] @ self._axes[0] * self._axes[0]
-        self._axes[1] /= np.linalg.norm(self._axes[1])
+        self._axes = np.random.randn(self._d, self._features.shape[1])
+        self._axes = orthornormalize(self._axes)
         # check orthogonality
         err = np.abs(np.sum(self._axes[0] * self._axes[1]))
         if err > 1e-6:
@@ -77,13 +85,18 @@ class RandProjWindow(MPLWindow):
         colors = self.app.windows[Windows.ui].get_cluster_color_ids()
         # import ipdb; ipdb.set_trace()
         self._ax.clear()
-        plot_clustering(self._ax, noisy_points, colors['colors']/255., colors['ids'], image_size=(500,500), alpha=0.5)
-        # since clusters will be on the border if there are many connected components, move everything in by a percentage
-        marg_frac = 0.025
-        x_lim, y_lim = self._ax.get_xlim(), self._ax.get_ylim()
-        w, h = x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]
-        self._ax.set_xlim(x_lim[0] - marg_frac*w, x_lim[1] + marg_frac*w)
-        self._ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h)
+        if self._d==2:
+            plot_clustering(self._ax, noisy_points, colors['colors']/255., colors['ids'], image_size=(500,500), alpha=0.5)
+            # since clusters will be on the border if there are many connected components, move everything in by a percentage
+            marg_frac = 0.025
+            x_lim, y_lim = self._ax.get_xlim(), self._ax.get_ylim()
+            w, h = x_lim[1] - x_lim[0], y_lim[1] - y_lim[0]
+            self._ax.set_xlim(x_lim[0] - marg_frac*w, x_lim[1] + marg_frac*w)
+            self._ax.set_ylim(y_lim[0] - marg_frac*h, y_lim[1] + marg_frac*h)
+        elif self._d ==3:
+            color_v = [colors['colors'][c_id]/255. for c_id in colors['ids']]
+            self._ax.scatter(noisy_points[:, 0], noisy_points[:, 1], noisy_points[:, 2], c=color_v, alpha=0.5)
+        
         self._ax.set_title("Random Projection")
         self._fig.canvas.draw_idle()
 
@@ -106,5 +119,9 @@ def test_randproj_window():
     window._bbox_size = (800, 600)
     window.refresh()
     plt.show()
+    plt.waitforbuttonpress()
 
+
+if __name__ == "__main__":
+    test_randproj_window()
 

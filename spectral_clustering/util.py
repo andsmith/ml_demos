@@ -388,7 +388,7 @@ def sample_gaussian(center, p0, p1, n, random_state):
     # get the angle of the major axis
     angle = -np.arctan2(p0[1] - center[1], p0[0] - center[0])
     # get the covariance matrix, but scale so major axis is 1.0.
-    min_a = minor_axis /major_axis
+    min_a = minor_axis / major_axis
     maj_a = 1.0
     cov = np.array([[maj_a, 0], [0, min_a]])
 
@@ -396,10 +396,9 @@ def sample_gaussian(center, p0, p1, n, random_state):
     rot_matrix = np.array([[np.cos(angle), -np.sin(angle)],
                            [np.sin(angle), np.cos(angle)]])
     cov = np.dot(cov, rot_matrix)
-    
 
     points = random_state.multivariate_normal(np.zeros(2), np.eye(2), n)
-    points = np.dot( points, cov) * major_axis + center  # co-vary, scale and translate
+    points = np.dot(points, cov) * major_axis + center  # co-vary, scale and translate
     return points
 
 
@@ -419,14 +418,35 @@ def test_sample_gaussian():
     # plot ellipse around sigma, 2*sigma
     n_interp = 1000
     points = get_ellipse_points(center, p0, p1, n_interp)
-    plt.plot(points[:, 0], points[:, 1], lw=3,color='r')
+    plt.plot(points[:, 0], points[:, 1], lw=3, color='r')
     points = get_ellipse_points(center, p0 + p0_offset, p1+p1_offset, n_interp)
     plt.plot(points[:, 0], points[:, 1], lw=3, color='g')
     plt.show()
 
 
+def orthornormalize(vectors):
+    o_vecs = vectors.copy()
+    o_vecs[0] = o_vecs[0] / np.linalg.norm(o_vecs[0])
+    for i in range(1, len(vectors)):
+        for j in range(i):
+            o_vecs[i] -= np.dot(o_vecs[i], o_vecs[j]) * o_vecs[j]
+        o_vecs[i] /= np.linalg.norm(o_vecs[i])
+    return o_vecs
+
+def test_orthornormalize():
+    vecs = np.random.randn(3, 3)
+    vecs = orthornormalize(vecs)
+    print(vecs)
+    print(np.linalg.norm(vecs[0]))
+    print(np.linalg.norm(vecs[1]))
+    print(np.linalg.norm(vecs[2]))
+    print(np.dot(vecs[0], vecs[1]))
+    print(np.dot(vecs[0], vecs[2]))
+    print(np.dot(vecs[1], vecs[2]))
+
 if __name__ == '__main__':
     # test_sample_canonical_ellipse(empty_frac=.667)
     # test_sample_canonical_ellipse(empty_frac=0)
     # test_sample_elipse()
-    test_sample_gaussian()
+    #test_sample_gaussian()
+    test_orthornormalize()
