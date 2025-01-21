@@ -103,6 +103,7 @@ class Tools(IntEnum):
     epsilon_slider = 8 # param for epsilon similarity graph
     sigma_slider = 9  # param for full similarity graph
     alpha_slider = 12  # param for soft_nn graph
+    alpha_toggle = 13  # param for soft_nn graph, whether to add or multiply neighbors
 
 
 button_indent = 0.02
@@ -122,6 +123,7 @@ TOOLBAR_LAYOUT = {Tools.kind_radio: {'x': (0, .33),  # scale from unit square to
                   Tools.nn_slider: None,
                   Tools.alpha_slider: None,
                   Tools.nn_toggle: None,
+                  Tools.alpha_toggle: None,
 
                   Tools.run_button: {'x': (button_indent, button_indent+.16),
                                      'y': (.83, 1)},
@@ -149,6 +151,7 @@ TOOLBAR_LAYOUT[Tools.sigma_slider] = sim_param_area  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_slider] = left  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.alpha_slider] = left  # three_boxes[0]
 TOOLBAR_LAYOUT[Tools.nn_toggle] = right  # three_boxes[2]
+TOOLBAR_LAYOUT[Tools.alpha_toggle] = right  # three_boxes[2]
 
 
 PLOT_LAYOUT = {'axis_spacing': 5,

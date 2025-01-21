@@ -137,7 +137,7 @@ class SoftNNSimGraph(SimilarityGraph):
         weights = np.zeros_like(dists)
         n = dists.shape[0]
         for row in range(n):
-            weights[row,orders[row,:-1]] = (1.0 / np.arange(1, n)) ** self._alpha
+            weights[row,orders[row,:-1]] = np.exp(-np.arange(1, n) **2.0 /  self._alpha**2.0)
 
         
         if self._additive:
@@ -189,7 +189,7 @@ class NNSimGraph(SimilarityGraph):
 
 # labels for slider param for different simgraph types
 SIMGRAPH_PARAM_NAMES = {SimilarityGraphTypes.NN: "N-nearest",
-                        SimilarityGraphTypes.SOFT_NN: "A-nearest",
+                        SimilarityGraphTypes.SOFT_NN: "Alpha",
                         SimilarityGraphTypes.EPSILON: "Epsilon",
                         SimilarityGraphTypes.FULL: "Sigma"}
 # simgraph type menu options

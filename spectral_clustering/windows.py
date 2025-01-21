@@ -370,15 +370,21 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.epsilon_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.epsilon_slider], indented_bbox),
                                                    SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.EPSILON],
                                                    self.app.update_sim_graph,
-                                                   range=[1., 50], default=25, format_str="=%.3f", visible=True),
+                                                   range=[1., 50], default=25, format_str="=%.3f", visible=False),
                       Tools.sigma_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.sigma_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.FULL],
                                                  self.app.update_sim_graph,
                                                  range=[1., 500], default=100, format_str="=%.3f", visible=False),
+                                                 
                       Tools.alpha_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.alpha_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.SOFT_NN],
                                                  self.app.update_sim_graph,
-                                                 range=[0, 5.], default=1., format_str="=%.3f", visible=False)}
+                                                 range=[0, 5.], default=1., format_str="=%.3f", visible=True),
+
+                    Tools.alpha_toggle:ToggleButton(scale_bbox(TOOLBAR_LAYOUT[Tools.alpha_toggle], indented_bbox),
+                                                    "mult", self.app.update_sim_graph,
+                                                    default=True, visible=True, spacing_px=5, border_indent=2)
+                                                 }
 
         logging.info(f"Created tools window with {len(self.tools)} tools")
 
@@ -391,25 +397,32 @@ class ToolsWindow(WindowMouseManager, Window):
         self.app.windows[Windows.eigenvectors].refresh()
 
 
-
     def _change_sim_param_visibility(self, kind_name):
         """
         Set the visibility of the sim_param sliders based on the current sim_graph_radio selection.
         kind_name:  name of the kind of similarity graph to show sliders for.
         """
-        turn_on_toggle = False
+        turn_on_ann_toggle = False
+        turn_on_nn_toggle = False
         for param_kind in self._sim_kind_names:
             if self._sim_kind_names[param_kind] == kind_name:
                 self.tools[param_kind].set_visible(True)
                 if param_kind == Tools.nn_slider:
-                    turn_on_toggle = True
+                    turn_on_nn_toggle = True
+                elif param_kind == Tools.alpha_slider:
+                    turn_on_ann_toggle = True
             else:
                 self.tools[param_kind].set_visible(False)
 
-        if turn_on_toggle:
+        if turn_on_nn_toggle:
             self.tools[Tools.nn_toggle].set_visible(True)
         else:
             self.tools[Tools.nn_toggle].set_visible(False)
+
+        if turn_on_ann_toggle:
+            self.tools[Tools.alpha_toggle].set_visible(True)
+        else:
+            self.tools[Tools.alpha_toggle].set_visible(False)
 
         self.app.update_sim_graph()
 
@@ -446,6 +459,10 @@ class ToolsWindow(WindowMouseManager, Window):
             return int(self.tools[Tools.f_slider].get_value())
         elif param == 'mutual':
             return self.tools[Tools.nn_toggle].get_value()
+        elif param == 'alpha':
+            return self.tools[Tools.alpha_slider].get_value()
+        elif param == 'mult':
+            return self.tools[Tools.alpha_toggle].get_value()
         else:
             raise ValueError(f"Invalid parameter: {param}")
 
@@ -473,7 +490,7 @@ class SimMatrixWindow(Window):
         self._m = sim_mat.get_matrix()
         # img_full = image_from_floats(self._m)
         img_full = sim_mat.make_img(self._colormap)
-        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_CUBIC)
+        img_resized = cv2.resize(img_full, (self._s, self._s), interpolation=cv2.INTER_LINEAR)
         # cv2.merge((img_resized, img_resized, img_resized))  # colormap handles this now
         self._image_rgb_resized = img_resized
 
