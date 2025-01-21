@@ -31,10 +31,12 @@ W[i,j] = e^{-{S(x_i, x_j)^2}/{2\sigma^2}}, or
 $$
 
 2. Construct the ***Laplacian matrix*** from the edge weight matrix.  The laplacian $L$ is the same as the weight matrix $W$ in the off-diagonal elements, but with the diagonal set to the sum of each row of W (or column, since W is symmetric):
+
 $$
 L[i,j] = W - W\cdot\mathbb{1}_{|W|},
 $$
-  Where $\mathbb{1}_{|W|}$ is the column vector of 1's with as many entries as $W$ has rows/cols.  Since the diagonals of $W$ are zero, each row and column of $L$ should now sum to zero. 
+
+Where $\mathbb{1}_{|W|}$ is the column vector of 1's with as many entries as $W$ has rows/cols.  Since the diagonals of $W$ are zero, each row and column of $L$ should now sum to zero.
 
 3. Find the eigenvalues of $L$ sorted in increasing order:
 
