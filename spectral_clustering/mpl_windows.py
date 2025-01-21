@@ -39,7 +39,7 @@ class MPLWindow(metaclass=ABCMeta):
 class RandProjWindow(MPLWindow):
     def __init__(self, app):
         super().__init__(app, kind=Windows.rand_proj)
-        self._noise = 0.1
+        self._noise = 0.02
         self._noise_offsets = None  # 2d, scale by _noise and add to data after projecting
         self._axes = None  # 2xf, orthogonal vectors in feature space
         self._features = None
@@ -57,7 +57,7 @@ class RandProjWindow(MPLWindow):
         """
         axcolor = 'lightgoldenrodyellow'
         ax_noise = plt.axes([0.2, 0.1, 0.3, 0.03], facecolor=axcolor)
-        self._noise_slider = Slider(ax_noise, 'Noise', 0.0, 1.0, valinit=self._noise)
+        self._noise_slider = Slider(ax_noise, 'Noise', 0.0, .1, valinit=self._noise)
         self._noise_slider.on_changed(self._update_noise)
 
         ax_remake = plt.axes([0.7, 0.1, 0.2, 0.04])
