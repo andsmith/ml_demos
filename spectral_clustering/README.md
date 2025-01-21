@@ -68,7 +68,7 @@ The tools at the bottom let the user choose:
     * Annulus - Ring of points.  Experiment with one cluster inside the other (see below).
     * Sierpinski - The fractal.  Create a set of points for which many possible numbers of clusters are equally valid.  Observe the results in the spectrum.
 
-* One of the **Sim Graph** types, described in the previous section.  It's parameter area is above the "Run" and "Clear" button.  The image shows the "Full" similarity graph is selected and its parameter $\sigma$ is set to 31.613.
+* One of the **Sim Graph** types, described in the previous section.  It's parameter area is above the "Run" and "Clear" button.  The image shows the "Full" similarity graph is selected and its parameter $\sigma$ is set to 43.859.
 
 * The Clustering **Algorithm** and its parameters.  The algorithms availiable are spectral clustering and K-means.  The spectral clustering algorithm uses these parameters (K-means only uses $K$)
   * $F$ is the number of eigenvectors (i.e. those corresponding to the $F$ smallest eigenvalues) spanning the space the points will be embedded into for clustering.
