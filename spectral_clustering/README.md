@@ -1,19 +1,19 @@
 # Spectral clustering
 
-Sometimes, data points $X$ to be clustered into $K$ clusters are not embedded in a space with an implicit distance function.  Images, documents, etc.  
+Sometimes, a set of objects $X = (x_1,...,x_n)$ to be clustered into $k$ clusters are not embedded in a space with an implicit distance function.  Images, documents, etc.  
 
-If a similarity function comparing two samples $S(x_i, x_j)$ can be defined, [spectral clustering](https://en.wikipedia.org/wiki/Spectral_clustering) can determine a clustering (partition) of $X$ such that:
+If, instead of a natural distance function, a domain-specific *similarity function* $S(x_i, x_j)$ comparing two objects can be defined, [spectral clustering](https://en.wikipedia.org/wiki/Spectral_clustering) can determine a clustering (partition) $P = {P_0, ..., P_k}$ of $X$ such that:
 
 $$
-S(x_i,x_j) =
-\begin{cases}
- & \text{[high value] if }x_i\text{ and }x_j\text{ are in the same cluster, or}\\
-&  \text{[low value]  if }x_i\text{ and }x_j\text{ are in different clusters.}
-\end{cases}
+\begin{align*}
+S(x_i,x_j) = & \text{[high value] }  \Leftrightarrow \exists c \in [1, k] \mid x_i, x_j \in P_c,  \text{ and} \\
+S(x_i,x_j) = & \text{[low value] }  \Leftrightarrow \nexists c \in [1, k] \mid x_i, x_j \in P_c.\\
+\end{align*}
 $$
+That is, given a similarity function, spectral clustering attempts to find the partitioning that results in objects in the same cluster having high similarity and objects in different clusters having low similiarity.  
 
 The general steps are:
-1. Construct a ***similarity graph***, the weighted, undirected graph $W=(V, E)$ where each vertex represents a sample in $X$ and edges (possibly weighted) between vertices are defined by the similiarity function, possibly using one of these ways:
+1. Construct a ***similarity graph***, the weighted, undirected graph $W=(V, E)$ where each vertex represents a sample in $X$ and edges (possibly weighted) between vertices are defined by the similiarity function, possibly using one of these ways. :
   - **Epsilon threshold**: Let an edge between vertices $i$ and $j$ exist with weight 1 if $S(x_i, x_j) >\epsilon$, for some threshold $\epsilon$.
   - **N Nearest neighbors**: Let an edge between $i$ and $j$ exist with weight  if vertex $j$ is among the $N$ most similar to vertex $i$ or vice-versa, but not necessarily both.  If the condition is required in both direction, this is called "mutual" nearest neighbors.  
   - **Soft Nearest Neighbors**:  Define the parameter $\alpha$ and define the *directed* graph with weights
@@ -108,4 +108,4 @@ The hotkey 'g' toggles showing the edges that exist between vertices given curre
 
 ![datasets](/spectral_clustering/assets/graph_view.png)
 
-The spectral algorithm succeeded in recovering the three concentric clusters because the values for the algorithm parameters (using an N-nearest sim. graph with N=8 and non-mutual edges allowed) created a graph with no edges between vertices in different clusters, and at least one edge from every point to the correct cluster.
+The parameters indicated in the toolbar explain the success of the spectral algorithm:  it succeeded in recovering the three concentric clusters because the values for the algorithm parameters (using an N-nearest sim. graph with N=8 and non-mutual edges allowed) created a graph with no edges between vertices in different clusters, and at least one edge from every point to another point in the same cluster.
