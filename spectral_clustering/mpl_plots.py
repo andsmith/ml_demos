@@ -54,6 +54,42 @@ def add_alpha(colors, alpha):
     """
     return np.concatenate([colors, np.ones((colors.shape[0], 1)) * alpha], axis=1)
 
+def plot_graph_stats(fig,ax, sim_matrix):
+    """
+    Plot the graph statistics, a histogram of values in the upper triangle of the similarity matrix.
+    :param ax: matplotlib axis object
+    :param sim_matrix: N x N similarity matrix
+    """
+    s = sim_matrix.shape[0]
+    upper_triangle = sim_matrix[np.triu_indices(s, k=1)]
+    n = len(upper_triangle)
+    # check if binary
+    if len(np.unique(upper_triangle)) == 2:
+        n_bins = 2
+        bin_centers = np.array((0.0, 1.0))
+        count0 = np.sum(upper_triangle==0)
+        count1 = n - count0
+        density =np.array([count0/n, count1/n])
+        ax.bar(bin_centers,density, width=0.5)
+        #ax.set_title("BINARY Graph has %i edge weights in %i bins" % (n, n_bins))
+        # annotate both bars with the densities
+        ax.text(0, .1, f'{density[0]:.5f}', ha='center', va='bottom')
+        ax.text(1, .1, f'{density[1]:.5f}', ha='center', va='bottom')
+    else:
+        range =  np.min(upper_triangle), np.max(upper_triangle) 
+        n_bins = np.min((s, 30))
+        counts, bin_edges = np.histogram(upper_triangle, bins=n_bins, range=range)
+        bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+        #density = counts / n
+        #ax.plot(bin_centers, density,'o-')
+        
+        ax.plot(bin_centers, counts,'o-')
+        ax.set_yscale('log')
+
+        
+    ax.set_title('Graph(v=%i) edge hist.' % s)
+    fig.tight_layout(rect=[0, 0, 1, 1])
+    
 
 def plot_clustering(ax, points, colors, cluster_ids, image_size, alpha=.5, invert_y=True):
     """
@@ -151,7 +187,7 @@ def test_plot_clustering():
         colors = get_n_disp_colors(n_clusters) / 255.
         points = np.concatenate(points)
         ids = np.concatenate(ids)
-        print("Plotting points(%s), ids(%s), and colors(%s)." %(points.shape, ids.shape, colors.shape))
+        #print("Plotting points(%s), ids(%s), and colors(%s)." %(points.shape, ids.shape, colors.shape))
         
         fig_size = (5, 5)
         dpi = 100
@@ -167,7 +203,38 @@ def test_plot_clustering():
     _n_clusters(2)
     _n_clusters(1)
 
+def test_graph_stats():
+    from util import get_n_disp_colors
+    from similarity import EpsilonSimGraph, FullSimGraph
+    cluster_size_range = (2, 600)
+    fig, axes = plt.subplots(3, 2)
+    def _n_clusters(axes,n_clusters, graph_class, graph_kwargs={}):
+        points, ids = [], []
+        for c_id in range(n_clusters):
+            n = np.random.randint(*cluster_size_range)  # cluster_sizes[c_id]
+            center = np.random.randn(2)*7
+            sigma = np.random.rand(1)*6
+            points.append(np.random.randn(n, 2)*sigma + center)
+            ids.append(np.ones(n, dtype=np.int32)*c_id)
+        colors = get_n_disp_colors(n_clusters) / 255.
+        points = np.concatenate(points)
+        ids = np.concatenate(ids)
+        axes[0].scatter(points[:, 0], points[:, 1], c=colors[ids], s=5)
+        axes[0].set_title("%i clusters, %i points" % (n_clusters, len(points)))
+        sim_graph = graph_class(points, **graph_kwargs)
+        mat = sim_graph.get_matrix()
+        plot_graph_stats(fig,axes[1],mat)
+        
+    
+    #import ipdb; ipdb.set_trace()
+    _n_clusters(axes[0],10, EpsilonSimGraph, {'epsilon': 1.5})
+    _n_clusters(axes[1],2, EpsilonSimGraph, {'epsilon': 0.5})
+    _n_clusters(axes[2],1, FullSimGraph,{'sigma': 3.5})
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
-    test_plot_eigenvecs()
-    test_plot_clustering()
+    #test_plot_eigenvecs()
+    #test_plot_clustering()
+    test_graph_stats()
     print("All tests passed!")

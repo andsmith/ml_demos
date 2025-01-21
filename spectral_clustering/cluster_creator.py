@@ -30,7 +30,7 @@ import time
 from layout import WINDOW_LAYOUT, Windows, Tools
 from clustering import KMeansAlgorithm, SpectralAlgorithm
 from util import get_n_disp_colors, unscale_coords
-from spectral import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SoftNNSimGraph, SIMGRAPH_KIND_NAMES
+from similarity import SimilarityGraphTypes, EpsilonSimGraph, FullSimGraph, NNSimGraph,SoftNNSimGraph, SIMGRAPH_KIND_NAMES
 from threading import Thread, Lock, get_ident
 
 HOTKEYS = {'toggle graph view': 'g',
@@ -47,7 +47,7 @@ class ClusterCreator(object):
                    Windows.clustering,
                    Windows.sim_matrix,
                    Windows.eigenvectors,
-                   Windows.rand_proj,
+                   Windows.graph_stats,
                    Windows.spectrum]
 
     def __init__(self, size=(1350, 800)):
@@ -121,22 +121,23 @@ class ClusterCreator(object):
 
         return window_layout
 
-    def update_points(self):
+    def update_points(self, fast_windows_only=False):
         """
         Get new points from the UI window and update the similarity graph & clustering
+        :param fast_windows_only: if True, update all the non matplotlib windows 
         """
         # print("Main thread updating points")
         self._points = self.windows[Windows.ui].get_points()
-        self.update_sim_graph()
+        self.update_sim_graph(fast_windows_only=fast_windows_only)
 
-        # other windows are no longer valid, so clear their data
+        # other windows are no longer valid, so clear their data until it's recomputed.
         self.windows[Windows.clustering].clear()
         self.windows[Windows.spectrum].clear()
         self.windows[Windows.eigenvectors].clear()
-        self.windows[Windows.rand_proj].clear()
+        ### self.windows[Windows.rand_proj].clear
 
 
-    def update_sim_graph(self, param_val=None, asynch=False):
+    def update_sim_graph(self, param_val=None, asynch=False, fast_windows_only=False):
         """
         Points, clusters, or sim-graph type/param has changed, recompute it in its own thread.
         :param param_val: the value of the parameter that changed (ignored since they're looked up)
@@ -160,26 +161,32 @@ class ClusterCreator(object):
             graph_kind = self.windows[Windows.toolbar].get_value('sim_graph')
             if graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.FULL]:
                 sigma = self.windows[Windows.toolbar].get_value('sigma')
-                logging.info("Making new SimGraph: full with sigma=%f" % sigma)
+                #logging.info("Making new SimGraph: full with sigma=%f" % sigma)
                 sim_graph = FullSimGraph(unit_points, sigma)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.NN]:
                 n_nearest = self.windows[Windows.toolbar].get_value('n_nearest')
                 mutual = self.windows[Windows.toolbar].get_value('mutual')
-                logging.info("Making new SimGraph: nearest neighbors with n=%i and mutual=%s" % (n_nearest, mutual))   
+                #logging.info("Making new SimGraph: nearest neighbors with n=%i and mutual=%s" % (n_nearest, mutual))   
                 sim_graph = NNSimGraph(unit_points, n_nearest, mutual)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.EPSILON]:
                 epsilon_dist=self.windows[Windows.toolbar].get_value('epsilon')
-                logging.info("Making new SimGraph: full with epsilon=%f" % epsilon_dist)
+                #logging.info("Making new SimGraph: full with epsilon=%f" % epsilon_dist)
                 sim_graph = EpsilonSimGraph(unit_points, epsilon_dist)
             elif graph_kind == SIMGRAPH_KIND_NAMES[SimilarityGraphTypes.SOFT_NN]:
                 alpha = self.windows[Windows.toolbar].get_value('alpha')
                 additive = not self.windows[Windows.toolbar].get_value('mult')
-                logging.info("Making new SimGraph: soft nearest neighbors with alpha=%f and additive=%s" % (alpha, additive))
+                #logging.info("Making new SimGraph: soft nearest neighbors with alpha=%f and additive=%s" % (alpha, additive))
                 sim_graph = SoftNNSimGraph(unit_points, alpha, additive)
+
             with self._similarity_graph['lock']:
                 self._similarity_graph['graph'] = sim_graph
-                self.windows[Windows.sim_matrix].set_graph(sim_graph)
-                self.windows[Windows.ui].set_graph(sim_graph)
+
+            # Send relevant windows the new graph/matrix
+            self.windows[Windows.sim_matrix].set_graph(sim_graph)
+            self.windows[Windows.ui].set_graph(sim_graph)
+            if not fast_windows_only:
+                self.windows[Windows.graph_stats].set_values(sim_graph)
+
             #logging.info("\tDone updating similarity graph in thread:  ", get_ident())
         if asynch:
             with self._similarity_graph['lock']:
@@ -208,7 +215,7 @@ class ClusterCreator(object):
             values, vectors = self._spectrum.get_eigens()
             self.windows[Windows.spectrum].set_values(values)
             self.windows[Windows.eigenvectors].set_values(vectors)
-            self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+            ### self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
         elif algorithm_name not in ['K-means']:
             # algorithms that don't need the eigendecomposition
             raise ValueError(f"Invalid algorithm name: {algorithm_name}")
@@ -237,7 +244,7 @@ class ClusterCreator(object):
             # update rand_proj window.  (other windows look it up)
             if new_eigenvectors:
                 _, vectors = self._spectrum.get_eigens()
-                self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
+                ### self.windows[Windows.rand_proj].set_values(vectors[:, :n_features])
 
 
         if self._cluster_colors is None or self._cluster_colors.shape[0] != n_clusters:
@@ -257,8 +264,9 @@ class ClusterCreator(object):
         self.windows[Windows.clustering].clear()
         self.windows[Windows.sim_matrix].clear()
         self.windows[Windows.eigenvectors].clear()
-        self.windows[Windows.rand_proj].clear()
+        ### self.windows[Windows.rand_proj].clear()
         self.windows[Windows.spectrum].clear()
+        self.windows[Windows.graph_stats].clear()
 
         with self._similarity_graph['lock']:
             self._similarity_graph['graph'] = None

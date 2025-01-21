@@ -35,6 +35,8 @@ class SimilarityGraph(object):
         """
         self._points = points
         self._mat = self._build()
+        # print("Built similarit matrix, weights in range [%f, %f], frac_nonzero=%.5f" % (
+        # np.min(self._mat), np.max(self._mat), np.count_nonzero(self._mat) / self._mat.size))
 
     @abstractmethod
     def _build(self):
@@ -97,6 +99,7 @@ class FullSimGraph(SimilarityGraph):
         Build the similarity matrix using the full similarity function.
         """
         dists = squareform(pdist(self._points))
+        np.fill_diagonal(dists, np.inf)
         sim_matrix = np.exp(-dists**2 / (2*self._sigma**2))
         return sim_matrix
     
@@ -132,7 +135,7 @@ class SoftNNSimGraph(SimilarityGraph):
 
     def _build(self):
         dists = squareform(pdist(self._points))
-        np.fill_diagonal(dists, np.inf)  # set diagonal to inf to ignore self-distances
+        np.fill_diagonal(dists, np.inf)
         orders = np.argsort(dists, axis=1)
         weights = np.zeros_like(dists)
         n = dists.shape[0]
@@ -175,10 +178,12 @@ class NNSimGraph(SimilarityGraph):
         # add 1 to k to include self
         nbrs = NearestNeighbors(n_neighbors=self._k+1, algorithm='ball_tree').fit(self._points)
         edge_mat = nbrs.kneighbors_graph(self._points, mode='connectivity').toarray()
+
         if self._mutual:
             edge_mat = np.logical_and(edge_mat, edge_mat.T)
         else:
             edge_mat = np.logical_or(edge_mat, edge_mat.T)
+        np.fill_diagonal(edge_mat, 0) 
         return edge_mat
     
     def make_img(self, colormap=None):

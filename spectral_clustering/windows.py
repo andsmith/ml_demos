@@ -6,14 +6,14 @@ from abc import ABC, abstractmethod
 import cv2
 from util import (scale_bbox, get_good_point_size, add_sub_image,
                   hsplit_bbox, indent_bbox, vsplit_bbox)
-from mpl_plots import plot_clustering, plot_eigenvecs, add_alpha
+from mpl_plots import plot_clustering, plot_eigenvecs, add_alpha, plot_graph_stats
 import logging
 from tools import RadioButtons, Slider, Button, ToggleButton
-from clustering import render_clustering, KMeansAlgorithm
+from clustering import render_clustering
 from colors import COLORS
 from layout import WINDOW_LAYOUT, TOOLBAR_LAYOUT, OTHER_TOOL_LAYOUT,APP_CONFIG, Windows, Tools
 from clusters import CLUSTER_TYPES
-from spectral import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
+from similarity import SimilarityGraphTypes, SIMGRAPH_PARAM_NAMES, SIMGRAPH_KIND_NAMES
 from plot_to_img import PlotRenderer
 
 
@@ -23,7 +23,7 @@ WINDOW_NAMES = {Windows.ui: "UI",  # default text to render in windows
                 Windows.spectrum: "Spectrum",
                 Windows.eigenvectors: "Eigenvectors",
                 Windows.sim_matrix: "Similarity matrix",
-                Windows.rand_proj: "Random projection"}
+                Windows.graph_stats: "Edge weight hist."}
 
 
 class Window(ABC):
@@ -223,7 +223,7 @@ class UiWindow(Window):
             self._clusters[-1].update_mouse_pos(x, y)
             self._clusters[-1].start_adjusting()
             self._adjusting_ind = len(self._clusters) - 1
-            self.app.update_points()  # inform the app that the points have changed
+            self.app.update_points(fast_windows_only=True)  # inform the app that the points have changed
             return True
 
     def clear(self):
@@ -242,10 +242,11 @@ class UiWindow(Window):
             if self._clusters[self._adjusting_ind].stop_adjusting(self.bbox):
                 # if the cluster wants to be removed
                 del self._clusters[self._adjusting_ind]
-                self.app.update_points()
+                self.app.update_points(fast_windows_only=False)
 
             self._adjusting_ind = None
         self._update_mouse_pos(x, y)
+        self.app.update_points(fast_windows_only=False)
 
     def mouse_move(self, x, y):
         """
@@ -254,7 +255,7 @@ class UiWindow(Window):
         """
         if self._adjusting_ind is not None:
             self._clusters[self._adjusting_ind].drag_ctrl(x, y)
-            self.app.update_points()
+            self.app.update_points(fast_windows_only=True)
         else:
             self._update_mouse_pos(x, y)
 
@@ -379,7 +380,7 @@ class ToolsWindow(WindowMouseManager, Window):
                       Tools.alpha_slider: Slider(scale_bbox(TOOLBAR_LAYOUT[Tools.alpha_slider], indented_bbox),
                                                  SIMGRAPH_PARAM_NAMES[SimilarityGraphTypes.SOFT_NN],
                                                  self.app.update_sim_graph,
-                                                 range=[0, 5.], default=1., format_str="=%.3f", visible=True),
+                                                 range=[0, 50.], default=1., format_str="=%.3f", visible=True),
 
                     Tools.alpha_toggle:ToggleButton(scale_bbox(TOOLBAR_LAYOUT[Tools.alpha_toggle], indented_bbox),
                                                     "mult", self.app.update_sim_graph,
@@ -667,6 +668,22 @@ class EigenvectorsWindow(PlotWindow):
         self.refresh()
 
 
+class GraphStatsWindow(PlotWindow):
+    def __init__(self, bbox, app):
+        super().__init__(Windows.graph_stats, bbox, app, tool_frac=0)  # no tools
+
+    def _init_tools(self):
+        pass
+
+    def refresh(self):
+        if self._values is None:
+            return
+        fig, ax = self._plotter.get_axis()
+        sim_mat = self._values
+        plot_graph_stats(fig,ax, sim_mat.get_matrix())
+        self._disp_img = self._plotter.render_fig(fig)
+
+
 class RandProjWindow(WindowMouseManager, PlotWindow):
     """
     Project the data in feature space down to two random axes,
@@ -763,4 +780,4 @@ WINDOW_TYPES = {Windows.ui: UiWindow,
                 Windows.spectrum: SpectrumWindow,
                 Windows.eigenvectors: EigenvectorsWindow,
                 Windows.sim_matrix: SimMatrixWindow,
-                Windows.rand_proj: RandProjWindow}
+                Windows.graph_stats: GraphStatsWindow,}

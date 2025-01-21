@@ -28,6 +28,7 @@ class Windows(IntEnum):
     rand_proj = 4
     clustering = 5
     toolbar = 6
+    graph_stats = 7
 
 
 h_div = 0.5  # relative x position of the  vertical dividing line between UI and spectrum
@@ -44,7 +45,7 @@ WINDOW_LAYOUT = {"windows": {Windows.ui: {'x': (0, h_div),  # scale from unit sq
                                                     'y': (0, .5)},
                              Windows.sim_matrix: {'x': (.45, h_div),
                                                   'y': (.66, 1)},  # will be made square regardless of window size
-                             Windows.rand_proj: {'x': (h_div, h_mid),
+                             Windows.graph_stats: {'x': (h_div, h_mid),
                                                  'y': (.5, 1)},  # move up a bit for a button and a slider ****
                              Windows.clustering: {'x': (h_mid, 1),
                                                   'y': (.5, 1)}},
