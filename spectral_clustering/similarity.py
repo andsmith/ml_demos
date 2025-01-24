@@ -6,6 +6,7 @@ import cv2
 from enum import IntEnum
 from util import image_from_floats, apply_colormap
 from abc import ABC, abstractmethod
+from scipy.spatial import KDTree
 
 
 class SimilarityGraphTypes(IntEnum):
@@ -64,6 +65,8 @@ class SimilarityGraph(object):
     def make_img(self,colormap=None):
         pass
 
+    def get_tree(self):
+        return KDTree(self._points)
 
 class EpsilonSimGraph(SimilarityGraph):
 

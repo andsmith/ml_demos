@@ -250,7 +250,7 @@ class ClusterCreator(object):
             if self._spectrum is None:
                 self.recompute_spectrum()  # too slow to automatically recompute?
                 #return
-            cluster_ids = self._spectrum.cluster(n_clusters, n_features)
+            cluster_ids = self._spectrum.fit(n_clusters, n_features)
             # May have changed n_features since last time, so 
             # update rand_proj window.  (other windows look it up)
             if new_eigenvectors:

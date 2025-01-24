@@ -3,7 +3,6 @@ from sklearn.cluster import KMeans
 from abc import ABC, abstractmethod
 from util import get_good_point_size
 
-
 class ClusteringAlgorithm(ABC):
     """
     Abstract class for clustering algorithms, plugins to the cluster creator.
@@ -12,9 +11,10 @@ class ClusteringAlgorithm(ABC):
     def __init__(self, name, k):
         self._name = name
         self._k = k
+        self._fit = False
 
     @abstractmethod
-    def cluster(self, x):
+    def fit(self, x):
         """
         Cluster the points.
         :param x: N x 2 array of points
@@ -22,6 +22,14 @@ class ClusteringAlgorithm(ABC):
         """
         pass
 
+    @abstractmethod
+    def assign(self, x):
+        """
+        Assign clusters to new points
+        :param x: N x 2 array of points
+        :returns: N x 1 array of cluster assignments
+        """
+        pass
 
 def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_px=5):
     """
@@ -59,8 +67,15 @@ class KMeansAlgorithm(ClusteringAlgorithm):
         super().__init__('KMeans', k)
         self._kmeans = KMeans(n_clusters=k)
 
-    def cluster(self, x):
-        return self._kmeans.fit_predict(x)
+    def fit(self, x):
+        self._kmeans.fit(x)
+        self._fit = True
+        return self._kmeans.labels_
+    
+    def assign(self, x):
+        if not self._fit:
+            raise ValueError("Model has not been fit yet.")
+        return self._kmeans.predict(x)
 
 
 class SpectralAlgorithm(ClusteringAlgorithm):
@@ -70,6 +85,7 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         """
         super().__init__('Spectral', None)
         self._g = sim_graph
+        self._tree = self._g.get_tree()  # for clustering new points
         self._solve()
 
     def _solve(self):
@@ -87,8 +103,9 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         self._eigvecs = eigvecs[:, idx]
 
 
-    def cluster(self, n_clusters, n_features):
+    def fit(self, n_clusters, n_features):
         eig_features = self._eigvecs[:, :n_features]
+
 
         # kmeans on eigenvectors
         self._kmeans = KMeans(n_clusters=n_clusters)
@@ -96,10 +113,17 @@ class SpectralAlgorithm(ClusteringAlgorithm):
 
         # cluster
         cluster_ids = self._kmeans.labels_
+
         return cluster_ids
 
     def get_eigens(self):
         return self._eigvals, self._eigvecs 
+    
+    def assign(self, x):
+        # get index of nearest neighbor to x
+        n_ind = self._tree.query(x, k=1)[1]
+        return self._kmeans.labels_[n_ind]
+
 
 
 
