@@ -11,14 +11,15 @@ class MNISTData(object):
     (use same subset)
     """
 
-    def __init__(self, dim=30, n_train=1000, n_test=2000):
+    def __init__(self, dim=30, n_train=1000, n_test=2000, rnd_seed=42):
         """
         :param dim: number of PCA components to keep
         :param n_train: number of training samples to use PER digit
         :param n_test: number of test samples to use per digit
         """
-        self.n_train = n_train
-        self.n_test = n_test
+        self._rnd = np.random.RandomState(rnd_seed)
+        self._n_train = n_train
+        self._n_test = n_test
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
 
         # reshape and normalize
@@ -42,7 +43,7 @@ class MNISTData(object):
 
         def sample_digit(digit):
             idx = np.where(y_raw == digit)[0]
-            subset = np.random.choice(len(idx), n_train+n_test, replace=False)
+            subset = self._rnd.choice(len(idx), n_train+n_test, replace=False)
             return x_raw[idx[subset]]
 
         self._train, self._test = {}, {}
@@ -53,7 +54,11 @@ class MNISTData(object):
 
     def get_digit(self, d):
         return self._train[d], self._test[d]
+    
+    def get_n(self):
+        return self._n_train, self._n_test
 
+    
 
 def test_data():
     """

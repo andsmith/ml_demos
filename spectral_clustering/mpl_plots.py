@@ -54,7 +54,8 @@ def add_alpha(colors, alpha):
     """
     return np.concatenate([colors, np.ones((colors.shape[0], 1)) * alpha], axis=1)
 
-def plot_graph_stats(fig,ax, sim_matrix):
+
+def plot_graph_stats(fig, ax, sim_matrix):
     """
     Plot the graph statistics, a histogram of values in the upper triangle of the similarity matrix.
     :param ax: matplotlib axis object
@@ -67,29 +68,28 @@ def plot_graph_stats(fig,ax, sim_matrix):
     if len(np.unique(upper_triangle)) == 2:
         n_bins = 2
         bin_centers = np.array((0.0, 1.0))
-        count0 = np.sum(upper_triangle==0)
+        count0 = np.sum(upper_triangle == 0)
         count1 = n - count0
-        density =np.array([count0/n, count1/n])
-        ax.bar(bin_centers,density, width=0.5)
-        #ax.set_title("BINARY Graph has %i edge weights in %i bins" % (n, n_bins))
+        density = np.array([count0/n, count1/n])
+        ax.bar(bin_centers, density, width=0.5)
+        # ax.set_title("BINARY Graph has %i edge weights in %i bins" % (n, n_bins))
         # annotate both bars with the densities
         ax.text(0, .1, f'{density[0]:.5f}', ha='center', va='bottom')
         ax.text(1, .1, f'{density[1]:.5f}', ha='center', va='bottom')
     else:
-        range =  np.min(upper_triangle), np.max(upper_triangle) 
+        range = np.min(upper_triangle), np.max(upper_triangle)
         n_bins = np.min((s, 30))
         counts, bin_edges = np.histogram(upper_triangle, bins=n_bins, range=range)
         bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
-        #density = counts / n
-        #ax.plot(bin_centers, density,'o-')
-        
-        ax.plot(bin_centers, counts,'o-')
+        # density = counts / n
+        # ax.plot(bin_centers, density,'o-')
+
+        ax.plot(bin_centers, counts, 'o-')
         ax.set_yscale('log')
 
-        
     ax.set_title('Graph(v=%i) edge hist.' % s)
     fig.tight_layout(rect=[0, 0, 1, 1])
-    
+
 
 def plot_clustering(ax, points, colors, cluster_ids, image_size, alpha=.5, invert_y=True):
     """
@@ -187,8 +187,8 @@ def test_plot_clustering():
         colors = get_n_disp_colors(n_clusters) / 255.
         points = np.concatenate(points)
         ids = np.concatenate(ids)
-        #print("Plotting points(%s), ids(%s), and colors(%s)." %(points.shape, ids.shape, colors.shape))
-        
+        # print("Plotting points(%s), ids(%s), and colors(%s)." %(points.shape, ids.shape, colors.shape))
+
         fig_size = (5, 5)
         dpi = 100
         _, axes = plt.subplots(1, 1, figsize=(5, 5), dpi=dpi)
@@ -203,12 +203,14 @@ def test_plot_clustering():
     _n_clusters(2)
     _n_clusters(1)
 
+
 def test_graph_stats():
     from util import get_n_disp_colors
     from similarity import EpsilonSimGraph, FullSimGraph
     cluster_size_range = (2, 600)
     fig, axes = plt.subplots(3, 2)
-    def _n_clusters(axes,n_clusters, graph_class, graph_kwargs={}):
+
+    def _n_clusters(axes, n_clusters, graph_class, graph_kwargs={}):
         points, ids = [], []
         for c_id in range(n_clusters):
             n = np.random.randint(*cluster_size_range)  # cluster_sizes[c_id]
@@ -223,18 +225,92 @@ def test_graph_stats():
         axes[0].set_title("%i clusters, %i points" % (n_clusters, len(points)))
         sim_graph = graph_class(points, **graph_kwargs)
         mat = sim_graph.get_matrix()
-        plot_graph_stats(fig,axes[1],mat)
-        
-    
-    #import ipdb; ipdb.set_trace()
-    _n_clusters(axes[0],10, EpsilonSimGraph, {'epsilon': 1.5})
-    _n_clusters(axes[1],2, EpsilonSimGraph, {'epsilon': 0.5})
-    _n_clusters(axes[2],1, FullSimGraph,{'sigma': 3.5})
+        plot_graph_stats(fig, axes[1], mat)
+
+    # import ipdb; ipdb.set_trace()
+    _n_clusters(axes[0], 10, EpsilonSimGraph, {'epsilon': 1.5})
+    _n_clusters(axes[1], 2, EpsilonSimGraph, {'epsilon': 0.5})
+    _n_clusters(axes[2], 1, FullSimGraph, {'sigma': 3.5})
     plt.tight_layout()
     plt.show()
 
+
+def project_binary_clustering(points, labels, whiten=False):
+    """
+    :param points: N x d array of points
+    :param labels: N array of integers in [0, 1], cluster assignments
+    :return: 2D projection of points (N x 2 array) in the unit square
+    """
+    points = points - np.mean(points, axis=0)
+    p0 = np.mean(points[labels == 0], axis=0)
+    p1 = np.mean(points[labels == 1], axis=0)
+    horizontal = p1 - p0
+    horizontal /= np.linalg.norm(horizontal)
+    points_deflated = points - np.dot(points, horizontal[:, np.newaxis]) * horizontal
+    # find first principal component in the deflated space as the vertical axis
+    covar = np.cov(points_deflated, rowvar=False)
+    vals, vecs = np.linalg.eigh(covar)
+    pc_dir0 = vecs[:, np.argmax(vals)]
+    vert = pc_dir0 / np.linalg.norm(pc_dir0)
+
+    # check = np.abs(np.dot(horizontal, vert))
+    # print("Check orthogonality: %f" % check)
+
+    proj_mat = np.column_stack((horizontal, vert))
+    projected = points @ proj_mat
+    if whiten:
+        projected = (projected - np.mean(projected, axis=0)) / np.std(projected, axis=0)
+
+    # scale to unit square
+    unit = (projected - np.min(projected, axis=0)) / (np.max(projected, axis=0) - np.min(projected, axis=0))
+
+    return unit
+
+
+def plot_binary_clustering(ax, points, labels, true_labels=None, point_size=5, circle_size=50):
+    """
+    (Will flip predicted labels if more than half are wrong)
+    :param ax: matplotlib axis object
+    :param points: N x 2 array of points
+    :param labels: N array of integers in [0, 1], cluster assignments
+    :param true_labels: N array of integers in [0, 1], ground truth labels
+    """
+    labels =np.array(labels,dtype=np.int32)
+    colors = np.array([(0.122, 0.467, 0.706), # matplotlib blue
+                       (1.0, 0.498, 0.055)])
+    ax.scatter(points[:, 0], points[:, 1], c=colors[labels], s=point_size)
+
+    if true_labels is None:
+        return
+
+    true_labels = np.array(true_labels,dtype=np.int32)
+    error = labels != true_labels
+    if np.mean(error)>.5:
+        labels = 1 - labels
+        error = labels != true_labels
+    # circles around errors, edge color of correct label (no face color)
+    correct_colors = colors[true_labels[error]]
+    ax.scatter(points[error, 0], points[error, 1], s=circle_size, edgecolors=correct_colors,facecolors='none')
+
+
+
+def test_project_binary_clustering():
+    n, d = 300, 10
+    points = np.vstack((np.random.randn(n, d) + np.random.randn(d)*1.0,
+                        np.random.randn(n, d) + np.random.randn(d)*1.0))
+    true_labels = np.concatenate((np.zeros(n), np.ones(n))).astype(np.int32)
+    error = np.random.rand(n*2) < 0.05
+    pred_labels = true_labels.copy()
+    pred_labels[error] = 1 - pred_labels[error]
+    points_flattened = project_binary_clustering(points, pred_labels, whiten=True)
+    fig,ax = plt.subplots(1, 1)
+    plot_binary_clustering(ax, points_flattened, pred_labels, true_labels)
+    plt.title("Projected points,\nerrors circled w/correct colors.")
+    plt.show()
+
 if __name__ == "__main__":
-    #test_plot_eigenvecs()
-    #test_plot_clustering()
-    test_graph_stats()
+    # test_plot_eigenvecs()
+    # test_plot_clustering()
+    # test_graph_stats()
+    test_project_binary_clustering()
     print("All tests passed!")
