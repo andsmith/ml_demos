@@ -5,6 +5,41 @@ import logging
 from scipy.interpolate import interp1d
 
 
+def pca(points, d):
+    """
+    Return the first d principal axes of the point cloud.
+    :param points: N x M array of points
+    :param d: integer, number of principal components to return
+    :return: M x d array of principal axes, vector of standard deviations along each axis
+    """
+    points = points - np.mean(points, axis=0)
+    covar = np.cov(points, rowvar=False)
+    evals, evecs = np.linalg.eigh(covar)
+    idx = np.argsort(evals)[::-1][:d]
+    p_axes = evecs[:, idx]
+    vars = evals[idx]
+    print(vars)
+    return p_axes, np.sqrt(vars)
+
+
+def test_pca():
+    n_clusters = 5
+    n_points = 2100
+    for _ in range(n_clusters):
+        center = np.random.rand(2) * 20
+        covar =  np.random.randn(2, 2)
+        covar = np.dot(covar, covar.T)
+        points = np.random.multivariate_normal(center, covar, n_points)
+        evecs, lengths = pca(points, 2)
+        plt.scatter(points[:, 0], points[:, 1], s=2, alpha=.9)
+        for length, vec in zip(lengths, evecs.T):
+            plt.plot([center[0]-vec[0]*length, center[0] + vec[0]*length],
+                     [center[1]-vec[1]*length, center[1] + vec[1]*length], lw=3)
+    # equal axis
+    plt.axis('equal')
+    plt.show()
+
+
 def image_from_floats(floats, small=None, big=None):
     small = floats.min() if small is None else small
     big = floats.max() if big is None else big
@@ -433,6 +468,7 @@ def orthornormalize(vectors):
         o_vecs[i] /= np.linalg.norm(o_vecs[i])
     return o_vecs
 
+
 def test_orthornormalize():
     vecs = np.random.randn(3, 3)
     vecs = orthornormalize(vecs)
@@ -444,9 +480,10 @@ def test_orthornormalize():
     print(np.dot(vecs[0], vecs[2]))
     print(np.dot(vecs[1], vecs[2]))
 
+
 if __name__ == '__main__':
     # test_sample_canonical_ellipse(empty_frac=.667)
     # test_sample_canonical_ellipse(empty_frac=0)
     # test_sample_elipse()
-    #test_sample_gaussian()
+    # test_sample_gaussian()
     test_orthornormalize()

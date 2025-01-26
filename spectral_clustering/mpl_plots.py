@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from util import get_n_disp_colors
+from util import get_n_disp_colors, pca
 
 
 def make_data(n):
@@ -248,13 +248,11 @@ def project_binary_clustering(points, labels, whiten=False):
     horizontal /= np.linalg.norm(horizontal)
     points_deflated = points - np.dot(points, horizontal[:, np.newaxis]) * horizontal
     # find first principal component in the deflated space as the vertical axis
-    covar = np.cov(points_deflated, rowvar=False)
-    vals, vecs = np.linalg.eigh(covar)
-    pc_dir0 = vecs[:, np.argmax(vals)]
-    vert = pc_dir0 / np.linalg.norm(pc_dir0)
+    dirs, _ = pca(points_deflated, 2)
+    vert = dirs[:, 0]
 
-    # check = np.abs(np.dot(horizontal, vert))
-    # print("Check orthogonality: %f" % check)
+    check = np.abs(np.dot(horizontal, vert))
+    print("Check orthogonality: %f" % check)
 
     proj_mat = np.column_stack((horizontal, vert))
     projected = points @ proj_mat
@@ -275,42 +273,125 @@ def plot_binary_clustering(ax, points, labels, true_labels=None, point_size=5, c
     :param labels: N array of integers in [0, 1], cluster assignments
     :param true_labels: N array of integers in [0, 1], ground truth labels
     """
-    labels =np.array(labels,dtype=np.int32)
-    colors = np.array([(0.122, 0.467, 0.706), # matplotlib blue
+    labels = np.array(labels, dtype=np.int32)
+    colors = np.array([(0.122, 0.467, 0.706),  # matplotlib blue
                        (1.0, 0.498, 0.055)])
     ax.scatter(points[:, 0], points[:, 1], c=colors[labels], s=point_size)
 
     if true_labels is None:
         return
 
-    true_labels = np.array(true_labels,dtype=np.int32)
+    true_labels = np.array(true_labels, dtype=np.int32)
     error = labels != true_labels
-    if np.mean(error)>.5:
+    if np.mean(error) > .5:
         labels = 1 - labels
         error = labels != true_labels
     # circles around errors, edge color of correct label (no face color)
     correct_colors = colors[true_labels[error]]
-    ax.scatter(points[error, 0], points[error, 1], s=circle_size, edgecolors=correct_colors,facecolors='none')
-
+    ax.scatter(points[error, 0], points[error, 1], s=circle_size, edgecolors=correct_colors, facecolors='none')
 
 
 def test_project_binary_clustering():
-    n, d = 300, 10
-    points = np.vstack((np.random.randn(n, d) + np.random.randn(d)*1.0,
-                        np.random.randn(n, d) + np.random.randn(d)*1.0))
+    n, d = 300, 30
+    spread = 0.5
+    points = np.vstack((np.random.randn(n, d) + np.random.randn(d)*spread,
+                        np.random.randn(n, d) + np.random.randn(d)*spread))
     true_labels = np.concatenate((np.zeros(n), np.ones(n))).astype(np.int32)
     error = np.random.rand(n*2) < 0.05
     pred_labels = true_labels.copy()
     pred_labels[error] = 1 - pred_labels[error]
     points_flattened = project_binary_clustering(points, pred_labels, whiten=True)
-    fig,ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1)
     plot_binary_clustering(ax, points_flattened, pred_labels, true_labels)
-    plt.title("Projected points,\nerrors circled w/correct colors.")
+    plt.title("Projected points (dim %i -> %i),\nerrors circled w/correct colors." % (d, 2))
     plt.show()
+
+
+def show_digit_cluster_collage(ax, images, points, pred_labels, true_labels, max_n_imgs=200,image_extent_frac = 0.03):
+    """
+    Plot the images in their embedded locations to show the clustering results.
+    Make 2 plots w/correct predictions on the left, errors on the right.
+
+    :param ax: list of 2 matplotlib axis objects
+    :param images: N x 28 x 28 array of images
+    :param points: N x D array of points
+    :param pred_labels: N array of integers in [0, 1], cluster assignments
+    :param true_labels: N array of integers in [0, 1], ground truth labels
+    :param max_n_imgs: integer, max number of images to plot in each axis.
+    :param image_extent_frac: float, fraction of the image width to extend the extent of the image
+    """
+    # flatten to 2d
+    points = project_binary_clustering(points, pred_labels)
+    x_span = np.max(points[:, 0]) - np.min(points[:, 0])
+    side = x_span * image_extent_frac
+
+    # do correct side on ax[0]
+    correct = pred_labels == true_labels
+    n_correct = np.sum(correct)
+    if n_correct > max_n_imgs:
+        idx = np.random.choice(np.where(correct)[0], max_n_imgs, replace=False)
+    else:
+        idx = np.where(correct)[0]
+    for i in idx:
+        ax[0].imshow(images[i], extent=(points[i, 0]-side, points[i, 0]+side,
+                                     points[i, 1]-side, points[i, 1]+side), cmap='gray',
+                                     alpha=images[i]/255.)
+    ax[0].set_xlim(np.min(points[:, 0])-side, np.max(points[:, 0])+side)
+    ax[0].set_ylim(np.min(points[:, 1])-side, np.max(points[:, 1])+side)
+    
+    # do errors side on ax[1]
+    # TODO:  should find a way to avoid plotting points that will be under images
+    plot_binary_clustering(ax[1], points, pred_labels, None, point_size=1)
+    n_errors = np.sum(~correct)
+    if n_errors > max_n_imgs:
+        idx = np.random.choice(np.where(~correct)[0], max_n_imgs, replace=False)
+    else:
+        idx = np.where(~correct)[0]
+    for i in idx:
+        ax[1].imshow(images[i], extent=(points[i, 0]-side, points[i, 0]+side,
+                                     points[i, 1]-side, points[i, 1]+side), cmap='gray',
+                                     alpha=images[i]/255.)
+    ax[1].set_xlim(np.min(points[:, 0])-side, np.max(points[:, 0])+side)
+    ax[1].set_ylim(np.min(points[:, 1])-side, np.max(points[:, 1])+side)
+
+    ax[0].set_title("Correct predictions")
+    ax[1].set_title("Errors")
+
+
+def test_show_digit_cluster_collage():
+    # making test data
+    from mnist_data import MNISTData
+    n_train = 200
+    n_test = 10
+    data = MNISTData(dim=0, n_train=n_train, n_test=10)
+    train0, _ = data.get_digit(0)
+    train1, _ = data.get_digit(1)
+    images0, _ = data.get_images(0)
+    images1, _ = data.get_images(1)
+    d = 30
+
+    train_both = np.vstack((train0, train1))
+    images_both = np.vstack((images0, images1))
+    pca_dims, _ = pca(train_both, d)
+    train = np.dot(train_both, pca_dims)
+    train_lab = np.concatenate((np.zeros(n_train), np.ones(n_train)))
+    pred_lab = train_lab.copy()
+    error_idx = np.random.choice(2*n_train, 10, replace=False)
+    pred_lab[error_idx] = 1 - pred_lab[error_idx]
+
+    # plotting
+    fig, ax = plt.subplots(1, 2)
+    show_digit_cluster_collage(ax, images_both, train, pred_lab, train_lab)
+    plt.title("Projected digits, errors circled w/correct colors.")
+    plt.show()
+
 
 if __name__ == "__main__":
     # test_plot_eigenvecs()
     # test_plot_clustering()
     # test_graph_stats()
-    test_project_binary_clustering()
+    # test_project_binary_clustering()
+    plt.style.use('dark_background')
+
+    test_show_digit_cluster_collage()
     print("All tests passed!")

@@ -21,7 +21,7 @@ class MNISTData(object):
         self._n_train = n_train
         self._n_test = n_test
         (x_train, y_train), (x_test, y_test) = mnist.load_data()
-
+        x_orig = np.vstack((x_train, x_test))
         # reshape and normalize
         x_train = x_train.reshape((x_train.shape[0], -1))
         x_test = x_test.reshape((x_test.shape[0], -1))
@@ -44,13 +44,20 @@ class MNISTData(object):
         def sample_digit(digit):
             idx = np.where(y_raw == digit)[0]
             subset = self._rnd.choice(len(idx), n_train+n_test, replace=False)
-            return x_raw[idx[subset]]
+            images = x_orig[idx[subset]]
+            data = x_raw[idx[subset]]
+            return data, images
 
-        self._train, self._test = {}, {}
+        self._train, self._test, self._test_images, self._train_images = {}, {}, {},{}
         for d in range(10):
-            x = sample_digit(d)
+            x, img = sample_digit(d)
             self._train[d] = x[:n_train]
             self._test[d] = x[n_train:]
+            self._train_images[d] = img[:n_train]
+            self._test_images[d] = img[n_train:]
+
+    def get_images(self, d):
+        return self._train_images[d], self._test_images[d]
 
     def get_digit(self, d):
         return self._train[d], self._test[d]
