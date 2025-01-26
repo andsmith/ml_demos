@@ -1,15 +1,16 @@
 import numpy as np
 from sklearn.decomposition import PCA
-from keras.api.datasets import mnist
 import cv2
 import logging
-
+import os
+import pickle
 
 class MNISTData(object):
     """
     Load raw data, reduce dimensionality, randomly sample to create subset for all testing.
     (use same subset)
     """
+    CACHE = "MNIST_data_local.pkl"
 
     def __init__(self, dim=30, n_train=1000, n_test=2000, rnd_seed=42):
         """
@@ -20,7 +21,7 @@ class MNISTData(object):
         self._rnd = np.random.RandomState(rnd_seed)
         self._n_train = n_train
         self._n_test = n_test
-        (x_train, y_train), (x_test, y_test) = mnist.load_data()
+        (x_train, y_train), (x_test, y_test) = self._load()
         x_orig = np.vstack((x_train, x_test))
         # reshape and normalize
         x_train = x_train.reshape((x_train.shape[0], -1))
@@ -56,6 +57,22 @@ class MNISTData(object):
             self._train_images[d] = img[:n_train]
             self._test_images[d] = img[n_train:]
 
+    def _load(self):
+        if os.path.exists(self.CACHE):
+            logging.info("Loading MNIST data from cache.")
+            with open(self.CACHE, "rb") as f:
+                return pickle.load(f)
+        else:
+            # import here because it's slow
+            from keras.api.datasets import mnist
+            logging.info("Downloading MNIST data.")
+            (x_train, y_train), (x_test, y_test) = mnist.load_data()
+            with open(self.CACHE, "wb") as f:
+                pickle.dump(((x_train, y_train), (x_test, y_test)), f)
+            return (x_train, y_train), (x_test, y_test)
+        logging.info("\tGot %i training and %i test samples." % (len(y_train), len(y_test)))
+
+
     def get_images(self, d):
         return self._train_images[d], self._test_images[d]
 
@@ -75,7 +92,8 @@ def test_data():
     n_train_cols = 5
     n_test_rows = 9
     n_test_cols = 4
-    data = MNISTData(dim=0,
+    import ipdb; ipdb.set_trace()
+    data = MNISTData(dim=0,  # No PCA so we keep the image
                      n_test=n_test_rows*n_test_cols,
                      n_train=n_train_rows*n_train_cols)
     train_imgs, test_imgs = {}, {}
@@ -108,3 +126,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     test_data()
     logging.info("Done.")
+ 

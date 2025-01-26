@@ -20,7 +20,7 @@ from clustering import SpectralAlgorithm, KMeansAlgorithm, ClusterClassifier
 from multiprocessing import Pool, cpu_count
 from pprint import pprint
 from mnist_data import MNISTData
-from mpl_plots import project_binary_clustering, plot_binary_clustering
+from mpl_plots import project_binary_clustering, plot_binary_clustering, show_digit_cluster_collage
 import pickle
 import os
 from fisher_lda import FisherLDA
@@ -78,7 +78,7 @@ class MNISTTuner(object):
         self._k_means_results = None
         self._spectral_results = None
         self._n_cpu = n_cpu if n_cpu > 0 else cpu_count() - 1
-        self._digit_pairs =  [(a, b) for a in range(9) for b in range(a+1, 10)]
+        self._digit_pairs = [(a, b) for a in range(9) for b in range(a+1, 10)]
 
         self._param_ranges = {graph_name: self._get_param_range(graph_name,
                                                                 self.GRAPH_PARAM_NAMES[graph_name],
@@ -94,10 +94,17 @@ class MNISTTuner(object):
         y_train = np.concatenate((np.zeros(len(data_a_train)), np.ones(len(data_b_train))))
         y_test = np.concatenate((np.zeros(len(data_a_test)), np.ones(len(data_b_test))))
 
+        img_a_train, img_a_test = self._data.get_images(pair[0])
+        img_b_train, img_b_test = self._data.get_images(pair[1])
+        img_train = np.vstack((img_a_train, img_b_train))
+        img_test = np.vstack((img_a_test, img_b_test))
+
         return {'x_train': x_train,
                 'y_train': y_train,
                 'x_test': x_test,
                 'y_test': y_test,
+                'img_train': img_train,
+                'img_test': img_test,
                 'pair': pair}
 
     def _get_kmeans_results(self):
@@ -142,7 +149,8 @@ class MNISTTuner(object):
         ax[1].imshow(test_img, cmap='hot', interpolation='nearest')
         ax[0].set_title("TRAIN")
         ax[1].set_title("TEST")
-        fig.suptitle("K-Means Results %i samples/digit\n(mean accuracy over %i trials)" %(self._data.get_n()[0], self._n_KM_trials))
+        fig.suptitle("K-Means Results %i samples/digit\n(mean accuracy over %i trials)" %
+                     (self._data.get_n()[0], self._n_KM_trials))
         # colorbar
         fig.colorbar(ax[0].imshow(train_img, cmap='hot', interpolation='nearest'), ax=ax[0])
         fig.colorbar(ax[1].imshow(test_img, cmap='hot', interpolation='nearest'), ax=ax[1])
@@ -193,6 +201,33 @@ class MNISTTuner(object):
         ax.xaxis.tick_top()
         ax.set_xlim(x_lim)
         ax.set_ylim(y_lim)
+
+    def _plot_best_and_worst_pairs(self, results, n=2, title=""):
+        # only training for now
+
+        def _show_pair(fig, ax, result, title_2, index):
+            pair = result['pair']
+            data = self._get_train_test_data(pair)
+            show_digit_cluster_collage(ax,
+                                       data['img_train'],
+                                       data['x_train'],
+                                       result['train_out'],
+                                       data['y_train'],
+                                       max_n_imgs=300)
+            fig.suptitle("%s - %s pairs, showing %i of %i:  %s" % (title, title_2, index+1, n, pair))
+
+        best = sorted(results, key=lambda x: x['acc_train'], reverse=True)[:n]
+        worst = sorted(results, key=lambda x: x['acc_train'])[:n]
+
+        for i, res in enumerate(best):
+            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+            _show_pair(fig, ax, res, "Best", i)
+            plt.show()
+
+        for i, res in enumerate(worst):
+            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+            _show_pair(fig, ax, res, "Worst", i)
+            plt.show()
 
     def _stats_from_results(self, results):
         train_accs = [r['acc_train'] for r in results]
@@ -282,20 +317,24 @@ class MNISTTuner(object):
         self._fisher_results = self._get_fisher_results()
         self._k_means_results = self._get_kmeans_results()
         self._k_means_stats = self._stats_from_results(self._k_means_results)
-        _, ax = plt.subplots(1, 1)
-        _, ax2 = plt.subplots(1, 1)
-        
-        self.plot_pairwise_clusterings(ax, self._k_means_results, 'train')
-        self.plot_pairwise_clusterings(ax2, self._fisher_results, 'train')
+        #_, ax = plt.subplots(1, 1)
+        #_, ax2 = plt.subplots(1, 1)
+
+        #self.plot_pairwise_clusterings(ax, self._k_means_results, 'train')
+        # self.plot_pairwise_clusterings(ax2, self._fisher_results, 'train')
 
         # self._spectral_results = self._get_spectral_results()
-        self.plot_km_digit_confusion()
-        print("KMeans results:")
+        # self.plot_km_digit_confusion()
+
+        self._plot_best_and_worst_pairs(self._fisher_results, n=10)
+        self._plot_best_and_worst_pairs(self._k_means_results, n=10)
+
+        logging.info("KMeans results:")
         pprint(self._k_means_stats)
         # fig, ax = plt.subplots()
         # self._plot_spectral_result(ax, 'n-neighbors', 'train')
-        ax.set_title("K-Means cluster separation")
-        ax2.set_title("Fisher LDA class separation")
+        #ax.set_title("K-Means cluster separation")
+        #ax2.set_title("Fisher LDA class separation")
         plt.show()
 
     def _plot_kmean_baseline(self, ax, test_train='test'):
@@ -361,7 +400,7 @@ def _test_kmeans(work):
         test_out = classifier.predict(data['x_test'])
         train_acc = np.mean(train_out == data['y_train'])
         test_acc = np.mean(test_out == data['y_test'])
-        
+
         if train_acc > best_results['acc_train']:
             best_results = {'acc_train': train_acc,
                             'acc_test': test_acc,
@@ -398,13 +437,10 @@ def _test_fisher(work):
     train_out = classif.predict(data['x_train'])
     test_out = classif.predict(data['x_test'])
 
-
-
     train_out = classif.predict(data['x_train'])
     test_out = classif.predict(data['x_test'])
     train_acc = np.mean(train_out == data['y_train'])
     test_acc = np.mean(test_out == data['y_test'])
-    
 
     print("Tested Fisher LDA on digits %s:  (Train acc:  %.4f, Test acc: %.4f)" % (
         pair, train_acc, test_acc))
@@ -457,7 +493,6 @@ def _test_params(work):
 
         train_acc = np.mean(train_out == y_train)
         test_acc = np.mean(test_out == y_test)
-        
 
         results.append({'acc_train': train_acc,
                         'acc_test': test_acc,

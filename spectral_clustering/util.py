@@ -18,8 +18,11 @@ def pca(points, d):
     idx = np.argsort(evals)[::-1][:d]
     p_axes = evecs[:, idx]
     vars = evals[idx]
-    print(vars)
-    return p_axes, np.sqrt(vars)
+    if np.sum(vars<=0) > 0:
+        logging.warning("Some eigenvalues are <= 0, returning 0s for those axes.")
+        vars[vars<=0] = 0
+    sds = np.sqrt(vars)
+    return p_axes, sds
 
 
 def test_pca():

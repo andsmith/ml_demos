@@ -251,8 +251,8 @@ def project_binary_clustering(points, labels, whiten=False):
     dirs, _ = pca(points_deflated, 2)
     vert = dirs[:, 0]
 
-    check = np.abs(np.dot(horizontal, vert))
-    print("Check orthogonality: %f" % check)
+    #check = np.abs(np.dot(horizontal, vert))
+    #print("Check orthogonality: %f" % check)
 
     proj_mat = np.column_stack((horizontal, vert))
     projected = points @ proj_mat
@@ -307,7 +307,7 @@ def test_project_binary_clustering():
     plt.show()
 
 
-def show_digit_cluster_collage(ax, images, points, pred_labels, true_labels, max_n_imgs=200,image_extent_frac = 0.03):
+def show_digit_cluster_collage(ax, images, points, pred_labels, true_labels, max_n_imgs=200,image_extent_frac = 0.03, invert=True):
     """
     Plot the images in their embedded locations to show the clustering results.
     Make 2 plots w/correct predictions on the left, errors on the right.
@@ -319,10 +319,11 @@ def show_digit_cluster_collage(ax, images, points, pred_labels, true_labels, max
     :param true_labels: N array of integers in [0, 1], ground truth labels
     :param max_n_imgs: integer, max number of images to plot in each axis.
     :param image_extent_frac: float, fraction of the image width to extend the extent of the image
+    :param invert: True for plotting Black characters on white background
     """
     # flatten to 2d
     points = project_binary_clustering(points, pred_labels)
-    x_span = np.max(points[:, 0]) - np.min(points[:, 0])
+    x_span = 1.0
     side = x_span * image_extent_frac
 
     # do correct side on ax[0]
@@ -333,31 +334,36 @@ def show_digit_cluster_collage(ax, images, points, pred_labels, true_labels, max
     else:
         idx = np.where(correct)[0]
     for i in idx:
-        ax[0].imshow(images[i], extent=(points[i, 0]-side, points[i, 0]+side,
+        img = images[i] if not invert else 255 - images[i]
+        ax[0].imshow(img, extent=(points[i, 0]-side, points[i, 0]+side,
                                      points[i, 1]-side, points[i, 1]+side), cmap='gray',
                                      alpha=images[i]/255.)
-    ax[0].set_xlim(np.min(points[:, 0])-side, np.max(points[:, 0])+side)
-    ax[0].set_ylim(np.min(points[:, 1])-side, np.max(points[:, 1])+side)
+    ax[0].set_xlim(-side, 1.+side)
+    ax[0].set_ylim(-side, 1.+side)
+    ax[0].set_xticks([])
+    ax[0].set_yticks([])
+    
     
     # do errors side on ax[1]
     # TODO:  should find a way to avoid plotting points that will be under images
-    plot_binary_clustering(ax[1], points, pred_labels, None, point_size=1)
+    #plot_binary_clustering(ax[1], points, pred_labels, None, point_size=1)
     n_errors = np.sum(~correct)
     if n_errors > max_n_imgs:
         idx = np.random.choice(np.where(~correct)[0], max_n_imgs, replace=False)
     else:
         idx = np.where(~correct)[0]
     for i in idx:
-        ax[1].imshow(images[i], extent=(points[i, 0]-side, points[i, 0]+side,
+        img = images[i] if not invert else 255 - images[i]
+        ax[1].imshow(img, extent=(points[i, 0]-side, points[i, 0]+side,
                                      points[i, 1]-side, points[i, 1]+side), cmap='gray',
                                      alpha=images[i]/255.)
-    ax[1].set_xlim(np.min(points[:, 0])-side, np.max(points[:, 0])+side)
-    ax[1].set_ylim(np.min(points[:, 1])-side, np.max(points[:, 1])+side)
-
+    ax[1].set_xlim(-side, 1.+side)
+    ax[1].set_ylim(-side, 1.+side)
     ax[0].set_title("Correct predictions")
     ax[1].set_title("Errors")
-
-
+    ax[1].set_xticks([])
+    ax[1].set_yticks([])
+    
 def test_show_digit_cluster_collage():
     # making test data
     from mnist_data import MNISTData
