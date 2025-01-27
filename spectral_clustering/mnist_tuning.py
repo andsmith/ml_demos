@@ -1,16 +1,18 @@
 """
-What are the effects of the different similarity graphs & their parameters on the
-spectrum and clustering results?
+Sweep over parameter values for the spectral clustering variants.
 
-    method:
-      1. Reduce dim to 30 with PCA.
-      2. For each clustering algorithm variant, iterate over many values of its parameter:
-      3.    For all 45 pairs of dissimilar digits:
-      4.       Cluster with K=2, determine cluster labels that yield best training accuracy.
-      5     Compute mean, sd of each parameter value (and k-means).
-      6. For the N pairs, cluster 5 times with K-Means, determine mean & sd of test/train accuracy.
-      7. Plot the accuracy +/- 1 sd curve as the parameter varies. 
-      8. Plot the best result for each algorithm (and k-means on each) on a single plot.
+In "Pairwise Mode", for each parameter value:
+    * Each of the 45 digit pairs is clustered with K=2, cluster/class labels are assigned to maximize accuracy.
+    * Mean/sd of accuracy is computed over all pairs.
+    * Results are a plot of the accuracy +/- 1 sd curve as the parameter varies.
+    * Add K-Means and Fisher LDA for comparison.
+
+In "Full Mode", for each parameter value:
+    * All digits are clustered with K=10, cluster/class labels are assigned to maximize accuracy.
+    * Accuracy computed as the mean one-vs-rest classification accuracy.
+    * Results are a plot of the accuracy +/- 1 sd curve as the parameter varies.
+    * Add K-Means for comparison.
+
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -113,7 +115,7 @@ class MNISTTuner(object):
             logging.info("Creating work for K-Means results...")
             for pair in self._digit_pairs:
                 work.append({'pair': pair,
-                            'data': self._get_train_test_data(pair),
+                             'data': self._get_train_test_data(pair),
                              'n_trials': self._n_KM_trials})
             logging.info("Done creating work for K-Means results, %i tasks." % len(work))
 
@@ -317,10 +319,10 @@ class MNISTTuner(object):
         self._fisher_results = self._get_fisher_results()
         self._k_means_results = self._get_kmeans_results()
         self._k_means_stats = self._stats_from_results(self._k_means_results)
-        #_, ax = plt.subplots(1, 1)
-        #_, ax2 = plt.subplots(1, 1)
+        # _, ax = plt.subplots(1, 1)
+        # _, ax2 = plt.subplots(1, 1)
 
-        #self.plot_pairwise_clusterings(ax, self._k_means_results, 'train')
+        # self.plot_pairwise_clusterings(ax, self._k_means_results, 'train')
         # self.plot_pairwise_clusterings(ax2, self._fisher_results, 'train')
 
         # self._spectral_results = self._get_spectral_results()
@@ -333,8 +335,8 @@ class MNISTTuner(object):
         pprint(self._k_means_stats)
         # fig, ax = plt.subplots()
         # self._plot_spectral_result(ax, 'n-neighbors', 'train')
-        #ax.set_title("K-Means cluster separation")
-        #ax2.set_title("Fisher LDA class separation")
+        # ax.set_title("K-Means cluster separation")
+        # ax2.set_title("Fisher LDA class separation")
         plt.show()
 
     def _plot_kmean_baseline(self, ax, test_train='test'):
