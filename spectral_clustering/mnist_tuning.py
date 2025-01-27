@@ -9,7 +9,7 @@ In "Pairwise Mode", for each parameter value:
 
 In "Full Mode", for each parameter value:
     * All digits are clustered with K=10, cluster/class labels are assigned to maximize accuracy.
-    * Accuracy computed as the mean one-vs-rest classification accuracy.
+    * Accuracy computed as the mean (and sd) of the one-vs-rest classification accuracy.
     * Results are a plot of the accuracy +/- 1 sd curve as the parameter varies.
     * Add K-Means for comparison.
 
@@ -17,7 +17,7 @@ In "Full Mode", for each parameter value:
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
-from similarity import FullSimGraph, NNSimGraph, SoftNNSimGraph, EpsilonSimGraph
+from similarity import GRAPH_TYPES
 from clustering import SpectralAlgorithm, KMeansAlgorithm, ClusterClassifier
 from multiprocessing import Pool, cpu_count
 from pprint import pprint
@@ -29,46 +29,9 @@ from fisher_lda import FisherLDA
 # Expand these for easier comparison:
 
 
-class SoftNNSimGraphAdditive(SoftNNSimGraph):
-    def __init__(self, points, alpha):
-        super().__init__(points, alpha, additive=True)
-
-
-class SoftNNSimGraphMultiplicative(SoftNNSimGraph):
-    def __init__(self, points, alpha):
-        super().__init__(points, alpha, additive=False)
-
-
-class NNSimGraphMutual(NNSimGraph):
-    def __init__(self, points, k):
-        super().__init__(points, k, mutual=True)
-
-
-class NNSimGraphNonMutual(NNSimGraph):
-    def __init__(self, points, k):
-        super().__init__(points, k, mutual=False)
-
 
 class MNISTTuner(object):
 
-    GRAPH_TYPES = {  # 'full': FullSimGraph,
-        'n-neighbors': NNSimGraphNonMutual,
-        # 'n-mutual-neighbors': NNSimGraphMutual,
-        # 'soft_neighbors_additive': SoftNNSimGraphAdditive,
-        # 'soft_neighbors_multiplicative': SoftNNSimGraphMultiplicative,
-        # 'epsilon': EpsilonSimGraph
-    }
-
-    GRAPH_PARAM_NAMES = {'full': 'sigma',
-                         'n-neighbors': 'k',
-                         'n-mutual-neighbors': 'k',
-                         'soft_neighbors_additive': 'alpha',
-                         'soft_neighbors_multiplicative': 'alpha',
-                         'epsilon': 'epsilon'}
-
-    KM_RESULTS_CACHE_FILE = "km_results.pkl"
-    SPECTRAL_RESULTS_CACHE_FILE = "spectral_results.pkl"
-    FISHER_CACHE_FILE = "fisher_results.pkl"
 
     def __init__(self, data, n_KM_trials=30, n_param_tests=30, n_cpu=1):
         self._data = data
@@ -109,127 +72,8 @@ class MNISTTuner(object):
                 'img_test': img_test,
                 'pair': pair}
 
-    def _get_kmeans_results(self):
-        if not os.path.exists(self.KM_RESULTS_CACHE_FILE):
-            work = []
-            logging.info("Creating work for K-Means results...")
-            for pair in self._digit_pairs:
-                work.append({'pair': pair,
-                             'data': self._get_train_test_data(pair),
-                             'n_trials': self._n_KM_trials})
-            logging.info("Done creating work for K-Means results, %i tasks." % len(work))
+ 
 
-            if self._n_cpu == 1:
-                logging.info("Running K-Means results in single process.")
-                results = [_test_kmeans(w) for w in work]
-            else:
-                logging.info("Running K-Means results in %i processes." % self._n_cpu)
-                with Pool(self._n_cpu) as pool:
-                    results = pool.map(_test_kmeans, work)
-
-            with open(self.KM_RESULTS_CACHE_FILE, 'wb') as f:
-                logging.info("Saving K-Means results to %s" % self.KM_RESULTS_CACHE_FILE)
-                pickle.dump(results, f)
-        else:
-
-            with open(self.KM_RESULTS_CACHE_FILE, 'rb') as f:
-                logging.info("Loading K-Means results from %s" % self.KM_RESULTS_CACHE_FILE)
-                results = pickle.load(f)
-
-        return results
-
-    def plot_km_digit_confusion(self):
-        test_img = np.zeros((10, 10), dtype=np.float32)
-        train_img = np.zeros((10, 10), dtype=np.float32)
-        for result in self._k_means_results:
-            train_img[int(result['pair'][0]), int(result['pair'][1])] = result['acc_train']
-            test_img[int(result['pair'][0]), int(result['pair'][1])] = result['acc_test']
-            train_img[int(result['pair'][1]), int(result['pair'][0])] = result['acc_train']
-            test_img[int(result['pair'][1]), int(result['pair'][0])] = result['acc_test']
-        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-        ax[0].imshow(train_img, cmap='hot', interpolation='nearest')
-        ax[1].imshow(test_img, cmap='hot', interpolation='nearest')
-        ax[0].set_title("TRAIN")
-        ax[1].set_title("TEST")
-        fig.suptitle("K-Means Results %i samples/digit\n(mean accuracy over %i trials)" %
-                     (self._data.get_n()[0], self._n_KM_trials))
-        # colorbar
-        fig.colorbar(ax[0].imshow(train_img, cmap='hot', interpolation='nearest'), ax=ax[0])
-        fig.colorbar(ax[1].imshow(test_img, cmap='hot', interpolation='nearest'), ax=ax[1])
-
-    def plot_pairwise_clusterings(self, ax, results, which='train'):
-        """
-        Plot the clustering results for each digit pair.
-
-        """
-        v_digits = []
-        h_digits = []
-
-        for result in results:
-            pair = result['pair']
-
-            data = self._get_train_test_data(pair)
-            if which == 'train':
-                pred_labels = result['train_out']
-                true_labels = data['y_train']
-                points = data['x_train']
-            else:
-                pred_labels = result['test_out']
-                true_labels = data['y_test']
-                points = data['x_test']
-            unit_points = project_binary_clustering(points, true_labels)
-            points_shifted = unit_points + np.array(pair)
-            # if pair==(2,3):
-            #    import ipdb; ipdb.set_trace()
-            plot_binary_clustering(ax, points_shifted, pred_labels.astype(int), true_labels.astype(int),
-                                   point_size=2, circle_size=15)
-            v_digits.append(pair[1])
-            h_digits.append(pair[0])
-        v_digits = np.sort(np.unique(v_digits))
-        h_digits = np.sort(np.unique(h_digits))
-
-        # draw black lines between pairs
-        x_lim, y_lim = [0, 9], [1, 10]
-        for i in range(9):
-            if i < 9:
-                ax.plot([i, i], y_lim, color='black', linewidth=0.5)
-            ax.plot(x_lim, [i+1, i+1], color='black', linewidth=0.5)
-        # set x-ticks and y-ticks for all integers
-        ax.set_xticks(np.array(h_digits)+.5)
-        ax.set_yticks(np.array(v_digits)+.5)
-        ax.set_xticklabels(["%i" % i for i in h_digits])
-        ax.set_yticklabels(["%i" % i for i in v_digits])
-
-        ax.xaxis.tick_top()
-        ax.set_xlim(x_lim)
-        ax.set_ylim(y_lim)
-
-    def _plot_best_and_worst_pairs(self, results, n=2, title=""):
-        # only training for now
-
-        def _show_pair(fig, ax, result, title_2, index):
-            pair = result['pair']
-            data = self._get_train_test_data(pair)
-            show_digit_cluster_collage(ax,
-                                       data['img_train'],
-                                       data['x_train'],
-                                       result['train_out'],
-                                       data['y_train'],
-                                       max_n_imgs=300)
-            fig.suptitle("%s - %s pairs, showing %i of %i:  %s" % (title, title_2, index+1, n, pair))
-
-        best = sorted(results, key=lambda x: x['acc_train'], reverse=True)[:n]
-        worst = sorted(results, key=lambda x: x['acc_train'])[:n]
-
-        for i, res in enumerate(best):
-            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-            _show_pair(fig, ax, res, "Best", i)
-            plt.show()
-
-        for i, res in enumerate(worst):
-            fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-            _show_pair(fig, ax, res, "Worst", i)
-            plt.show()
 
     def _stats_from_results(self, results):
         train_accs = [r['acc_train'] for r in results]
@@ -285,38 +129,9 @@ class MNISTTuner(object):
 
         return results
 
-    def _get_fisher_results(self):
-        """
-        Apply fisher's linear discriminant analysis to the data as an
-        upper bound to the performance of K-means, since K-means with 2
-        classes has a linear decision boundary, and LDA finds the optimal one.
-        """
-        if not os.path.exists(self.FISHER_CACHE_FILE):
-            work = []
-            for pair in self._digit_pairs:
-                data = self._get_train_test_data(pair)
-                work.append({'pair': pair,
-                            'graph_name': 'Fisher LDA',
-                             'data': data})
-            output = [_test_fisher(w) for w in work]
-            # if self._n_cpu == 1:
-            #    output = [_test_fisher(w) for w in work]
-            # else:
-            #    with Pool(self._n_cpu) as pool:
-            #        output = pool.map(_test_fisher, work)
-            logging.info("Saving Fisher results to %s" % self.FISHER_CACHE_FILE)
-            with open(self.FISHER_CACHE_FILE, 'wb') as f:
-                pickle.dump(output, f)
 
-        else:
-            logging.info("Reading Fisher results from %s" % self.FISHER_CACHE_FILE)
-            with open(self.FISHER_CACHE_FILE, 'rb') as f:
-                output = pickle.load(f)
-
-        return output
 
     def run(self):
-        self._fisher_results = self._get_fisher_results()
         self._k_means_results = self._get_kmeans_results()
         self._k_means_stats = self._stats_from_results(self._k_means_results)
         # _, ax = plt.subplots(1, 1)
@@ -328,7 +143,7 @@ class MNISTTuner(object):
         # self._spectral_results = self._get_spectral_results()
         # self.plot_km_digit_confusion()
 
-        self._plot_best_and_worst_pairs(self._fisher_results, n=10)
+        # self._plot_best_and_worst_pairs(self._fisher_results, n=10)
         self._plot_best_and_worst_pairs(self._k_means_results, n=10)
 
         logging.info("KMeans results:")
@@ -338,13 +153,6 @@ class MNISTTuner(object):
         # ax.set_title("K-Means cluster separation")
         # ax2.set_title("Fisher LDA class separation")
         plt.show()
-
-    def _plot_kmean_baseline(self, ax, test_train='test'):
-        x = ax.get_xlim()
-        means = self._k_means_stats['test_mean'] if test_train == 'test' else self._k_means_stats['train_mean']
-        sd = self._k_means_stats['test_sd'] if test_train == 'test' else self._k_means_stats['train_sd']
-        self._plot_bands(ax, x, [means, means], [sd, sd], "K-Means Baseline")
-        ax.set_xlim(x[0], x[1])
 
     def _plot_bands(self, ax, param_values, means, sds, label):
         ax.plot(param_values, means, label=label)
@@ -380,79 +188,6 @@ class MNISTTuner(object):
             return np.linspace(0.01, 1, n_vals)
         elif param_name == 'alpha':
             return np.linspace(0.1, 5, n_vals)
-
-
-def _test_kmeans(work):
-    """
-    multiprocessing helper for testing K-means, n-trials on a single digit pair.
-    """
-    pair = work['pair']
-    data = work['data']
-    n_trials = work['n_trials']
-
-    best_results = {'acc_train': 0,
-                    'acc_test': 0,
-                    'train_out': None,
-                    'test_out': None}
-    for _ in range(n_trials):
-        km = KMeansAlgorithm(2)
-        km.fit(data['x_train'])
-        classifier = ClusterClassifier(km, data['x_train'], data['y_train'])
-        train_out = classifier.predict(data['x_train'])
-        test_out = classifier.predict(data['x_test'])
-        train_acc = np.mean(train_out == data['y_train'])
-        test_acc = np.mean(test_out == data['y_test'])
-
-        if train_acc > best_results['acc_train']:
-            best_results = {'acc_train': train_acc,
-                            'acc_test': test_acc,
-                            'train_out': train_out,
-                            'test_out': test_out}
-
-    best_results['pair'] = pair
-    best_results['graph_name'] = 'k-means'
-    print("Tested K-Means for digit pair {}, {} samples, {} times, best results: train_acc={}, test_acc={}".format(
-        pair, len(data['x_train']), n_trials, train_acc, test_acc))
-
-    return best_results
-
-
-def _test_fisher(work):
-    """
-    multiprocessing helper for testing Fisher's LDA on a single digit pair.
-    :param work: dict with {
-                    'pair': (a, b),
-                    'graph_name': 'Fisher LDA',
-                    'data': dict with x_train, x_test, y_train, y_test}
-    :returns: list of dicts with {
-                    'acc_train': train accuracy,
-                    'acc_test': test accuracy,
-                    'pair': (a, b),
-                    'graph_name': 'Fisher LDA'}
-    """
-
-    pair = work['pair']
-    data = work['data']
-    model = FisherLDA()
-    model.fit(data['x_train'], data['y_train'])
-    classif = ClusterClassifier(model, data['x_train'], data['y_train'])
-    train_out = classif.predict(data['x_train'])
-    test_out = classif.predict(data['x_test'])
-
-    train_out = classif.predict(data['x_train'])
-    test_out = classif.predict(data['x_test'])
-    train_acc = np.mean(train_out == data['y_train'])
-    test_acc = np.mean(test_out == data['y_test'])
-
-    print("Tested Fisher LDA on digits %s:  (Train acc:  %.4f, Test acc: %.4f)" % (
-        pair, train_acc, test_acc))
-
-    return {'acc_train': train_acc,
-            'acc_test': test_acc,
-            'test_out': test_out,
-            'train_out': train_out,
-            'pair': pair,
-            'graph_name': 'Fisher LDA'}
 
 
 def _test_params(work):

@@ -50,7 +50,10 @@ class FisherLDA(object):
         :return: projected data points (N)
         """
         return x @ self.w > self.threshold
-
+    
+    def get_k(self):
+        # for compatibility with clustering algorithms
+        return 2
 
 def test_fisher_lda():
     n = 1000

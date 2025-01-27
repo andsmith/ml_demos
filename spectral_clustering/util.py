@@ -3,7 +3,8 @@ import cv2
 import matplotlib.pyplot as plt
 import logging
 from scipy.interpolate import interp1d
-
+import os
+import pickle
 
 def pca(points, d):
     """
@@ -483,6 +484,26 @@ def test_orthornormalize():
     print(np.dot(vecs[0], vecs[2]))
     print(np.dot(vecs[1], vecs[2]))
 
+
+def load_cached(func, filename, *args, **kwargs):
+    """
+    Load the result of a function from a file if it exists, otherwise run the function and save the result.
+    :param func: function to run
+    :param filename: file to save/load the result
+    :param args: args to pass to the function
+    :param kwargs: kwargs to pass to the function
+    :return: result of the function
+    """
+    if os.path.exists(filename):
+        with open(filename, 'rb') as f:
+            logging.info("Loading %s" % (filename,))
+            return pickle.load(f)
+    else:
+        result = func(*args, **kwargs)
+        with open(filename, 'wb') as f:
+            logging.info("Caching %s" % (filename,))
+            pickle.dump(result, f)
+        return result
 
 if __name__ == '__main__':
     # test_sample_canonical_ellipse(empty_frac=.667)

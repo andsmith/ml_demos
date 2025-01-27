@@ -33,6 +33,9 @@ class ClusteringAlgorithm(ABC):
     def is_fit(self):
         return self._fit    
     
+    def get_k(self):
+        return self._k
+    
 def render_clustering(img, points, cluster_ids, colors, clip_unit=True, margin_px=5):
     """
     Render the clustering.
@@ -126,12 +129,12 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         n_ind = self._tree.query(x, k=1)[1]
         return self._kmeans.labels_[n_ind]
 
-
+'''  # subsued by MNISTResult
 class ClusterClassifier(object):
-    def __init__(self, fit_model, train_in, train_out):
+    def __init__(self,k,  fit_model, train_in, train_out):
         """
         :param fit_model: subclass of ClusteringAlgorithm
-        :param train_in: N x 2 array of training points
+        :param train_in: N x d array of training points
         :param train_out: N x 1 array of training cluster assignments
         """
         self._model = fit_model
@@ -151,7 +154,7 @@ class ClusterClassifier(object):
             pred = 1 - pred
         return pred
 
-
+'''
 def test_render_clustering():
     import cv2
     img = np.zeros((480, 640, 3), np.uint8)
