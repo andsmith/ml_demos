@@ -100,10 +100,13 @@ class MNISTResult(object):
         return np.mean(self.pred_labels == self.true_labels)
     
     def _get_confusion_matrix(self):
+        """
+        element i,j is the fraction of samples with label j were correctly assigned to cluster i
+        """
         if self.true_labels is None:
             raise ValueError("True labels are not provided.")
         conf_mat = np.zeros((self.k, self.k))
         for i in range(self.k):
             for j in range(self.k):
-                conf_mat[i, j] = np.mean((self.pred_labels == i) & (self.true_labels == j))
+                conf_mat[i, j] = np.sum((self.pred_labels == i) & (self.true_labels == j)) / np.sum(self.true_labels == j)
         return conf_mat

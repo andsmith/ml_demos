@@ -126,3 +126,85 @@ The hotkey 'g' toggles showing the edges that exist between vertices given curre
 ![datasets](/spectral_clustering/assets/graph_view.png)
 
 The parameters indicated in the toolbar explain the success of the spectral algorithm:  it succeeded in recovering the three concentric clusters because parameter settings created a graph with only three edges between points in different clusters (so the clusters are easily separable) and where every point has several edges to other points in the same cluster (so there are no stragglers/outliers).
+
+
+# Experiments on the MNIST handwritten digit dataset:
+
+The [MNIST digit classification dataset](https://keras.io/api/datasets/mnist/) consists of 70,000 greyscale images handwritten digits 0 - 9:
+
+![datasets](/spectral_clustering/assets/MNIST/mnist_data.png)
+
+Treating each as a 784-element vector and its digit as the label, how well do the clusters in this dataset conform to class labels?
+
+### General experiments:
+ To explore this, the MNIST scripts contain three types of experiments:
+ * **Full clustering**:  If we put all the data together and look for $K=10$ clusters, will the digits be separated by cluster?
+ * **Pairwise clustering**:  If we combine the samples from two digits and cluster the result with $K=2$, do the most prominent clusters also separate the digit classes?
+ * **Single digit clustering**:  Can we discover subtypes of a single digit, such as crossed and uncrossed sevens?
+
+The general process for comparing clusters to class labels is:
+  1. Reduce dimensionality to 30 using PCA on the full dataset.
+  2. Cluster for $K=2$ or $10$ clusters, assign cluster--class mapping that results in highest accuracy.
+  3. Repeat step 3 to get the best clustering (10 times seems stable).
+
+For pairwise clustering experiments, average accuracies are computed over all 45 pairs.  For full clustering experiments, averages are over 100 random samples of the full dataset.
+  
+
+## Clustering digits with K-Means
+As a basline, the experiments are run with K-means.  Do the clusters that K-means find look like they separate the digit image classes?
+
+Run `> python mnist_kmeans.py` which will run the pairwise and full (10-digit) clustering experiments and generate the following figures:
+
+#### K-Means pairwise results
+
+When given data from two digits, K-Means finds two clusters that correspond to those two digits with varying degrees of accuracy:
+
+![datasets](/spectral_clustering/assets/MNIST/KM_pariwise_accuracy.png)
+
+The pairs (1, 0) (6, 7), and (6,9) are particularly well separated, whereas the pairs (5, 8), (4, 9), and (7, 9) are more mixed.
+
+The next graph shows a 2-d embedding (down from the 30 PCs) of each of the 45 pairwise cluster experiments, showing the correct and incorrect classifications.  The horizontal axis separating the cluster's centers and the vertical axis maximizing point spread:
+
+![datasets](/spectral_clustering/assets/MNIST/KM_pariwise_clusters.png)
+
+It's more useful zoomed in, e.g. to (6, 8):
+
+![datasets](/spectral_clustering/assets/MNIST/KM_pariwise_clusters_zoomed.png)
+
+The final pairwise experiment plot shows the digit images in their embedded positions, with the correct and incorrect digits in side-by-side plots.  The 3 best and worst clusterings (label correspondences) are plotted:
+
+
+![datasets](/spectral_clustering/assets/MNIST/KM_pairwise_best_worst.png)
+
+With the more accurate pairs, the errors are on the boundary between clusters.  With the least accurate, they are all mixed together.    
+
+#### K-means full 10-digit results:
+
+Putting all the data together, looking for 10 clusters in it, and assigning them class labels yields much lower accuracy than attempting to distinguish only two digits at a time:
+
+
+![datasets](/spectral_clustering/assets/MNIST/KM_full_accuracy.png)
+
+The upper plot shows, in cell $(i,j)$ the proportion of digits with label $j$ that ended up in cluster $i$.  The diagonal elements are therefore the fraction of correctly identified digits in each class, and the off-diagonals show the frequent misidentifications.  As with the pairwise experiments, 1 is easiest to distingiush from the other digits and 5 is much harder.
+
+The lower plot shows the distribution of (all digit) accuracies over the 100 randomly sampled trials. 
+
+## Spectral clustering results
+
+#### Tuning parameters
+
+Each of the similarity graph types has a hyperparameter.  To find the best value for a particular MNIST clustering task, a range of values is tested and evaulated for accuracy (correspondence with cluster type).  The parameter giving highest accuracy is used.
+
+Run `> python mnist_tuning.py` to compare the different resulst on the pairwise and full experiments.  This generate the following figure:
+
+#### Spectral pairwise results:
+
+To compare the results of spectral clustering the digits pairwise using the diferent similarity graph types (and the KMeans results), run `> python mnist_pairwise.py`.  This will generate this figure:
+
+#### Spectral full results:
+
+To compare the four similarity graphs with the KMeans resulsts, run `> python mnist_pairwise.py` to generate this figure:
+
+#### Spectral single digit results:
+
+To find digit sub-classes with the spectral clustering algorithms, run `> python mnist_single.py`.

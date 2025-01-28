@@ -87,8 +87,8 @@ def test_data_img():
     """
     Make a collage of data.
     """
-    n_rows = 9
-    n_cols = 9
+    n_rows = 4
+    n_cols = 4
     data = MNISTDataPCA(dim=30)
 
     imgs = {}
@@ -108,9 +108,15 @@ def test_data_img():
             x = 0
             y += imgs[d].shape[0]
 
-    title = "MNIST - %i train, %i test per digit (esc to close)" % (n_rows*n_cols, n_rows*n_cols)
-    cv2.imshow(title, output)
-    cv2.waitKey(0)
+    title = "MNIST data"
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.imshow(1-output/255., cmap='gray')
+    ax.set_title(title)
+    # axes off
+    ax.axis('off')
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":

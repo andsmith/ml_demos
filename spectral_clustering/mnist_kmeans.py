@@ -95,8 +95,10 @@ class KMeansFull(object):
         # show confusion matrix & histogram in one figure
         fig, ax = plt.subplots(2, 1, figsize=(5, 8))
         img = plot_full_confusion(ax[0], self._all_results)
-        ax[0].set_ylabel("Mean confusion matrix.")
+        ax[0].set_ylabel("Cluster ID")
+        ax[1].set_xlabel("True digit")
         fig.colorbar(img, ax=ax[0])
+        ax[0].set_title("recall accuracy (diagonal) & F.P. rate.")
 
         # accuracy histogram
         accuracies = [result.accuracy for result in self._all_results]
@@ -236,14 +238,14 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info("Running KMeansPairwise.")
 
-    km = KMeansPairwise()
-    km.plot_results()
-    plt.show()
+    #km = KMeansPairwise()
+    #km.plot_results()
+    #plt.show()
 
     km = KMeansFull()
     km.plot_results()
     plt.show()
 
-    f = FisherPairwise()
-    f.plot_results()
+    #f = FisherPairwise()
+    #f.plot_results()
     plt.show()
