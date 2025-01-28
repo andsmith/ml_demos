@@ -9,7 +9,7 @@ In "Pairwise Mode", for each parameter value:
 
 In "Full Mode", for each parameter value:
     * All digits are clustered with K=10, cluster/class labels are assigned to maximize accuracy.
-    * Accuracy computed as the mean (and sd) of the one-vs-rest classification accuracy.
+    * Accuracy computed as the mean (and sd) of class label correctness.
     * Results are a plot of the accuracy +/- 1 sd curve as the parameter varies.
     * Add K-Means for comparison.
 
@@ -22,7 +22,7 @@ from clustering import SpectralAlgorithm, KMeansAlgorithm, ClusterClassifier
 from multiprocessing import Pool, cpu_count
 from pprint import pprint
 from mnist_data import MNISTData
-from mpl_plots import project_binary_clustering, plot_binary_clustering, show_digit_cluster_collage
+from mpl_plots import project_binary_clustering, plot_binary_clustering, show_digit_cluster_collage_binary
 import pickle
 import os
 from fisher_lda import FisherLDA
@@ -31,7 +31,6 @@ from fisher_lda import FisherLDA
 
 
 class MNISTTuner(object):
-
 
     def __init__(self, data, n_KM_trials=30, n_param_tests=30, n_cpu=1):
         self._data = data

@@ -61,7 +61,8 @@ class MNISTResult(object):
         :param data: data used to fit the model
         :param cluster_ids: cluster ids for each data point
         :param true_labels: true labels for each data point
-        :param sample_indices: indices into full NIST dataset used to train model
+        :param sample_indices: indices into full NIST dataset used to train model 
+            (dict: key=digit, value = index array)
         :param aux: any auxiliary data to store with the result
         """
         self.aux = aux
@@ -71,24 +72,24 @@ class MNISTResult(object):
         self.cluster_ids = model.assign(data)
         self.true_labels = true_labels
         if true_labels is not None:
-            self.pred_labels = self._get_cluster_labels()
+            self.label_map =  self._get_cluster_labels()
+            self.pred_labels = np.array([self.label_map[c] for c in self.cluster_ids])
             self.accuracy = self._get_accuracy()
 
     def _get_cluster_labels(self):
         if self.k == 2:
-            # just see which is better
             err_rate = np.mean(self.cluster_ids != self.true_labels)
             if err_rate > 0.5:
-                return 1 - self.cluster_ids
+                return {0: 1, 1: 0}
             else:
-                return self.cluster_ids
+                return {0: 0, 1: 1}
         else:
             # use the Hungarian algorithm to assign cluster labels to digit labels
             m = Munkres()
             cost_matrix = np.zeros((self.k, self.k))
             for i in range(self.k):
                 for j in range(self.k):
-                    cost_matrix[i, j] = -np.sum((self.pred_labels == i) & (self.true_labels == j))
+                    cost_matrix[i, j] = -np.sum((self.cluster_ids == i) & (self.true_labels == j))
             indexes = m.compute(cost_matrix)
             cluster_label_map = {i: j for i, j in indexes}
             return cluster_label_map
@@ -97,3 +98,12 @@ class MNISTResult(object):
         if self.true_labels is None:
             raise ValueError("True labels are not provided.")
         return np.mean(self.pred_labels == self.true_labels)
+    
+    def _get_confusion_matrix(self):
+        if self.true_labels is None:
+            raise ValueError("True labels are not provided.")
+        conf_mat = np.zeros((self.k, self.k))
+        for i in range(self.k):
+            for j in range(self.k):
+                conf_mat[i, j] = np.mean((self.pred_labels == i) & (self.true_labels == j))
+        return conf_mat
