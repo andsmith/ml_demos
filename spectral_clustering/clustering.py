@@ -84,11 +84,12 @@ class KMeansAlgorithm(ClusteringAlgorithm):
 
 
 class SpectralAlgorithm(ClusteringAlgorithm):
-    def __init__(self, sim_graph):
+    def __init__(self, sim_graph, normalize=False):
         """
         :param sim_graph: similarity graph
         """
         super().__init__('Spectral', None)
+        self._normalize = normalize
         self._g = sim_graph
         self._tree = self._g.get_tree()  # for clustering new points
         self._solve()
@@ -98,8 +99,14 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         # set diagonal to zero
         np.fill_diagonal(w, 0)
         # compute the Laplacian matrix:
-        degree_mat = np.sum(w, axis=1)
-        laplacian = np.diag(degree_mat) - w
+        degree_vec = np.sum(w, axis=1)
+        degree_mat = np.diag(degree_vec)
+        laplacian = degree_mat - w
+        if self._normalize:
+            # normalize
+            degree_mat_sqrt = np.diag(1 / np.sqrt(degree_vec))
+            laplacian = np.dot(degree_mat_sqrt, np.dot(laplacian, degree_mat_sqrt))
+
         eigvals, eigvecs = np.linalg.eigh(laplacian)
 
         # sort by eigenvalues
@@ -110,6 +117,9 @@ class SpectralAlgorithm(ClusteringAlgorithm):
 
     def fit(self, n_clusters, n_features):
         eig_features = self._eigvecs[:, :n_features]
+        if self._normalize:
+            # normalize
+            eig_features /= np.linalg.norm(eig_features, axis=1)[:, np.newaxis]
 
 
         # kmeans on eigenvectors
