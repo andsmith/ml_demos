@@ -17,141 +17,116 @@ In "Full Mode", for each parameter value:
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
-from similarity import GRAPH_TYPES
-from clustering import SpectralAlgorithm, KMeansAlgorithm, ClusterClassifier
+from mnist_common import GRAPH_TYPES, GRAPH_PARAM_NAMES, MNISTResult
+from clustering import SpectralAlgorithm, KMeansAlgorithm
 from multiprocessing import Pool, cpu_count
 from pprint import pprint
-from mnist_data import MNISTData
-from mpl_plots import project_binary_clustering, plot_binary_clustering, show_digit_cluster_collage_binary
+from mnist_data import MNISTDataPCA
+from mpl_plots import project_binary_clustering, plot_binary_clustering
 import pickle
 import os
 from fisher_lda import FisherLDA
-# Expand these for easier comparison:
+from scipy.spatial.distance import pdist
+from util import load_cached
+# Common params for full and pairwise experiments
+DIM = 30
+N_SAMP = 1000
+N_BOOT = 50  # bootstraps for error estimation
+N_CPU = 12
+n_vals = 50
 
 
+class MNISTPairwiseTuner(object):
 
-class MNISTTuner(object):
-
-    def __init__(self, data, n_KM_trials=30, n_param_tests=30, n_cpu=1):
-        self._data = data
-        self._n_KM_trials = n_KM_trials
-        self._init_tests(n_cpu, n_param_tests)
-        logging.info("Running with {} digit pairs.".format(len(self._digit_pairs)))
-
-    def _init_tests(self, n_cpu, n_param_tests):
-        self._k_means_results = None
-        self._spectral_results = None
+    def __init__(self, n_param_vals=n_vals, n_cpu=N_CPU, pca_dim=DIM, n_samp=N_SAMP):
+        self._helper_func = _test_params
+        self._dim = pca_dim
+        self._data = MNISTDataPCA(dim=self._dim)
+        self._n_samples = n_samp
+        self._n_param_vals = n_param_vals
         self._n_cpu = n_cpu if n_cpu > 0 else cpu_count() - 1
         self._digit_pairs = [(a, b) for a in range(9) for b in range(a+1, 10)]
 
-        self._param_ranges = {graph_name: self._get_param_range(graph_name,
-                                                                self.GRAPH_PARAM_NAMES[graph_name],
-                                                                n_param_tests,
-                                                                self._data)
-                              for graph_name in self.GRAPH_PARAM_NAMES}
-
-    def _get_train_test_data(self, pair):
-        data_a_train, data_a_test = self._data.get_digit(pair[0])
-        data_b_train, data_b_test = self._data.get_digit(pair[1])
-        x_train = np.vstack((data_a_train, data_b_train))
-        x_test = np.vstack((data_a_test, data_b_test))
-        y_train = np.concatenate((np.zeros(len(data_a_train)), np.ones(len(data_b_train))))
-        y_test = np.concatenate((np.zeros(len(data_a_test)), np.ones(len(data_b_test))))
-
-        img_a_train, img_a_test = self._data.get_images(pair[0])
-        img_b_train, img_b_test = self._data.get_images(pair[1])
-        img_train = np.vstack((img_a_train, img_b_train))
-        img_test = np.vstack((img_a_test, img_b_test))
-
-        return {'x_train': x_train,
-                'y_train': y_train,
-                'x_test': x_test,
-                'y_test': y_test,
-                'img_train': img_train,
-                'img_test': img_test,
-                'pair': pair}
-
- 
-
-
-    def _stats_from_results(self, results):
-        train_accs = [r['acc_train'] for r in results]
-        test_accs = [r['acc_test'] for r in results]
-
-        return {'train_mean': np.mean(train_accs),
-                'train_sd': np.std(train_accs),
-                'test_mean': np.mean(test_accs),
-                'test_sd': np.std(test_accs)}
-
-    def _get_spectral_results(self):
-        """
-        :param graph_name: name of the graph type to use
-        :param n_param_vals: number of parameter values to test
-        """
-
-        work = []
-        logging.info("Creating work for anlyzing %i graph types and %i digit pairs." %
-                     (len(self.GRAPH_TYPES), len(self._digit_pairs)))
-
-        for graph_name in self.GRAPH_TYPES:
-            param_name = self.GRAPH_PARAM_NAMES[graph_name]
-            for pair in self._digit_pairs:
-                data = self._get_train_test_data(pair)
-                param_range = self._param_ranges[graph_name]
-                work.append({'pair': pair,
-                             'data': data,
-                             'graph_name': graph_name,
-                             'param_name': param_name,
-                             'param_vals': param_range})
-
-        logging.info("Done creating work for analyzing %i graph types:" % len(self.GRAPH_TYPES))
-        logging.info("\t%i digit pairs" % len(self._digit_pairs))
-        logging.info("\t%i tasks" % (len(work)))
-        logging.info("\t%i parameters values per task" % len(param_range))
-        logging.info("\t%i training samples per class" % self._data.n_train)
-        if self._n_cpu == 1:
-            output = [_test_params(w) for w in work]
-        else:
-            with Pool(self._n_cpu) as pool:
-                output = pool.map(_test_params, work)
-        # flatten list of results (now a list of lists, one per graph type, per pair)
-        output = [r for sublist in output for r in sublist]
-        # reassemble: for each graph type and param value, get stats
-        results = {}
-        for graph_name in self.GRAPH_TYPES:
-            g_out = [r for r in output if r['graph_name'] == graph_name]
-            param_vals = sorted(set([r['param_val'] for r in g_out]))
-            results[graph_name] = {}
-            for param_val in param_vals:
-                p_out = [r for r in g_out if r['param_val'] == param_val]
-                results[graph_name][param_val] = self._stats_from_results(p_out)
-
-        return results
-
-
-
     def run(self):
-        self._k_means_results = self._get_kmeans_results()
-        self._k_means_stats = self._stats_from_results(self._k_means_results)
-        # _, ax = plt.subplots(1, 1)
-        # _, ax2 = plt.subplots(1, 1)
+        # compute/load
+        logging.info("Anlyzing %i graph types and %i digit pairs." % (len(GRAPH_TYPES), len(self._digit_pairs)))
+        self._results = {}
+        for graph_name in  GRAPH_TYPES:
+            cache_filename = "%s_%s_n=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples)
+            self._results[graph_name] = load_cached(lambda: self._compute(graph_name), cache_filename, no_compute=False)
 
-        # self.plot_pairwise_clusterings(ax, self._k_means_results, 'train')
-        # self.plot_pairwise_clusterings(ax2, self._fisher_results, 'train')
+    def _get_prefixes(self):
+        # logging info, cache filename prefix
+        return "spectral clustering", "tuner_pairwise"
 
-        # self._spectral_results = self._get_spectral_results()
-        # self.plot_km_digit_confusion()
+    def plot_results(self):
+        """
+        plot the mean (over all pairs) accuracy curve and +/- 1 sd deviation band for each graph type.
+        Add a legend.
 
-        # self._plot_best_and_worst_pairs(self._fisher_results, n=10)
-        self._plot_best_and_worst_pairs(self._k_means_results, n=10)
+        self._results should now be a dict with one entry per graph_name, each
+           value is a list of lists of MNISTResult objects:
+              for all pairs P:
+                 for all parameter values V:
+                    MNISTResult(results on P and V)
 
-        logging.info("KMeans results:")
-        pprint(self._k_means_stats)
-        # fig, ax = plt.subplots()
-        # self._plot_spectral_result(ax, 'n-neighbors', 'train')
-        # ax.set_title("K-Means cluster separation")
-        # ax2.set_title("Fisher LDA class separation")
+            (unfortunately, a bit inside-out for plotting curves over parameter values)
+        """
+        fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+        def _add_results(results):
+
+            # START HERE
+
+            param_name = results[0][0]['result'].aux['param_name']
+            param_values = [r['param_val'] for r in results[0]]
+            pairs = [r['result'].aux['pair'] for r in results[0]]
+            accs = np.array([[r['result'].accuracy for r in result_row] for result_row in results])
+            means = np.mean(accs, axis=0)
+            sds = np.std(accs, axis=0)
+            # print(means.shape, sds.shape)
+
+            label = "%s: %s" % (graph_name, param_name)
+            self._plot_bands(ax, param_values, means, sds, label)
+
+        for graph_name in self._results:
+            g_results = self._results[graph_name]  # list of MNISTResult
+            _add_results(g_results)
+        ax.set_ylabel("Accuracy")
+        plt.legend()
         plt.show()
+
+    def _compute(self, graph_name):
+        """
+        Look up the paramter name and values, construct the work list, and run the computation.
+        """
+        param_name = GRAPH_PARAM_NAMES[graph_name]
+        param_range = self._get_param_range(graph_name, param_name, self._n_param_vals, self._data)
+        work = []
+        for pair in self._digit_pairs:
+            # sample randomly from each digit, each time.
+            inds0 = self._data.get_digit_sample_inds(pair[0], self._n_samples)
+            inds1 = self._data.get_digit_sample_inds(pair[1], self._n_samples)
+            inds = {0: inds0, 1: inds1}
+            x = np.vstack((self._data.get_digit(pair[0])[inds0],
+                           self._data.get_digit(pair[1])[inds1]))
+            y = np.hstack((np.zeros(inds0.size),
+                           np.ones(inds1.size)))
+            work.append({'graph_name': graph_name,
+                         'aux': {'pair': pair},  # for debug print
+                         'param': (param_name, param_range),
+                         'k': 2,
+                         'inds': inds,  # for locating image
+                         'data': (x, y), })
+        logging.info("About to run pairwise tuning with %i tasks for graph type:  %s." % (len(work), graph_name))
+        if self._n_cpu == 1:
+            logging.info("Running %s in single process." % self._get_prefixes()[0])
+            results = [self._helper_func(w) for w in work]
+        else:
+            logging.info("Running %s in %i processes." % (self._get_prefixes()[0], self._n_cpu))
+            with Pool(self._n_cpu) as pool:
+                results = pool.map(self._helper_func, work)
+        return results
 
     def _plot_bands(self, ax, param_values, means, sds, label):
         ax.plot(param_values, means, label=label)
@@ -160,97 +135,139 @@ class MNISTTuner(object):
                         np.array(means) + np.array(sds),
                         alpha=0.2)
 
-    def _plot_spectral_result(self, ax, graph_name, test_train='test'):
-        """
-        Plot the results of the spectral clustering for a single graph type.
-        Add the K-Means baseline for comparison in red.
-        :param graph_name: name of the graph type to plot
-        :return:
-        """
-
-        param_vals = sorted(self._spectral_results[graph_name].keys())
-        means = [self._spectral_results[graph_name][param_val][test_train + '_mean'] for param_val in param_vals]
-        sds = [self._spectral_results[graph_name][param_val][test_train + '_sd'] for param_val in param_vals]
-        self._plot_bands(ax, param_vals, means, sds, graph_name)
-        self._plot_kmean_baseline(ax, test_train)
-
     def _get_param_range(self, graph_name, param_name, n_vals, data):
         """
         Determine a good set of test values.
         """
 
         if param_name == 'k':
-            return np.arange(1, n_vals).astype(int)
-        elif param_name == 'sigma':
-            return np.linspace(0.1, 5, n_vals)
-        elif param_name == 'epsilon':
-            return np.linspace(0.01, 1, n_vals)
+            # for the nearest neighbor sim graphs
+            values = np.arange(1, n_vals).astype(int)
+
+        elif param_name in ['epsilon', 'sigma']:
+            # for epsilon & full graphs (hard/soft thresholding on euclidean distance)
+            data = np.vstack([data.get_digit(i) for i in range(10)])
+            n_s = 10000
+            sample_pairs_a = np.random.choice(data.shape[0], n_s, replace=True)
+            sample_pairs_b = np.random.choice(data.shape[0], n_s, replace=True)
+            valid = sample_pairs_a != sample_pairs_b
+            sample_pairs_a = sample_pairs_a[valid]
+            sample_pairs_b = sample_pairs_b[valid]
+            distances = np.linalg.norm(data[sample_pairs_a] - data[sample_pairs_b], axis=1)
+            #fig, ax = plt.subplots()
+            #ax.hist(distances, bins=100)
+            #plt.show()
+            if param_name == 'epsilon':
+                val_range = np.min(distances), np.percentile(distances, (98))
+            else:  # sigma
+                print("MIN DISTANCE", np.min(distances))
+                val_range = np.min(distances)/100, np.percentile(distances, (20))
+
+            values = np.linspace(val_range[0], val_range[1], n_vals)  # don't go too low
+
         elif param_name == 'alpha':
-            return np.linspace(0.1, 5, n_vals)
+            # for the soft nearest neighbors graphs
+            values = np.linspace(0.1, 50, n_vals)
+        else:
+            raise ValueError("Unknown param name: %s" % param_name)
+
+        logging.info("%s range: %f to %f  (%i values)" % (param_name, values[0], values[-1], values.size))
+        return values
 
 
 def _test_params(work):
     """
     Subprocess for testing a single set of parameters on a single pair of digits.
-    :param work: dict with {'graph_name': key of self.GRAPH_TYPES,
-                    'param_name': name of the parameter to vary,
-                    'param_vals': list of values to test,
-                    'pair': (a, b),
-                    'data': dict with x_train, x_test, y_train, y_test}
-
-    :return: list of dicts with {'acc_train': train accuracy,
-                                 'acc_test': test accuracy,
-                                 'pair': (a, b),
-                                 'graph_name': (same as input),
-                                 'param_name': (same as input),
-                                 'param_val': value of the parameter}
-            for every parameter value tested.
+    :param work: dict with {'graph_name': name of graph type,
+                            'param': (param_name, param_values), # to test,
+                            'k': number of clusters,
+                            'inds': (inds0, inds1) for locating image,
+                            'data': (x, y) for training/testing}
+    :return: list of MNISTResult with the parameter value in the 'aux' field.
     """
 
-    data = work['data']
-    x_train = data['x_train']
-    y_train = data['y_train']
-    x_test = data['x_test']
-    y_test = data['y_test']
     graph_name = work['graph_name']
-    param_name = work['param_name']
-    param_vals = work['param_vals']
-    graph_type = MNISTTuner.GRAPH_TYPES[graph_name]
+    param_name, params = work['param']
+    inds = work['inds']
+    x, y = work['data']
+    k = work['k']
     results = []
-    for param_val in param_vals:
-        graph = graph_type(x_train, **{param_name: param_val})
-        clust = SpectralAlgorithm(graph)
-        clust.fit(n_clusters=2, n_features=2)
-        classif = ClusterClassifier(clust, x_train, y_train)
-
-        # determine best train accuracy
-        train_out = classif.predict(x_train)
-        test_out = classif.predict(x_test)
-
-        train_acc = np.mean(train_out == y_train)
-        test_acc = np.mean(test_out == y_test)
-
-        results.append({'acc_train': train_acc,
-                        'acc_test': test_acc,
-                        'pair': work['pair'],
-                        'graph_name': graph_name,
-                        'param_name': param_name,
-                        'param_val': param_val})
-
-        print("Tested %s on digits %s with %s=%s:  (Train acc:  %.4f)" %
-              (graph_name, work['pair'], param_name, param_val, train_acc))
-
+    for param in params:
+        sim_graph = GRAPH_TYPES[graph_name](x, **{param_name: param})
+        model = SpectralAlgorithm(sim_graph)
+        model.fit(k, k)
+        info = work['aux'].copy()
+        info['param_val'] = param
+        info['param_name'] = param_name
+        result = MNISTResult(k, model, x, y, sample_indices=inds, aux=info)
+        print("Graph %s, pair %s, param %s = %s, acc = %f" %
+              (graph_name, info['pair'], param_name, param, result.accuracy))
+        results.append({'param_val': param, 'result': result})
     return results
 
 
-def tune_all():
-    data = MNISTData(n_test=1000, n_train=2500, dim=30)
-    tuner = MNISTTuner(data, n_cpu=10)
-    tuner.run()
+class MNISTFullTuner(MNISTPairwiseTuner):
+    """
+    Tuning params for clustering the 10 classes at ones.
+    Parallelism is over bootstrap samples.
+    """
+
+    def __init__(self, n_param_vals=n_vals, n_cpu=N_CPU, pca_dim=DIM, n_samp=N_SAMP, n_boot=N_BOOT):
+        super().__init__(n_param_vals, n_cpu, pca_dim, n_samp)
+        self._helper_func = _test_params_full
+        self._n_boot = n_boot
+
+    def run(self):
+        # compute/load
+        logging.info("Anlyzing %i graph types and %i random samples." % (len(GRAPH_TYPES), self._n_boot))
+        self._results = {}
+        for graph_name in ['n-nearest']:  # GRAPH_TYPES:
+            cache_filename = "%s_%s_n=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples)
+            self._results[graph_name] = load_cached(lambda: self._compute(graph_name), cache_filename)
+
+    def _get_prefixes(self):
+        # logging info, cache filename prefix
+        return "spectral clustering", "tuner_full"
+
+    def _compute(self, graph_name):
+        """
+        Look up the paramter name and values, construct the work list, and run the computation.
+        """
+        param_name = GRAPH_PARAM_NAMES[graph_name]
+        param_range = self._get_param_range(graph_name, param_name, self._n_param_vals, self._data)
+        work = []
+        for i in range(self._n_boot):
+            # sample randomly from each digit, each time.
+            inds = {d: self._data.get_digit_sample_inds(d, self._n_samples) for d in range(10)}
+
+            x = np.vstack([self._data.get_digit(d)[inds[d]] for d in range(10)])
+            y = np.hstack([d*np.ones(inds[d].size) for d in range(10)])
+
+            work.append({'graph_name': graph_name,
+                         'inds': inds,
+                         'data': (x, y),
+                         'param': (param_name, param_range),
+                         'aux': {'trial': i, 'n_trials': self._n_boot}})
+        logging.info("About to run full tuning with %i tasks for graph type:  %s." % (len(work), graph_name))
+
+        if self._n_cpu == 1:
+            logging.info("Running %s in single process." % self._get_prefixes()[0])
+            results = [self._helper_func(w) for w in work]
+        else:
+            logging.info("Running %s in %i processes." % (self._get_prefixes()[0], self._n_cpu))
+            with Pool(self._n_cpu) as pool:
+                results = pool.map(self._helper_func, work)
+        return results
+
+
+def _test_params_full(work):
+    raise NotImplementedError("Implement me!")
 
 
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     # test_data()
-    tune_all()
+    t = MNISTPairwiseTuner()
+    t.run()
+    t.plot_results()

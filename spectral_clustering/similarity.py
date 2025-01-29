@@ -82,7 +82,7 @@ class EpsilonSimGraph(SimilarityGraph):
         """
         dists = squareform(pdist(self._points))
         sim_matrix = np.zeros(dists.shape)
-        sim_matrix[dists < self._epsilon] = 1
+        sim_matrix[dists <= self._epsilon] = 1
         return sim_matrix
     
     def make_img(self,colormap=None):

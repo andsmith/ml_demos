@@ -33,17 +33,17 @@ class NNSimGraphNonMutual(NNSimGraph):
         super().__init__(points, k, mutual=False)
 
 
-GRAPH_TYPES = {'full': FullSimGraph,
+GRAPH_TYPES = {'n-neighbors_mutual': NNSimGraphMutual,
                'n-neighbors': NNSimGraphNonMutual,
-               'n-neighbors_mutual': NNSimGraphMutual,
                'soft_neighbors_additive': SoftNNSimGraphAdditive,
                'soft_neighbors_multiplicative': SoftNNSimGraphMultiplicative,
+               'full': FullSimGraph,
                'epsilon': EpsilonSimGraph}
 
 
 GRAPH_PARAM_NAMES = {'full': 'sigma',
                      'n-neighbors': 'k',
-                     'n-mutual-neighbors': 'k',
+                     'n-neighbors_mutual': 'k',
                      'soft_neighbors_additive': 'alpha',
                      'soft_neighbors_multiplicative': 'alpha',
                      'epsilon': 'epsilon'}
@@ -55,7 +55,7 @@ class MNISTResult(object):
     If true labels are provided, will compute cluster ID to class label mapping
      and will computer accuracy.  (Keep classes balanced for best results.)
     """
-    def __init__(self, model, data, true_labels=None, sample_indices=None, aux=None):
+    def __init__(self, k,model, data, true_labels=None, sample_indices=None, aux=None):
         """
         :param model: ClusteringAlgorithm, with fit() called.
         :param data: data used to fit the model
@@ -66,7 +66,7 @@ class MNISTResult(object):
         :param aux: any auxiliary data to store with the result
         """
         self.aux = aux
-        self.k=model.get_k()
+        self.k=k
         #self.data = data  # don't bother saving, just save indices
         self.inds = sample_indices
         self.cluster_ids = model.assign(data)

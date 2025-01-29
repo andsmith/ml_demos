@@ -53,20 +53,24 @@ class MNISTData(object):
 class MNISTDataPCA(MNISTData):
     def __init__(self, dim=30, **kwargs):
         """
-        :param dim: number of PCA components to keep
+        :param dim: number of PCA components to keep, or 0 for no PCA.
         :param kwargs: passed to sklearn.decomposition.PCA
         """
         self._d = dim
         super(MNISTDataPCA, self).__init__()
-        self._reduce_dim()
+        if self._d > 0:
+            self._reduce_dim()
 
     def _reduce_dim(self):
         logging.info("Computing PCA with %s components." % (self._d, ))
-        self._pca = PCA(n_components=self._d)
+        self._pca = PCA(n_components=self._d, whiten=False)  # few percent better without whitening
         self._pca.fit(np.vstack([self.get_digit(d) for d in range(10)]))
 
         logging.info("\tPCA complete.")
         self._digits_flat = {d: self._pca.transform(self.get_digit(d)) for d in range(10)}
+
+        all_flats = np.vstack([self._digits_flat[d] for d in range(10)])
+        cov = np.cov(all_flats.T)
 
 
 def test_data(plot=False):

@@ -485,11 +485,12 @@ def test_orthornormalize():
     print(np.dot(vecs[1], vecs[2]))
 
 
-def load_cached(func, filename, *args, **kwargs):
+def load_cached(func, filename,no_compute=False, *args, **kwargs):
     """
     Load the result of a function from a file if it exists, otherwise run the function and save the result.
     :param func: function to run
     :param filename: file to save/load the result
+    :param no_compute: if True, do not run the function, just load the result if it exists or return None
     :param args: args to pass to the function
     :param kwargs: kwargs to pass to the function
     :return: result of the function
@@ -499,6 +500,8 @@ def load_cached(func, filename, *args, **kwargs):
             logging.info("Loading %s" % (filename,))
             return pickle.load(f)
     else:
+        if no_compute:
+            return None
         result = func(*args, **kwargs)
         with open(filename, 'wb') as f:
             logging.info("Caching %s" % (filename,))

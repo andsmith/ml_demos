@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 # Common params for full and pairwise experiments
 DIM = 30
 N_REP = 15
-N_SAMP = 1000
-N_BOOT = 100
+N_SAMP = 5000
+N_BOOT = 300
 N_CPU = 10
 
 
@@ -240,7 +240,7 @@ if __name__ == "__main__":
 
     #km = KMeansPairwise()
     #km.plot_results()
-    #plt.show()
+    plt.show()
 
     km = KMeansFull()
     km.plot_results()
