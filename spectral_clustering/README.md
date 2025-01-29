@@ -191,11 +191,37 @@ The lower plot shows the distribution of (all digit) accuracies over the 100 ran
 
 ## Spectral clustering results
 
-#### Tuning parameters
+#### Tuning parameters - the Similarity Graph:
 
-Each of the similarity graph types has a hyperparameter.  To find the best value for a particular MNIST clustering task, a range of values is tested and evaulated for accuracy (correspondence with cluster type).  The parameter giving highest accuracy is used.
+First we need to make a similarity graph from handwritten digits in PCA(30) space.  Ideally, there are many edges between all the vertices corresponding to images of the same digit, and few between vertices belonging to different classes.  We can use two metrics to measure this:
+  * **Number of connected components**:  if there are $C$ connected components in the similarity graph, spectral clustering is looking for $K$ clusters, and $C$ < $K$, then the $K$ clusters will consist of an arbitrary partitioning of the $C$ components, since the laplacian matrix will have $C$ eigenvalues corresponding to $\lambda=0$, and some have been dropped before the final clustering.  
+  * **Normalized cut**:  If, at the other extreme, the graph is too connected, there will be many edges between different digits.  This can be measured with the "[normalized cut](https://en.wikipedia.org/wiki/Segmentation-based_object_categorization#Normalized_cuts)" of the similarity graph.   Since we know the digit labels, we can use them to partition the data into separate classes and count how many edges of a given graph cross the partition.  In general:
+    * if most of the edges (of the binary graphs--the continuous ones sum edge weights) stay within a partition, the normalized cut will be low, or
+    * if a large total mass of edges crosses between partitions, the norm cut will be high.
+
+For a graph $G$, with verticies partitioned into sets $A$ and $B$, the cut of the partitioning is 
+
+$$
+\text{NormCut}(\{A,B\}) = \frac{\text{Out}(A)}{\text{Deg}(A)} +\frac{\text{Out}(B)}{\text{Deg}(B)} 
+$$
+* $\text{Out}(A) = \sum_{i\in A, j\in B} w_{ij}$ (the sum of edge weight from $A$ to $B$)
+* $\text{Deg}(A) = \sum_{i\in A, j\in G} w_{ij}$ (the sum of edge weight from $A$ to any vertex).
+
+
+Run `python mnist_simgraphs.py` to test various values of the different similarity graphs' parameters and generate the following plots:
+
+![datasets](/spectral_clustering/assets/MNIST/simgraph_tuning_pairwise.png)
+The upper two plots show results using the similarity graphs that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The two similarity graph types with parameters that scale with the data space are plotted on the bottom.
+
+The left two figures show how the number of connected components shrinks as the value of each paramter adds edges to the graph as it is increased.  The right two figures show the normalized-cut metric.
+### Tuning parameters - Spectral clustering
+
+[ADD EXPERIMENT DESCRIPTION HERE]
 
 Run `> python mnist_tuning.py` to compare the different resulst on the pairwise and full experiments.  This generate the following figure:
+
+[ADD FIGURE & DISCUSSION]
+
 
 #### Spectral pairwise results:
 
