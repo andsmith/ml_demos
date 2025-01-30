@@ -25,7 +25,6 @@ from scipy.sparse.csgraph import connected_components
 
 # Common params for full and pairwise experiments
 DIM = 30  # PCA dimension
-N_SAMP = 500  # per digit
 N_BOOT = 20  # bootstraps for error estimation (full only)
 N_CPU = 12  # number of CPUs to use for parallel processing
 
@@ -105,7 +104,7 @@ class SimGraphResultPlotter(object):
 class SimGraphTunerPairwise(SimGraphResultPlotter, MNISTPairwiseTuner):
 
     def __init__(self, n_cpu=N_CPU):
-        super().__init__(n_cpu=n_cpu, pca_dim=DIM, n_samp=N_SAMP)
+        super().__init__(n_cpu=n_cpu, pca_dim=DIM, n_samp=1000)
         self._helper_func = _test_g_params
         self._plot_title = "MNIST data, similarity graph parameter tuning - PAIRWISE\n(PCA-dim=%d, samples/digit=%d, avg over 45 pairs)" % (
             self._dim, self._n_samples)
@@ -117,7 +116,7 @@ class SimGraphTunerPairwise(SimGraphResultPlotter, MNISTPairwiseTuner):
 class SimGraphTunerFull(SimGraphResultPlotter, MNISTFullTuner):
 
     def __init__(self, n_cpu=N_CPU):
-        super().__init__(pca_dim=DIM, n_samp=N_SAMP, n_cpu=n_cpu, n_boot=N_BOOT)
+        super().__init__(pca_dim=DIM, n_samp=500, n_cpu=n_cpu, n_boot=N_BOOT)
         self._helper_func = _test_g_params
         self._plot_title = "MNIST data, similarity graph parameter tuning - FULL\n(PCA-dim=%d, samples/digit=%d, avg over %i random samples)" % (
             self._dim, self._n_samples, self._n_boot)
@@ -200,9 +199,9 @@ def _calc_cost(sim, y):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
  
-    # sg = SimGraphTunerPairwise()
-    # sg.run()
-    # sg.plot_results()
+    sg = SimGraphTunerPairwise()
+    sg.run()
+    sg.plot_results()
  
     sf = SimGraphTunerFull()
     sf.run()

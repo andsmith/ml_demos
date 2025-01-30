@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 # Common params for full and pairwise experiments
 DIM = 30
 N_REP = 15
-N_SAMP = 5000
-N_BOOT = 300
+N_SAMP = 1000
+N_BOOT = 100
 N_CPU = 10
 
 
@@ -192,7 +192,7 @@ def _test_kmeans(work):
     for _ in range(n_trials):
         km = KMeansAlgorithm(k)
         km.fit(x)
-        result = MNISTResult(km, x, y,
+        result = MNISTResult(k,km, x, y,
                              sample_indices=work['inds'],
                              aux=work['aux'])
         if best_result is None or result.accuracy > best_result.accuracy:
@@ -227,7 +227,7 @@ def _test_fisher(work):
     data = work['data']
     model = FisherLDA()
     model.fit(data[0], data[1])
-    result = MNISTResult(model, data[0], data[1], sample_indices=work['inds'], aux=work['aux'])
+    result = MNISTResult(2,model, data[0], data[1], sample_indices=work['inds'], aux=work['aux'])
 
     print("Tested Fisher LDA on digits %s:  (Accuracy:  %s)" % (
         work['aux'], result.accuracy))
@@ -238,14 +238,16 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info("Running KMeansPairwise.")
 
-    #km = KMeansPairwise()
-    #km.plot_results()
+    # import ipdb; ipdb.set_trace()
+
+    km = KMeansPairwise()
+    km.plot_results()
     plt.show()
 
     km = KMeansFull()
     km.plot_results()
     plt.show()
 
-    #f = FisherPairwise()
-    #f.plot_results()
+    f = FisherPairwise()
+    f.plot_results()
     plt.show()

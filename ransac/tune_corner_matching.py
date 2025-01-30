@@ -43,7 +43,7 @@ def tune_similarity_metric(data1, data2, transf, plot=False):
     plot_trial(ax[0], test_img1, corners1, None, "image 1,\ndetected corners (dots)")
     plot_trial(ax[1], test_img2, corners2, true_corners1_in_img2,
                "image 2,\ndetected corners (dots),\nimage 1 corners, transferred (+)")
-    plt.show()
+
 
     # in this, show the matches:
 
@@ -129,11 +129,10 @@ def tune_similarity_metric(data1, data2, transf, plot=False):
     plt.suptitle('corner matcher: distances scores\n(candidate matches for %i corners detected in image1)'% (n_corner_examples))
 
     # show and return
-    plt.show()
-
+    
 
 if __name__ == "__main__":
-    plt.ion()  # do all windows on startup
+    #plt.ion()  # do all windows on startup
 
     img_size = 400, 400
     noise_frac = 0.1
@@ -152,4 +151,5 @@ if __name__ == "__main__":
                            (q_img2, corners2),
                            transf=transf, plot=True)
 
-    plt.pause(0)
+    #plt.pause(0)
+    plt.show()
