@@ -25,19 +25,12 @@ from scipy.sparse.csgraph import connected_components
 
 # Common params for full and pairwise experiments
 DIM = 30  # PCA dimension
-N_SAMP = 1000  # per digit
+N_SAMP = 500  # per digit
 N_BOOT = 20  # bootstraps for error estimation (full only)
-N_CPU = 10  # number of CPUs to use for parallel processing
+N_CPU = 12  # number of CPUs to use for parallel processing
 
 
-class SimGraphTunerPairwise(MNISTPairwiseTuner):
-
-    def __init__(self, n_cpu=N_CPU):
-        super().__init__(n_cpu=n_cpu, pca_dim=DIM, n_samp=N_SAMP)
-        self._helper_func = _test_g_params
-
-    def _get_prefixes(self):
-        return "simgraph tuning", "simgraph_pairwise"  # for caching results
+class SimGraphResultPlotter(object):
 
     def plot_results(self):
         """
@@ -49,8 +42,8 @@ class SimGraphTunerPairwise(MNISTPairwiseTuner):
         Plot the mean accuracy over all pairs as a curve over the parameter values, with +/- 1 std dev shaded areas.
         Put  sigma/epsilon on a the lower x-axis and K/alpha on a twin upper X-axis
         """
-        left=0
-        right=1
+        left = 0
+        right = 1
         # Top x-axis has K-like parameters, bottom x-axis has sigma-like parameters
         axis_assignment = {'n-neighbors_mutual': 'left',
                            'n-neighbors': 'left',
@@ -59,18 +52,18 @@ class SimGraphTunerPairwise(MNISTPairwiseTuner):
                            'full': 'right',
                            'epsilon': 'right'}
 
-        fig, ax = plt.subplots(2,2, figsize=(10, 8))
+        fig, ax = plt.subplots(2, 2, figsize=(10, 8))
         for graph_name, results in self._results.items():  # [['epsilon', self._results['epsilon']]]:#
-            if results is None :
+            if results is None:
                 logging.info("Skipping graph '%s' - no results found." % graph_name)
                 continue
             param_name = results[0]['param_name']
             param_values = [r['param_value'] for r in results[0]['results']]
             n_trials = len(results)
             n_comps = np.array([[single_result['n_comp']
-                               for single_result in pair_results['results']] for pair_results in results])
+                                for single_result in result_row['results']] for result_row in results])
             norm_cuts = np.array([[single_result['norm_cut']
-                                 for single_result in pair_results['results']] for pair_results in results])
+                                   for single_result in result_row['results']] for result_row in results])
             mean_n_comps, st_n_comps = np.mean(n_comps, axis=0), np.std(n_comps, axis=0)
             mean_norm_cuts, st_norm_cuts = np.mean(norm_cuts, axis=0), np.std(norm_cuts, axis=0)
 
@@ -94,9 +87,8 @@ class SimGraphTunerPairwise(MNISTPairwiseTuner):
             ax[row][left].set_xlabel("k/alpha")
 
             # set left axis to log-y
-        ax[0][left].set_yscale('log') 
+        ax[0][left].set_yscale('log')
         ax[0][right].set_yscale('log')
-
 
         for col in range(2):
             ax[0][col].set_ylabel("num. connected components")
@@ -106,16 +98,29 @@ class SimGraphTunerPairwise(MNISTPairwiseTuner):
         [ax[i][j].grid() for i in range(2) for j in range(2)]
         [ax[i][j].legend() for i in range(2) for j in range(2)]
 
-        plt.suptitle("MNIST data, similarity graph parameter tuning - PAIRWISE\n(PCA-dim=%d, samples/digit=%d, avg over 45 pairs)" %
-                     (self._dim, self._n_samples))
+        plt.suptitle(self._plot_title)
         plt.show()
 
 
-class SimGraphTunerFull(MNISTFullTuner):
+class SimGraphTunerPairwise(SimGraphResultPlotter, MNISTPairwiseTuner):
 
     def __init__(self, n_cpu=N_CPU):
-        super().__init__(pca_dim=DIM, n_samp=N_SAMP, n_cpu=n_cpu,n_boot=N_BOOT)
+        super().__init__(n_cpu=n_cpu, pca_dim=DIM, n_samp=N_SAMP)
         self._helper_func = _test_g_params
+        self._plot_title = "MNIST data, similarity graph parameter tuning - PAIRWISE\n(PCA-dim=%d, samples/digit=%d, avg over 45 pairs)" % (
+            self._dim, self._n_samples)
+
+    def _get_prefixes(self):
+        return "simgraph tuning", "simgraph_pairwise"  # for caching results
+
+
+class SimGraphTunerFull(SimGraphResultPlotter, MNISTFullTuner):
+
+    def __init__(self, n_cpu=N_CPU):
+        super().__init__(pca_dim=DIM, n_samp=N_SAMP, n_cpu=n_cpu, n_boot=N_BOOT)
+        self._helper_func = _test_g_params
+        self._plot_title = "MNIST data, similarity graph parameter tuning - FULL\n(PCA-dim=%d, samples/digit=%d, avg over %i random samples)" % (
+            self._dim, self._n_samples, self._n_boot)
 
     def _get_prefixes(self):
         return "simgraph tuning", "simgraph_full"  # for caching results
@@ -177,7 +182,7 @@ def _calc_cost(sim, y):
     cut = 0
     norm_cut = 0
     for c in np.unique(y):
-        c_degree = np.sum(deg[y==c])
+        c_degree = np.sum(deg[y == c])
         # get all nodes in cluster c
         c_mask = (y == c)
         # get all edges from nodes in c
@@ -185,20 +190,22 @@ def _calc_cost(sim, y):
         # and and all from nodes in c to nodes not in c
         c_out_edges = c_edges[:, ~c_mask]
         # calculate cluster cost
-        cut_i = np.sum(c_out_edges) 
+        cut_i = np.sum(c_out_edges)
         norm_cut += cut_i / c_degree if c_degree > 0 else 0  # add self-weight to fix
-        cut += cut_i  
+        cut += cut_i
 
     return {'cut': cut, 'norm_cut':  norm_cut, 'n_comp': n_components}
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # sgt = SimGraphTunerPairwise(n_cpu=1)
-    # sgt.run()
-    #sg = SimGraphTunerPairwise(n_cpu=10)
-    #sg.run()
-    #sg.plot_results()
-    #import ipdb; ipdb.set_trace()
-    SimGraphTunerFull(n_cpu=1).run()
+ 
+    # sg = SimGraphTunerPairwise()
+    # sg.run()
+    # sg.plot_results()
+ 
+    sf = SimGraphTunerFull()
+    sf.run()
+    sf.plot_results()
+ 
     plt.show()

@@ -160,9 +160,9 @@ class MNISTPairwiseTuner(object):
             #ax.hist(distances, bins=100)
             #plt.show()
             if param_name == 'epsilon':
-                val_range = np.min(distances)/10, np.percentile(distances, (20))
+                val_range = np.min(distances)/100, np.percentile(distances, (20))
             else:  # sigma
-                val_range = np.min(distances)/10, np.percentile(distances, (20))
+                val_range = np.min(distances)/100, np.percentile(distances, (20))
 
             values = np.linspace(val_range[0], val_range[1], 50)  # don't go too low
 
