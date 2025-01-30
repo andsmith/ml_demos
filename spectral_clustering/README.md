@@ -211,9 +211,9 @@ $$
 Run `python mnist_simgraphs.py` to test various values of the different similarity graphs' parameters and generate the following plots:
 
 ![datasets](/spectral_clustering/assets/MNIST/simgraph_tuning_pairwise.png)
-The upper two plots show results using the similarity graphs that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The two similarity graph types with parameters that scale with the data space are plotted on the bottom.
+The left two plots show results using the similarity graphs that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The two similarity graph types with parameters that scale with the data space are plotted on the right.
 
-The left two figures show how the number of connected components shrinks as the value of each paramter adds edges to the graph as it is increased.  The right two figures show the normalized-cut metric.
+The upper two figures show how the number of connected components (y-axis, log scale) shrinks as higher value of each paramter adds edges to the graph.  The lower two figures show the normalized-cut metric. 
 ### Tuning parameters - Spectral clustering
 
 [ADD EXPERIMENT DESCRIPTION HERE]
