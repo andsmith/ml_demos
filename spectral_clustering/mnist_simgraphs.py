@@ -30,6 +30,45 @@ N_CPU = 12  # number of CPUs to use for parallel processing
 
 
 class SimGraphResultPlotter(object):
+    def _get_param_range(self, graph_name, param_name, data):
+        """
+        Determine a good set of test values.
+        """
+
+        if param_name == 'k':
+            # for the nearest neighbor sim graphs
+            values = np.arange(1, 101).astype(int)
+
+        elif param_name == 'alpha':
+            # for the soft nearest neighbors graphs
+            values = np.arange(1, 101)
+
+        elif param_name in ['epsilon', 'sigma']:
+            # for epsilon & full graphs (hard/soft thresholding on euclidean distance)
+            data = np.vstack([data.get_digit(i) for i in range(10)])
+            n_s = 100000
+            sample_pairs_a = np.random.choice(data.shape[0], n_s, replace=True)
+            sample_pairs_b = np.random.choice(data.shape[0], n_s, replace=True)
+            valid = sample_pairs_a != sample_pairs_b
+            sample_pairs_a = sample_pairs_a[valid]
+            sample_pairs_b = sample_pairs_b[valid]
+            distances = np.linalg.norm(data[sample_pairs_a] - data[sample_pairs_b], axis=1)
+            #fig, ax = plt.subplots()
+            #ax.hist(distances, bins=100)
+            #plt.show()
+            if param_name == 'epsilon':
+                val_range = np.min(distances)/100, np.percentile(distances, (20))
+            else:  # sigma
+                val_range = np.min(distances)/100, np.percentile(distances, (20))
+
+            values = np.linspace(val_range[0], val_range[1], 50)  # don't go too low
+
+        else:
+            raise ValueError("Unknown param name: %s" % param_name)
+
+        logging.info("%s range: %f to %f  (%i values)" % (param_name, values[0], values[-1], values.size))
+        return values
+
 
     def plot_results(self):
         """

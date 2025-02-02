@@ -63,7 +63,7 @@ class MNISTDataPCA(MNISTData):
 
     def _reduce_dim(self):
         logging.info("Computing PCA with %s components." % (self._d, ))
-        self._pca = PCA(n_components=self._d, whiten=False)  # few percent better without whitening
+        self._pca = PCA(n_components=self._d, whiten=True)  # few percent better without whitening
         self._pca.fit(np.vstack([self.get_digit(d) for d in range(10)]))
 
         logging.info("\tPCA complete.")
@@ -126,6 +126,6 @@ def test_data_img():
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
-    test_data(True)
     test_data_img()
+    test_data(True)
     logging.info("Done.")

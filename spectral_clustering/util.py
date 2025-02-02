@@ -495,13 +495,17 @@ def load_cached(func, filename,no_compute=False, *args, **kwargs):
     :param kwargs: kwargs to pass to the function
     :return: result of the function
     """
+    results_dir = 'results'
+    filename = os.path.join(results_dir, filename)
     if os.path.exists(filename):
         with open(filename, 'rb') as f:
             logging.info("Loading %s" % (filename,))
             return pickle.load(f)
     else:
         if no_compute:
+            logging.info("File not found (skipping): %s" % (filename,))
             return None
+        logging.info("File not found (computing): %s" % (filename,))
         result = func(*args, **kwargs)
         with open(filename, 'wb') as f:
             logging.info("Caching %s" % (filename,))

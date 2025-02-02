@@ -30,28 +30,30 @@ from scipy.spatial.distance import pdist
 from util import load_cached
 # Common params for full and pairwise experiments
 DIM = 30
-N_SAMP = 300
-N_BOOT = 50  # bootstraps for error estimation
-N_CPU = 15
+N_BOOT = 8  # bootstraps for error estimation
 
 
 class MNISTPairwiseTuner(object):
 
-    def __init__(self, n_cpu=N_CPU, pca_dim=DIM, n_samp=N_SAMP):
+    def __init__(self, n_cpu=10, pca_dim=DIM, n_samp=1000, no_compute=False):
         self._helper_func = _test_params
         self._dim = pca_dim
+        self._no_compute = no_compute  # just load/plot if True
         self._data = MNISTDataPCA(dim=self._dim)
         self._n_samples = n_samp
         self._n_cpu = n_cpu if n_cpu > 0 else cpu_count() - 1
         self._digit_pairs = [(a, b) for a in range(9) for b in range(a+1, 10)]
+        logging.info("Anlyzing %i graph types and %i digit pairs." % (len(GRAPH_TYPES), len(self._digit_pairs)))
 
     def run(self):
-        # compute/load
-        logging.info("Anlyzing %i graph types and %i digit pairs." % (len(GRAPH_TYPES), len(self._digit_pairs)))
         self._results = {}
         for graph_name in GRAPH_TYPES:
-            cache_filename = "%s_%s_n=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples)
-            self._results[graph_name] = load_cached(self._compute, cache_filename, no_compute=False, graph_name=graph_name)
+            # ,'n-neighbors_mutual','soft_neighbors_additive','soft_neighbors_multiplicative']:
+            #if graph_name in ['full', 'epsilon']:
+            #    continue
+            cache_filename = "%s_%s_n=%i_pca=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples, self._dim)
+            self._results[graph_name] = load_cached(
+                self._compute, cache_filename, no_compute=self._no_compute, graph_name=graph_name)
 
     def _get_prefixes(self):
         # logging info, cache filename prefix
@@ -59,38 +61,53 @@ class MNISTPairwiseTuner(object):
 
     def plot_results(self):
         """
-        plot the mean (over all pairs) accuracy curve and +/- 1 sd deviation band for each graph type.
-        Add a legend.
+        Plot clustering "accuracies" averaged over all digit pairs for every value of the parameter, with bars indicating +/- 1 sd.
 
-        self._results should now be a dict with one entry per graph_name, each
-           value is a list of lists of MNISTResult objects:
-              for all pairs P:
-                 for all parameter values V:
-                    MNISTResult(results on P and V)
-
-            (unfortunately, a bit inside-out for plotting curves over parameter values)
+        Plot graph types with k/alpha on the left, epsilon/sigma on the right.
         """
-        fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+        plot_side = {'n-neighbors_mutual': 0,
+                     'n-neighbors': 0,
+                     'soft_neighbors_additive': 0,
+                     'soft_neighbors_multiplicative': 0,
+                     'full': 1,
+                     'epsilon': 1}
+        axis_labels = {0: 'k/alpha', 1: 'epsilon/sigma'}
 
-        def _add_results(results):
+        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 
+        param_vals = {0: None, 1: None}
+
+        def _add_results(ax_ind, results):
+            if results is None:
+                return
             # START HERE
-
             param_name = results[0][0]['result'].aux['param_name']
             param_values = [r['param_val'] for r in results[0]]
-            pairs = [r['result'].aux['pair'] for r in results[0]]
+            # pairs = [r['result'].aux['pair'] for r in results[0]]
             accs = np.array([[r['result'].accuracy for r in result_row] for result_row in results])
             means = np.mean(accs, axis=0)
             sds = np.std(accs, axis=0)
             # print(means.shape, sds.shape)
+            param_vals[ax_ind] = param_values
 
             label = "%s: %s" % (graph_name, param_name)
-            self._plot_bands(ax, param_values, means, sds, label)
+            self._plot_bands(ax[ax_ind], param_values, means, sds, label)
 
         for graph_name in self._results:
             g_results = self._results[graph_name]  # list of MNISTResult
-            _add_results(g_results)
-        ax.set_ylabel("Accuracy")
+            _add_results(plot_side[graph_name], g_results)
+
+        for ax_ind in range(2):
+            if param_vals[ax_ind] is not None:
+                # set x-scale log
+                # ax[ax_ind].set_xscale('log')
+                ax[ax_ind].set_xticks(param_vals[ax_ind])
+                ax[ax_ind].set_xlabel(axis_labels[ax_ind])
+                ax[ax_ind].set_ylabel("Accuracy")
+                ax[ax_ind].legend()
+
+        plt.suptitle("Spectral Clustering MNIST Pairwise (pca_dim=%i,\nsamples/digit=%i, avg over 45 digit pairs)" %
+                     (self._n_samples, len(self._digit_pairs)))
         plt.legend()
         plt.show()
 
@@ -99,7 +116,7 @@ class MNISTPairwiseTuner(object):
         Look up the paramter name and values, construct the work list, and run the computation.
         """
         param_name = GRAPH_PARAM_NAMES[graph_name]
-        param_range = self._get_param_range(graph_name, param_name, self._data)
+        param_vals = self._get_param_vals(graph_name, param_name, self._data)
         work = []
         for pair in self._digit_pairs:
             # sample randomly from each digit, each time.
@@ -112,7 +129,7 @@ class MNISTPairwiseTuner(object):
                            np.ones(inds1.size)))
             work.append({'graph_name': graph_name,
                          'aux': {'pair': pair},  # for debug print
-                         'param': (param_name, param_range),
+                         'param': (param_name, param_vals),
                          'k': 2,
                          'inds': inds,  # for locating image
                          'data': (x, y), })
@@ -133,43 +150,46 @@ class MNISTPairwiseTuner(object):
                         np.array(means) + np.array(sds),
                         alpha=0.2)
 
-    def _get_param_range(self, graph_name, param_name, data):
+    def _get_param_vals(self, graph_name, param_name, data):
         """
         Determine a good set of test values.
         """
 
-        if param_name == 'k':
+        if param_name in ['k', 'alpha']:
             # for the nearest neighbor sim graphs
-            values = np.arange(1, 101).astype(int)
-
-        elif param_name == 'alpha':
-            # for the soft nearest neighbors graphs
-            values = np.arange(1, 101)
+            # k = np.array([1, 2, 5, 10, 15, 20, 30, 50, 75, 100, 150,200,500])
+            k = np.exp(np.linspace(0.0, np.log(500), 22)).astype(int)
+            k = np.unique(k)
+            print("Testing k values: ", k)
+            values = k
 
         elif param_name in ['epsilon', 'sigma']:
-            # for epsilon & full graphs (hard/soft thresholding on euclidean distance)
-            data = np.vstack([data.get_digit(i) for i in range(10)])
-            n_s = 100000
-            sample_pairs_a = np.random.choice(data.shape[0], n_s, replace=True)
-            sample_pairs_b = np.random.choice(data.shape[0], n_s, replace=True)
-            valid = sample_pairs_a != sample_pairs_b
-            sample_pairs_a = sample_pairs_a[valid]
-            sample_pairs_b = sample_pairs_b[valid]
-            distances = np.linalg.norm(data[sample_pairs_a] - data[sample_pairs_b], axis=1)
-            #fig, ax = plt.subplots()
-            #ax.hist(distances, bins=100)
-            #plt.show()
-            if param_name == 'epsilon':
-                val_range = np.min(distances)/100, np.percentile(distances, (20))
-            else:  # sigma
-                val_range = np.min(distances)/100, np.percentile(distances, (20))
+            if True:
+                # for epsilon & full graphs (hard/soft thresholding on euclidean distance)
+                data = np.vstack([data.get_digit(i) for i in range(10)])
+                n_s = 100000
+                sample_pairs_a = np.random.choice(data.shape[0], n_s, replace=True)
+                sample_pairs_b = np.random.choice(data.shape[0], n_s, replace=True)
+                valid = sample_pairs_a != sample_pairs_b
+                sample_pairs_a = sample_pairs_a[valid]
+                sample_pairs_b = sample_pairs_b[valid]
+                distances = np.linalg.norm(data[sample_pairs_a] - data[sample_pairs_b], axis=1)
+                # fig, ax = plt.subplots()
+                # ax.hist(distances, bins=100)
+                # plt.show()
+                if param_name == 'epsilon':
+                    val_range = np.min(distances)/100, np.percentile(distances, 98)
+                else:  # sigma
+                    val_range = np.min(distances)/100, np.max(distances)*1.05
 
-            values = np.linspace(val_range[0], val_range[1], 50)  # don't go too low
+                values = np.linspace(val_range[0], val_range[1], 20)  # don't go too low
+            else:
+                values = np.array([20, 50, 100, 150, 200, 325, 500, 1000, 1500, 2000, 2500])
 
         else:
             raise ValueError("Unknown param name: %s" % param_name)
 
-        logging.info("%s range: %f to %f  (%i values)" % (param_name, values[0], values[-1], values.size))
+        logging.info("Testing values for %s: %s" % (param_name, str(values)))
         return values
 
 
@@ -210,19 +230,11 @@ class MNISTFullTuner(MNISTPairwiseTuner):
     Parallelism is over bootstrap samples.
     """
 
-    def __init__(self, n_cpu=N_CPU, pca_dim=DIM, n_samp=N_SAMP, n_boot=N_BOOT):
-        super().__init__(n_cpu, pca_dim, n_samp)
+    def __init__(self, n_cpu=6, pca_dim=DIM, n_samp=500, n_boot=N_BOOT, no_compute=False):
+        super().__init__(n_cpu, pca_dim, n_samp, no_compute=no_compute)
         self._helper_func = _test_params_full
         self._n_boot = n_boot
-        print("Full tuner with %i bootstraps." % self._n_boot)
-
-    def run(self):
-        # compute/load
         logging.info("Anlyzing %i graph types and %i random samples." % (len(GRAPH_TYPES), self._n_boot))
-        self._results = {}
-        for graph_name in GRAPH_TYPES:
-            cache_filename = "%s_%s_n=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples)
-            self._results[graph_name] = load_cached(lambda: self._compute(graph_name), cache_filename)
 
     def _get_prefixes(self):
         # logging info, cache filename prefix
@@ -233,7 +245,7 @@ class MNISTFullTuner(MNISTPairwiseTuner):
         Look up the paramter name and values, construct the work list, and run the computation.
         """
         param_name = GRAPH_PARAM_NAMES[graph_name]
-        param_range = self._get_param_range(graph_name, param_name, self._data)
+        param_range = self._get_param_vals(graph_name, param_name, self._data)
         work = []
         for i in range(self._n_boot):
             # sample randomly from each digit, each time.
@@ -260,13 +272,51 @@ class MNISTFullTuner(MNISTPairwiseTuner):
 
 
 def _test_params_full(work):
-    raise NotImplementedError("Implement me!")
+    """
+    Subprocess for testing a single set of parameters on a single set of digits.
+    :param work: dict with {'graph_name': name of graph type,
+                            'param': (param_name, param_values), # to test,
+                            'inds': dict(digit -> index_array) for locating images,
+                            'data': (x, y) for training/testing,
+                            'aux': dict with 'trial' and 'n_trials'  #(which random sample)
+                            }
+    :return: list of dicts with {'param_val': param, # value tested
+                                 'result': MNISTResult  # result of test
+                                 }
+    """
+    graph_name = work['graph_name']
+    param_name, params = work['param']
+    inds = work['inds']
+    x, y = work['data']
+    results = []
+    print("Starting full test with %s, %s, %i samples (trial %i of %i)." %
+          (graph_name, param_name, x.shape[0], 1+work['aux']['trial'], work['aux']['n_trials']))
+    for param in params:
+        sim_graph = GRAPH_TYPES[graph_name](x, **{param_name: param})
+        model = SpectralAlgorithm(sim_graph)
+        model.fit(10, 10)
+        info = work['aux'].copy()
+        info['param_val'] = param
+        info['param_name'] = param_name
+        result = MNISTResult(10, model, x, y, sample_indices=inds, aux=info)
+        print("Graph %s, trial %i/%i, param %s = %s, acc = %f" %
+              (graph_name, info['trial']+1, info['n_trials'], param_name, param, result.accuracy))
+        results.append({'param_val': param, 'result': result})
+    return results
 
 
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
-    # test_data()
-    t = MNISTPairwiseTuner()
-    t.run()
-    t.plot_results()
+    
+    if False:
+        t = MNISTPairwiseTuner(8)
+        t.run()
+        # t.plot_results()
+        del t
+    
+    if True:
+        t = MNISTFullTuner(2)
+        t.run()
+        t.plot_results()
+        del t
