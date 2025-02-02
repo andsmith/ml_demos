@@ -65,11 +65,12 @@ class MNISTResult(object):
         """
         # save these for results reporting
         self.k = k
-        self.digits = data.digits
+        self.digits = np.array(data.digits)
         self.pca_dim = data.pca_dim
         self.inds = {'train': data.train_inds,
                      'test': data.test_inds}
         self.model = model
+        self.pca_transf = data.pca_transf  # for transforming new data
 
         x_test, y_test = data.get_data('test')
         x_train, y_train = data.get_data('train')
@@ -78,21 +79,27 @@ class MNISTResult(object):
         self.cluster_ids = {'train': self.model.assign(x_train),
                             'test': self.model.assign(x_test)}
         self.label_map = self._get_cluster_labels(self.cluster_ids['train'], y_train)
-        self.pred_labels = {'train': np.array([self.label_map[c]
-                                               for c in self.cluster_ids['train']]),
-                            'test': np.array([self.label_map[c]
-                                              for c in self.cluster_ids['test']])}
+        self.pred_labels = {'train': self.label_map[self.cluster_ids['train']],
+                            'test': self.label_map[self.cluster_ids['test']]}
         self.true_labels = {'train': y_train,
                             'test': y_test}
+
         self.accuracy = self._get_accuracy()
 
     def _get_cluster_labels(self, ids, labels):
+        """
+        Cluster IDs are in [0, k-1], labels are one of self.digits,
+        so we need to assign each cluster to a label.
+        We find the bijective mapping that minimizes the error rate.
+        :returns: array of length k, where element i is the digit label for cluster i.
+        """
         if self.k == 2:
-            err_rate = np.mean(ids != labels)
+            label_inds = (labels == self.digits[1]).astype(int)
+            err_rate = np.mean(ids != label_inds)
             if err_rate > 0.5:
-                return {0: 1, 1: 0}
+                return self.digits[::-1]
             else:
-                return {0: 0, 1: 1}
+                return self.digits
         else:
             # use the Hungarian algorithm to assign cluster labels to digit labels
             m = Munkres()
@@ -101,7 +108,10 @@ class MNISTResult(object):
                 for j in range(self.k):
                     cost_matrix[i, j] = -np.sum((ids == i) & (labels == j))
             indexes = m.compute(cost_matrix)
-            cluster_label_map = {i: j for i, j in indexes}
+            cluster_label_map = np.zeros(self.k, dtype=int)
+            for row, column in indexes:
+                cluster_label_map[row] = column
+
             return cluster_label_map
 
     def _get_accuracy(self):

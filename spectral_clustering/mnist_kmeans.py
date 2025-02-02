@@ -22,11 +22,11 @@ import matplotlib.pyplot as plt
 
 # Common params for full and pairwise experiments
 DIM = 30
-N_REP = 10
+N_REP = 20
 N_SAMP = 1000
 N_TEST = 800
 N_BOOT = 50
-N_CPU = 1
+N_CPU = 10
 
 
 class KMeansFull(object):
@@ -122,12 +122,12 @@ class KMeansFull(object):
 
 
 class KMeansPairwise(object):
-    def __init__(self, dim=DIM, n_rep=N_REP, n_samp=N_SAMP, n_cpu=N_CPU):
+    def __init__(self, dim=DIM, n_rep=N_REP, n_samp=(N_SAMP, N_TEST), n_cpu=N_CPU):
         self._n_rep = n_rep
         self._dim = dim
-        self._n_samples = n_samp
+        self._n_samples, self._n_test = n_samp
         self._n_cpu = cpu_count()-4 if n_cpu is None else n_cpu
-        self._data = MNISTDataPCA(dim=dim)
+        self._data = MNISTData(pca_dim=dim)
         self._digit_pairs = [(i, j) for i in range(10) for j in range(i+1, 10)]
         self._all_results = self._init_data()
 
@@ -140,18 +140,13 @@ class KMeansPairwise(object):
         for pair in self._digit_pairs:
             # Tasks will be divided up by each digit pair.
             # sample randomly from each digit, each time.
-            inds0 = self._data.get_digit_sample_inds(pair[0], self._n_samples)
-            inds1 = self._data.get_digit_sample_inds(pair[1], self._n_samples)
-
-            x = np.vstack((self._data.get_digit(pair[0])[inds0],
-                           self._data.get_digit(pair[1])[inds1]))
-            y = np.hstack((np.zeros(inds0.size),
-                           np.ones(inds1.size)))
+            data = self._data.get_sample(digits=pair,
+                                         n_train=self._n_samples,
+                                         n_test=self._n_test)
 
             work.append({'graph_name': name,
                          'aux': {'pair': pair},
-                         'inds': (inds0, inds1),
-                         'data': (x, y),
+                         'data': data,
                          'n_trials': self._n_rep})
         return work
 
@@ -167,27 +162,27 @@ class KMeansPairwise(object):
         return results
 
     def plot_results(self, prefix="KMeans"):
-
-        # show best & worst pairs
-        title = "%s(pca=%i)" % (prefix, self._dim)
-        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title)
-
-        # show pairwise clusterings
+        # show pairwise clusterings for TEST data
         fig, ax = plt.subplots(figsize=(7, 6))
         plot_pairwise_clusterings(ax, self._all_results, self._data)
         ax.set_title("%s Pairwise Clustering (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
             prefix, self._dim, self._n_samples, self._n_rep))
         plt.tight_layout()
         # plt.show()
-
-        # show confusion matrix
+       
+        # show pairwise accuracy matrix for TEST data
         fig, ax = plt.subplots()
         img = plot_pairwise_digit_confusion(ax, self._all_results)
         ax.set_title("%s pairwise accuracy (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
             prefix, self._dim, self._n_samples, self._n_rep))
         fig.colorbar(img, ax=ax)
         # plt.show()
+        return
 
+        # show best & worst pairs for TEST data
+        title = "%s(pca=%i)" % (prefix, self._dim)
+        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title)
+       
 
 def _test_kmeans(work):
     """
@@ -196,7 +191,6 @@ def _test_kmeans(work):
                             'data': MNistSample
                             'n_trials': n_rep}
     """
-    # import ipdb; ipdb.set_trace()
     n_trials = work['n_trials']
 
     x, y = work['data'].get_data('train')
@@ -249,14 +243,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     logging.info("Running KMeansPairwise.")
 
-    # import ipdb; ipdb.set_trace()
 
-    # km = KMeansPairwise()
-    # km.plot_results()
-    # plt.show()
-
-    km = KMeansFull()
+    km = KMeansPairwise()
     km.plot_results()
+    #plt.show()
+
+    #km = KMeansFull()
+    #km.plot_results()
     # plt.show()
 
     # f = FisherPairwise()

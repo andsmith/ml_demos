@@ -23,6 +23,7 @@ from multiprocessing import Pool, cpu_count
 from pprint import pprint
 from mnist_data import MNISTDataPCA
 from mpl_plots import project_binary_clustering, plot_binary_clustering
+from mnist_plots import show_digit_cluster_collage_full, plot_extreme_pairs, plot_pairwise_clusterings
 import pickle
 import os
 from fisher_lda import FisherLDA
@@ -59,7 +60,7 @@ class MNISTPairwiseTuner(object):
         # logging info, cache filename prefix
         return "spectral clustering", "tuner_pairwise"
 
-    def plot_results(self):
+    def plot_accuracy_curves(self):
         """
         Plot clustering "accuracies" averaged over all digit pairs for every value of the parameter, with bars indicating +/- 1 sd.
 
@@ -109,7 +110,10 @@ class MNISTPairwiseTuner(object):
         plt.suptitle("Spectral Clustering MNIST Pairwise (pca_dim=%i,\nsamples/digit=%i, avg over 45 digit pairs)" %
                      (self._n_samples, len(self._digit_pairs)))
         plt.legend()
-        plt.show()
+
+
+    def plot_results(self):
+        self.plot_accuracy_curves()
 
     def _compute(self, graph_name):
         """
@@ -180,7 +184,7 @@ class MNISTPairwiseTuner(object):
                 if param_name == 'epsilon':
                     val_range = np.min(distances)/100, np.percentile(distances, 98)
                 else:  # sigma
-                    val_range = np.min(distances)/100, np.max(distances)*1.05
+                    val_range = np.min(distances)/100, np.max(distancqes)*1.05
 
                 values = np.linspace(val_range[0], val_range[1], 20)  # don't go too low
             else:
@@ -191,7 +195,6 @@ class MNISTPairwiseTuner(object):
 
         logging.info("Testing values for %s: %s" % (param_name, str(values)))
         return values
-
 
 def _test_params(work):
     """
@@ -309,10 +312,10 @@ if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
     
-    if False:
+    if True:
         t = MNISTPairwiseTuner(8)
         t.run()
-        # t.plot_results()
+        t.plot_results()
         del t
     
     if True:
@@ -320,3 +323,5 @@ if __name__ == "__main__":
         t.run()
         t.plot_results()
         del t
+
+    plt.show()

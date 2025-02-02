@@ -5,16 +5,18 @@ from util import pca
 from matplotlib.widgets import Button
 import logging
 
-def plot_pairwise_digit_confusion(ax, results):
+
+def plot_pairwise_digit_confusion(ax, results, which='test'):
     """
-    Plot the pairwise digit confusion matrix.
+    show an image where the i,j value is the accuracy distinguishing between digits i and j.
     :param ax: matplotlib axis
     :param results: list of MNISTResult objects
     """
     conf_img = np.zeros((10, 10), dtype=np.float32)
     for result in results:
-        conf_img[int(result.aux['pair'][0]), int(result.aux['pair'][1])] = result.accuracy
-        conf_img[int(result.aux['pair'][1]), int(result.aux['pair'][0])] = result.accuracy
+        pair = result.digits
+        conf_img[pair[0], pair[1]] = result.accuracy[which]
+        conf_img[pair[1], pair[0]] = result.accuracy[which]
     ret = ax.imshow(conf_img, cmap='hot', interpolation='nearest')
     # show all axis ticks
     ax.set_xticks(range(10))
@@ -22,7 +24,7 @@ def plot_pairwise_digit_confusion(ax, results):
     return ret
 
 
-def plot_full_confusion(ax, results,**kwargs):
+def plot_full_confusion(ax, results, **kwargs):
     """
     :param results:  list of MNISTResult objects, bootsrap samples, 
         each result has a confusion matrix, since each trial is a 10-way classification
@@ -39,7 +41,7 @@ def plot_full_confusion(ax, results,**kwargs):
     return img
 
 
-def plot_pairwise_clusterings(ax, results, data):
+def plot_pairwise_clusterings(ax, results, data, which='train'):
     """
     Plot the clustering results for each digit pair.
     :param ax: matplotlib axis
@@ -49,18 +51,29 @@ def plot_pairwise_clusterings(ax, results, data):
     v_digits = []
     h_digits = []
 
+    def _relabel_binary(true, pred):
+        labels = sorted(np.unique(true))
+        true_bin = (true==labels[0]).astype(int)
+        pred_bin = (pred==labels[0]).astype(int)
+        return true_bin, pred_bin
+
+
     for result in results:
-        pred_labels = result.pred_labels
-        true_labels = result.true_labels
-        pair = result.aux['pair']
-        data0 = data.get_digit(pair[0])[result.inds[0]]
-        data1 = data.get_digit(pair[1])[result.inds[1]]
+        true_labels = result.true_labels[which]
+        pred_labels = result.pred_labels[which]
+        true_labels, pred_labels = _relabel_binary(true_labels, pred_labels)
+        pair = result.digits
+
+        if which=='train':
+            data0 = data.train[pair[0]][result.inds[which][pair[0]]]
+            data1 = data.train[pair[1]][result.inds[which][pair[1]]]
+        
         all_data = np.vstack((data0, data1))
         unit_points = project_binary_clustering(all_data, pred_labels)
         points_shifted = unit_points + np.array(pair)
 
         good, bad = plot_binary_clustering(ax, points_shifted, pred_labels.astype(int), true_labels.astype(int),
-                               point_size=2, circle_size=15)
+                                           point_size=2, circle_size=15)
         v_digits.append(pair[1])
         h_digits.append(pair[0])
 
@@ -72,8 +85,6 @@ def plot_pairwise_clusterings(ax, results, data):
     c1_bad_h = ax.scatter([], [], s=bad_size, edgecolors='blue', label='Should be A', facecolors='none')
     c0_bad_h = ax.scatter([], [], s=bad_size, edgecolors='orange', label='Should be B', facecolors='none')
     ax.legend(handles=[c1_good_h, c0_good_h, c1_bad_h, c0_bad_h], loc='lower right')
-    
-
 
     v_digits = np.sort(np.unique(v_digits))
     h_digits = np.sort(np.unique(h_digits))
@@ -94,37 +105,46 @@ def plot_pairwise_clusterings(ax, results, data):
     ax.set_ylim(y_lim)
 
 
-def plot_extreme_pairs(results, data, n=3, title = None):
+def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
     """
     Show on n rows the best & worst clusterings (digit images in 2d embeddings).
-    :param results: list of MNISTResult objects
+    :param results: list of MNISTResult objects, one per digit pair 
     :param data: MNISTData object, for looking up the original data
     :param n: number of pairs to show
     :param title: title prefix for the figures
+    :param which: 'train' or 'test' results
     returns: figure & axis array objects
     """
     fig, axes = plt.subplots(n, 4, figsize=(7, 2*n))
+    if n == 1:
+        axes = np.array([axes])
+
     def _add_pair(ax, result):
-        pair = result.aux['pair']
-        pair = result.aux['pair']
-        data0 = data.get_digit(pair[0])[result.inds[0]]
-        data1 = data.get_digit(pair[1])[result.inds[1]]
-        img0 = data.get_images(pair[0])[result.inds[0]]
-        img1 = data.get_images(pair[1])[result.inds[1]]
-        all_data = np.vstack((data0, data1))
-        all_imgs = np.vstack((img0, img1))
-        task_title = "%i vs %i" % pair
+        # results don't contain original data, so we have to look it up and re-project it
+        pair = result.digits
+        inds = result.inds[which]
+
+        x0, x1 = data.train[pair[0]][inds[pair[0]]], data.train[pair[1]][inds[pair[1]]]
+        points_full = np.vstack((x0, x1))
+        points = result.pca_transf.transform(points_full)
+        images = points_full.reshape(-1, 28, 28)
+        true_labels = np.hstack((np.ones(len(inds[pair[0]]))*pair[0],
+                                 np.ones(len(inds[pair[1]]))*pair[1]))
+        pred_labels = result.pred_labels[which]
+        
+        task_title = "%i vs %i" % (pair[0], pair[1])
+
         show_digit_cluster_collage_binary(ax,
-                                          all_imgs,
-                                          all_data,
-                                          result.pred_labels,
-                                          result.true_labels,
+                                          images,
+                                          points,
+                                          pred_labels,
+                                          true_labels,
                                           max_n_imgs=300,
                                           title=task_title)
-    
-    best  = sorted(results, key=lambda res: res.accuracy, reverse=True)[:n]
-    worst = sorted(results, key=lambda res: res.accuracy)[:n][::-1]
-    
+
+    best = sorted(results, key=lambda res: res.accuracy[which], reverse=True)[:n]
+    worst = sorted(results, key=lambda res: res.accuracy[which])[:n][::-1]
+
     for i, res in enumerate(best):
         _add_pair((axes[i][0], axes[i][1]), res)
 
@@ -137,6 +157,7 @@ def plot_extreme_pairs(results, data, n=3, title = None):
     fig.suptitle(_title)
     return fig, axes
 
+
 def plot_full_embedding(results, data, title, **kwargs):
     """
     Plot the full embedding of all digits, color-coded by the best result.
@@ -144,7 +165,7 @@ def plot_full_embedding(results, data, title, **kwargs):
     :param results: list of MNISTResult objects
     :param data: MNISTData object, for looking up the original data
     """
-    fig = plt.figure(figsize=(6,6))
+    fig = plt.figure(figsize=(6, 6))
     ax_data = fig.add_subplot()
     fig.subplots_adjust(right=.8)
 
@@ -155,11 +176,11 @@ def plot_full_embedding(results, data, title, **kwargs):
     all_data = np.vstack([data.get_digit(i)[indices[i]] for i in range(10)])
     all_imgs = np.vstack([data.get_images(i)[indices[i]] for i in range(10)])
     artists, colors = show_digit_cluster_collage_full(ax_data, all_imgs, all_data, best_labels, **kwargs)
-    #extract colors for each digit
+    # extract colors for each digit
 
-    # Add 10 buttons on the side of the image to turn off/on each digit 
+    # Add 10 buttons on the side of the image to turn off/on each digit
     digits_active = {i: True for i in range(10)}
-    
+
     def _toggle_activity(digit):
         digits_active[digit] = not digits_active[digit]
         state = digits_active[digit]
@@ -168,8 +189,7 @@ def plot_full_embedding(results, data, title, **kwargs):
             artist.set_visible(state)
         plt.draw()
 
-        
-    all_active = [True] # mutable object to use
+    all_active = [True]  # mutable object to use
 
     def _toggle_all():
         all_active[0] = not all_active[0]
@@ -178,7 +198,7 @@ def plot_full_embedding(results, data, title, **kwargs):
             if digits_active[i] != all_active[0]:
                 _toggle_activity(i)
         plt.draw()
-        
+
     button_height = 0.05
     button_width = 0.07
     button_spacing = 0.01
@@ -190,9 +210,9 @@ def plot_full_embedding(results, data, title, **kwargs):
         button = Button(button_ax, "%i" % i, color=colors[i])
         button.on_clicked(lambda event, i=i: _toggle_activity(i))
         y += button_height + button_spacing
-        buttons.append(button)  
+        buttons.append(button)
     y += button_spacing
-    button_ax = plt.axes([.83, y, button_width, button_height])      
+    button_ax = plt.axes([.83, y, button_width, button_height])
     button = Button(button_ax, "All")
     button.on_clicked(lambda event: _toggle_all())
     buttons.append(button)
@@ -273,9 +293,8 @@ def show_digit_cluster_collage_binary(ax, images, points, pred_labels, true_labe
     """
     # flatten to 2d
     points = project_binary_clustering(points, pred_labels)
-    x_span = 1.0
+    x_span = np.max(points[:, 0]) - np.min(points[:, 0])
     side = x_span * image_extent_frac
-
     # do correct side on ax[0]
     correct = pred_labels == true_labels
     n_correct = np.sum(correct)
@@ -294,8 +313,6 @@ def show_digit_cluster_collage_binary(ax, images, points, pred_labels, true_labe
     ax[0].set_yticks([])
 
     # do errors side on ax[1]
-    # TODO:  should find a way to avoid plotting points that will be under images
-    # plot_binary_clustering(ax[1], points, pred_labels, None, point_size=1)
     n_errors = np.sum(~correct)
     if n_errors > max_n_imgs:
         idx = np.random.choice(np.where(~correct)[0], max_n_imgs, replace=False)
@@ -320,28 +337,30 @@ def show_digit_cluster_collage_binary(ax, images, points, pred_labels, true_labe
 
 def test_show_digit_cluster_collage_binary():
     # making test data
-    from mnist_data import MNISTDataPCA
-    n_train = 200
-    data = MNISTDataPCA(dim=30)
-    inds = {0: data.get_digit_sample_inds(0, n_train),
-            1: data.get_digit_sample_inds(1, n_train)}
+    from mnist_data import MNISTData
+    n_train = 500
+    data = MNISTData(pca_dim=30)
+    sample = data.get_sample(n_train, n_train)
 
-    train0 = data.get_digit(0)[inds[0], :]
-    train1 = data.get_digit(1)[inds[1], :]
-    images0 = data.get_images(0)[inds[0]]
-    images1 = data.get_images(1)[inds[1]]
+    # show 5s and 8s, make 4 5s wrong and 30 8s wrong
+    pair = 5, 8
 
-    train_both = np.vstack((train0, train1))
+    images0 = data.train[pair[0]][sample.train_inds[pair[0]]].reshape(-1, 28, 28)
+    images1 = data.train[pair[1]][sample.train_inds[pair[1]]].reshape(-1, 28, 28)
+
+    points_pca = np.vstack((sample.train[pair[0]], sample.train[pair[1]]))
     images_both = np.vstack((images0, images1))
 
-    train_lab = np.concatenate((np.zeros(n_train), np.ones(n_train)))
-    pred_lab = train_lab.copy()
-    error_idx = np.random.choice(2*n_train, 10, replace=False)
-    pred_lab[error_idx] = 1 - pred_lab[error_idx]
+    train_lab = np.concatenate((np.ones(n_train) * pair[0],
+                                     np.ones(n_train)*pair[1])).astype(int)
+    pred_lab =train_lab.copy()
+    pred_lab[:4] = pair[1]
+    pred_lab[-30:] = pair[0]
+
 
     # plotting
     fig, ax = plt.subplots(1, 2)
-    show_digit_cluster_collage_binary(ax, images_both, train_both, pred_lab, train_lab)
+    show_digit_cluster_collage_binary(ax, images_both, points_pca, pred_lab, train_lab)
     plt.suptitle("Projected digits, errors\n circled w/correct colors.")
     plt.tight_layout()
     plt.show()
@@ -364,9 +383,10 @@ def test_plot_full_embedding():
     results = [result]
     plot_full_embedding(results, data, image_extent_frac=0.03)
 
+
 def test_plot_extreme_pairs():
     import pickle
-    with open('KMeans_pairwise_r=15_n=1000.pkl','rb') as f:
+    with open('KMeans_pairwise_r=15_n=1000.pkl', 'rb') as f:
         results = pickle.load(f)
     from mnist_data import MNISTDataPCA
     data = MNISTDataPCA(dim=30)
@@ -374,22 +394,23 @@ def test_plot_extreme_pairs():
 
     plt.show()
 
+
 def test_plot_full_confusion():
     file = 'KMeans_full_r=15_n=1000_b=100.pkl'
     import pickle
     with open(file, 'rb') as f:
         results = pickle.load(f)
     fig, ax = plt.subplots(1, 1)
-    img=plot_full_confusion(ax, results)
-    fig.colorbar(img, ax=ax)    
+    img = plot_full_confusion(ax, results)
+    fig.colorbar(img, ax=ax)
     plt.show()
-    
+
 
 if __name__ == '__main__':
-    #show_clusters(np.random.randn(100, 2), np.random.randint(0, 10, 100))
-    #import ipdb; ipdb.set_trace()
-    #test_plot_full_embedding()
-    #test_plot_extreme_pairs()
-    test_plot_full_confusion()
-    
-    #plt.show()
+    # show_clusters(np.random.randn(100, 2), np.random.randint(0, 10, 100))
+    # import ipdb; ipdb.set_trace()
+    # test_plot_full_embedding()
+    # test_plot_extreme_pairs()
+    #test_plot_full_confusion()
+    test_show_digit_cluster_collage_binary()
+    # plt.show()

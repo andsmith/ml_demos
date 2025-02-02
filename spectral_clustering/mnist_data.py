@@ -20,7 +20,7 @@ class MNISTData(object):
                                                            "MNIST_raw_data.pkl")
         self.train = {d: np.array([img.reshape(-1) for img in x_train[y_train == d]]) for d in range(10)}
         self.test = {d: np.array([img.reshape(-1) for img in x_test[y_test == d]]) for d in range(10)}
-        #self.print_digit_stats()
+        # self.print_digit_stats()
 
     def print_digit_stats(self):
         """
@@ -46,6 +46,23 @@ class MNISTData(object):
                            n_test=n_test)
 
 
+class PCATransf(object):
+    def __init__(self, n_components,whiten=False):
+        self._dim = n_components
+        self._proj_axes = None
+        self.explained_variance_ratio_ = None
+        self._whiten = whiten   
+
+    def fit(self, x):
+        pca = PCA(n_components=self._dim, whiten=self._whiten)
+        pca.fit(x)
+        self.explained_variance_ratio_ = pca.explained_variance_ratio_
+        self._proj_axes = pca.components_
+
+    def transform(self, x):
+        return x.dot(self._proj_axes.T)
+
+
 class MNISTSample(object):
     """
     Class to hold a test/train split of MNIST data and manage PCA (i.e. for a single trial)
@@ -67,29 +84,30 @@ class MNISTSample(object):
         self.train_inds = {d: np.random.choice(data.train[d].shape[0], n_train, replace=False)
                            for d in self.digits}
         if n_test == -1:
-            self.test_inds = {d: np.arange(data.test[d].shape[0],dtype=np.int32) for d in self.digits}
+            self.test_inds = {d: np.arange(data.test[d].shape[0], dtype=np.int32) for d in self.digits}
         else:
             self.test_inds = {d: np.random.choice(data.test[d].shape[0], n_test, replace=False)
-                            for d in self.digits}
+                              for d in self.digits}
 
         if self.pca_dim > 0:
             logging.info("Computing PCA with %s components." % (self.pca_dim, ))
-            self._pca = PCA(n_components=self.pca_dim, whiten=False)  # few percent better without whitening
+            self.pca_transf = PCATransf(n_components=self.pca_dim, whiten=False)  # few percent better without whitening
             train_x = np.vstack([data.train[d][self.train_inds[d]] for d in self.digits])
-            self._pca.fit(train_x)
-            var_sum = np.sum(self._pca.explained_variance_ratio_[:self.pca_dim])
-            sd_range = np.sqrt(self._pca.explained_variance_ratio_[0]), np.sqrt(self._pca.explained_variance_ratio_[-1])
+            self.pca_transf.fit(train_x)
+            var_sum = np.sum(self.pca_transf.explained_variance_ratio_[:self.pca_dim])
+            sd_range = np.sqrt(self.pca_transf.explained_variance_ratio_[0]), np.sqrt(self.pca_transf.explained_variance_ratio_[-1])
             logging.info("\tPCA complete, sd[0]=%.3f, sd[%i]=%.5f, %.3f %% of variance." %
                          (sd_range[0], self.pca_dim, sd_range[1], var_sum*100))
 
-            self.train = {d: self._pca.transform(data.train[d][self.train_inds[d]]) for d in self.digits}
-            self.test = {d: self._pca.transform(data.test[d][self.test_inds[d]]) if self.test_inds[d].size > 0
-                             else np.zeros((0, self.pca_dim))
+            self.train = {d: self.pca_transf.transform(data.train[d][self.train_inds[d]]) for d in self.digits}
+            self.test = {d: self.pca_transf.transform(data.test[d][self.test_inds[d]]) if self.test_inds[d].size > 0
+                         else np.zeros((0, self.pca_dim))
                          for d in self.digits}
         else:
             self.train = {d: data.train[d][self.train_inds[d]] for d in self.digits}
             self.test = {d:  data.test[d][self.test_inds[d]] if self.test_inds[d].size > 0 else np.zeros((0, self.dim))
-                        for d in self.digits}               
+                         for d in self.digits}
+            self.pca_transf = None
 
     def get_data(self, which='train'):
         """
@@ -113,7 +131,7 @@ class MNISTSample(object):
 
 
 def test_data(plot=False):
-    fig,ax=plt.subplots()
+    fig, ax = plt.subplots()
     pca_data = MNISTData(pca_dim=2).get_sample(2000, 0)
     if not plot:
         return
@@ -131,7 +149,6 @@ def test_data_img(plot=True):
     n_rows = 4
     n_cols = 4
     data = MNISTData(pca_dim=0).get_sample(100, 0)
-
 
     imgs = {}
     n_imgs_per_digit = n_rows*n_cols
@@ -151,7 +168,7 @@ def test_data_img(plot=True):
             x = 0
             y += imgs[d].shape[0]
     if plot:
-        
+
         title = "MNIST data"
         fig, ax = plt.subplots()
         ax.imshow(1-output/255., cmap='gray')
@@ -159,6 +176,7 @@ def test_data_img(plot=True):
         # axes off
         ax.axis('off')
         plt.tight_layout()
+
 
 def test_all(plot=False):
     # test pca
@@ -171,6 +189,7 @@ def test_all(plot=False):
     test_data(plot=plot)
     if plot:
         plt.show()
+
 
 if __name__ == "__main__":
 
