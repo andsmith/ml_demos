@@ -22,7 +22,7 @@ def plot_pairwise_digit_confusion(ax, results):
     return ret
 
 
-def plot_full_confusion(ax, results):
+def plot_full_confusion(ax, results,**kwargs):
     """
     :param results:  list of MNISTResult objects, bootsrap samples, 
         each result has a confusion matrix, since each trial is a 10-way classification
@@ -30,7 +30,7 @@ def plot_full_confusion(ax, results):
     """
     conf_mat = np.zeros((10, 10))
     for res in results:
-        conf_mat += res._get_confusion_matrix()
+        conf_mat += res._get_confusion_matrix(**kwargs)
     conf_mat /= len(results)
     img = ax.imshow(conf_mat, cmap='hot', interpolation='nearest')
     # show all axis ticks

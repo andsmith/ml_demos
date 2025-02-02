@@ -48,7 +48,7 @@ class MNISTData(object):
 
 class MNISTSample(object):
     """
-    Class to hold a test/train split of MNIST data and manage PCA.
+    Class to hold a test/train split of MNIST data and manage PCA (i.e. for a single trial)
     Also, keep track of sample indices so the image can be retrieved from the full data.
     (Don't store anything large, since we want to pickle this object.)
     """
@@ -94,6 +94,9 @@ class MNISTSample(object):
     def get_data(self, which='train'):
         """
         Get the test/training data in single arrays.
+        :param which: 'train' or 'test'
+        :returns X, y, where X is the data (N x PCA-dim) and y is the digit label (N), where
+        N is (n_train or n_test) * (lenght of self.digits).
         """
 
         def _get_pair(source):

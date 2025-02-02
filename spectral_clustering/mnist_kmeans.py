@@ -7,7 +7,7 @@ import logging
 import numpy as np
 from sklearn.cluster import KMeans
 from mnist_common import MNISTResult
-from mnist_data import MNISTDataPCA
+from mnist_data import MNISTData
 from clustering import KMeansAlgorithm
 from mnist_plots import (plot_pairwise_digit_confusion, plot_pairwise_clusterings,
                          plot_extreme_pairs, plot_full_confusion, plot_full_embedding)
@@ -22,14 +22,15 @@ import matplotlib.pyplot as plt
 
 # Common params for full and pairwise experiments
 DIM = 30
-N_REP = 15
+N_REP = 10
 N_SAMP = 1000
-N_BOOT = 100
-N_CPU = 10
+N_TEST = 800
+N_BOOT = 50
+N_CPU = 1
 
 
 class KMeansFull(object):
-    def __init__(self, dim=DIM, n_rep=N_REP, n_samp=N_SAMP, n_bootstraps=N_BOOT, n_cpu=N_CPU):
+    def __init__(self, dim=DIM, n_rep=N_REP, n_samp=(N_SAMP, N_TEST), n_bootstraps=N_BOOT, n_cpu=N_CPU):
         """
         :param dim: PCA dimension
         :param n_rep: Run KMeans this many times to get best result over random inits.
@@ -39,15 +40,15 @@ class KMeansFull(object):
         """
         self._n_rep = n_rep
         self._dim = dim
-        self._n_samples = n_samp
+        self._n_samples, self._n_test = n_samp
         self._n_bootstraps = n_bootstraps
         self._n_cpu = cpu_count()-4 if n_cpu is None else n_cpu
-        self._data = MNISTDataPCA(dim=dim)
+        self._data = MNISTData(pca_dim=dim)
         self._all_results = self._init_data()
 
     def _init_data(self):
         return load_cached(self._get_results, "KMeans_full_r=%i_n=%i_b=%i.pkl" % (
-            self._n_rep, self._n_samples, self._n_bootstraps))
+            self._n_rep, self._n_samples, self._n_bootstraps))  # add n-test to filename?
 
     def _get_work(self, name):
         """
@@ -60,12 +61,9 @@ class KMeansFull(object):
         """
         work = []
         for i in range(self._n_bootstraps):
-            inds = {d: self._data.get_digit_sample_inds(d, self._n_samples) for d in range(10)}
-            x = np.vstack([self._data.get_digit(d)[inds[d]] for d in range(10)])
-            y = np.hstack([d*np.ones(inds[d].size) for d in range(10)])
+            sample_data = self._data.get_sample(self._n_samples, self._n_test)
             work.append({'graph_name': name,
-                         'inds': inds,
-                         'data': (x, y),
+                         'data': sample_data,
                          'aux': {'trial': i, 'n_trials': self._n_bootstraps},
                          'n_trials': self._n_rep})
         return work
@@ -87,26 +85,38 @@ class KMeansFull(object):
         Plot 2:  Color-coded embedding of all digits, using best result
         """
         # show embedding
-        title = "KMeans 10-digit embedding, PCA dim=%i\n(%i samples/digit, %i trials)\ncolor by cluster ID" % (
-            self._dim, self._n_samples, self._n_bootstraps)
-        plot_full_embedding(self._all_results, self._data, title, max_n_imgs=200, image_extent_frac=0.015)
+        # title = "KMeans 10-digit embedding, PCA dim=%i\n(%i samples/digit, %i trials)\ncolor by cluster ID" % (
+        #    self._dim, self._n_samples, self._n_bootstraps)
+        # plot_full_embedding(self._all_results, self._data, title, max_n_imgs=200, image_extent_frac=0.015)
         # calls plt.show() at the end
 
-        # show confusion matrix & histogram in one figure
-        fig, ax = plt.subplots(2, 1, figsize=(5, 8))
-        img = plot_full_confusion(ax[0], self._all_results)
-        ax[0].set_ylabel("Cluster ID")
-        ax[1].set_xlabel("True digit")
-        fig.colorbar(img, ax=ax[0])
-        ax[0].set_title("recall accuracy (diagonal) & F.P. rate.")
+        # show confusion matrices & histograms in one figure
+        fig, ax = plt.subplots(2, 2, figsize=(5, 8))
 
-        # accuracy histogram
-        accuracies = [result.accuracy for result in self._all_results]
-        counts, bins = np.histogram(accuracies, bins=15)
-        bin_centers = (bins[:-1] + bins[1:]) / 2.
-        ax[1].plot(bin_centers, counts, 'o-')
-        ax[1].set_xlabel("Hist. of accuracy (%i trials)." % (            self._n_bootstraps,))
-        ax[1].set_ylabel("count")
+        #    train
+        def _show_confusion(ax, results, which):
+            img = plot_full_confusion(ax, results, which=which)
+            ax.set_ylabel("Cluster ID")
+            ax.set_xlabel("True digit")
+            ax.set_title("confusion - %s data" % which)
+            fig.colorbar(img, ax=ax)
+
+        _show_confusion(ax[0][0], self._all_results, 'train')
+        _show_confusion(ax[0][1], self._all_results, "test")
+
+        # accuracy histograms:
+        def _show_hist(ax, accuracies, title):
+            counts, bins = np.histogram(accuracies, bins=15)
+            bin_centers = (bins[:-1] + bins[1:]) / 2.
+            ax.plot(bin_centers, counts, 'o-')
+            ax.set_ylabel("count")
+            ax.set_xlabel("Histogram of accuracy")
+
+        accuracies_test = [result.accuracy['test'] for result in self._all_results]
+        accuracies_train = [result.accuracy['train'] for result in self._all_results]
+        _show_hist(ax[1][0], accuracies_train, "Training data")
+        _show_hist(ax[1][1], accuracies_test, "Test data")
+
         fig.suptitle("KMeans 10-digit classification, PCA dim=%i\n(%i samples/digit, %i trials)" % (
             self._dim, self._n_samples, self._n_bootstraps))
 
@@ -157,18 +167,18 @@ class KMeansPairwise(object):
         return results
 
     def plot_results(self, prefix="KMeans"):
-        
+
         # show best & worst pairs
         title = "%s(pca=%i)" % (prefix, self._dim)
-        fig, ax = plot_extreme_pairs(self._all_results, self._data,n=3,title= title)
-        
+        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title)
+
         # show pairwise clusterings
-        fig, ax = plt.subplots(figsize=(7,6))
+        fig, ax = plt.subplots(figsize=(7, 6))
         plot_pairwise_clusterings(ax, self._all_results, self._data)
         ax.set_title("%s Pairwise Clustering (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
             prefix, self._dim, self._n_samples, self._n_rep))
         plt.tight_layout()
-        #plt.show()
+        # plt.show()
 
         # show confusion matrix
         fig, ax = plt.subplots()
@@ -176,31 +186,32 @@ class KMeansPairwise(object):
         ax.set_title("%s pairwise accuracy (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
             prefix, self._dim, self._n_samples, self._n_rep))
         fig.colorbar(img, ax=ax)
-        #plt.show()
+        # plt.show()
 
 
 def _test_kmeans(work):
     """
     multiprocessing helper for testing K-means, n-trials on a single digit pair.
+    :param work: dict with {'graph_name': 'kmeans',
+                            'data': MNistSample
+                            'n_trials': n_rep}
     """
     # import ipdb; ipdb.set_trace()
     n_trials = work['n_trials']
 
-    x, y = work['data']
+    x, y = work['data'].get_data('train')
     k = np.unique(y).size
     best_result = None
     for _ in range(n_trials):
         km = KMeansAlgorithm(k)
         km.fit(x)
-        result = MNISTResult(k,km, x, y,
-                             sample_indices=work['inds'],
-                             aux=work['aux'])
-        if best_result is None or result.accuracy > best_result.accuracy:
+        result = MNISTResult(k, km, work['data'])
+        if best_result is None or result.accuracy['train'] > best_result.accuracy['train']:
             best_result = result
 
     if work['aux'] is not None:
-        print("Tested K-Means({}):  {} samples, {} times, best results: accuracy={}, info={}".format(
-            k, len(y), n_trials, best_result.accuracy, work['aux']))
+        print("Tested K-Means({}):  {} samples, {} times, best results: info={}.  accuracy={}".format(
+            k, len(y), n_trials, work['aux'], best_result.accuracy))
 
     return best_result
 
@@ -227,7 +238,7 @@ def _test_fisher(work):
     data = work['data']
     model = FisherLDA()
     model.fit(data[0], data[1])
-    result = MNISTResult(2,model, data[0], data[1], sample_indices=work['inds'], aux=work['aux'])
+    result = MNISTResult(2, model, data[0], data[1], sample_indices=work['inds'], aux=work['aux'])
 
     print("Tested Fisher LDA on digits %s:  (Accuracy:  %s)" % (
         work['aux'], result.accuracy))
@@ -240,14 +251,14 @@ if __name__ == "__main__":
 
     # import ipdb; ipdb.set_trace()
 
-    km = KMeansPairwise()
-    km.plot_results()
-    plt.show()
+    # km = KMeansPairwise()
+    # km.plot_results()
+    # plt.show()
 
     km = KMeansFull()
     km.plot_results()
-    plt.show()
+    # plt.show()
 
-    f = FisherPairwise()
-    f.plot_results()
+    # f = FisherPairwise()
+    # f.plot_results()
     plt.show()

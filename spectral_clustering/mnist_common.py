@@ -47,7 +47,7 @@ GRAPH_PARAM_NAMES = {'full': 'sigma',
                      'soft_neighbors_additive': 'alpha',
                      'soft_neighbors_multiplicative': 'alpha',
                      'epsilon': 'epsilon'}
-    
+
 
 class MNISTResult(object):
     """
@@ -55,30 +55,40 @@ class MNISTResult(object):
     If true labels are provided, will compute cluster ID to class label mapping
      and will computer accuracy.  (Keep classes balanced for best results.)
     """
-    def __init__(self, k,model, data, true_labels=None, sample_indices=None, aux=None):
+
+    def __init__(self, k, model, data):
         """
         :param model: ClusteringAlgorithm, with fit() called.
-        :param data: data used to fit the model
-        :param cluster_ids: cluster ids for each data point
-        :param true_labels: true labels for each data point
-        :param sample_indices: indices into full NIST dataset used to train model 
+        :param data: MNISTSamples object
+        :param sample_indices: indices into full NIST dataset used to train model
             (dict: key=digit, value = index array)
-        :param aux: any auxiliary data to store with the result
         """
-        self.aux = aux
-        self.k=k
-        #self.data = data  # don't bother saving, just save indices
-        self.inds = sample_indices
-        self.cluster_ids = model.assign(data)
-        self.true_labels = true_labels
-        if true_labels is not None:
-            self.label_map =  self._get_cluster_labels()
-            self.pred_labels = np.array([self.label_map[c] for c in self.cluster_ids])
-            self.accuracy = self._get_accuracy()
+        # save these for results reporting
+        self.k = k
+        self.digits = data.digits
+        self.pca_dim = data.pca_dim
+        self.inds = {'train': data.train_inds,
+                     'test': data.test_inds}
+        self.model = model
 
-    def _get_cluster_labels(self):
+        x_test, y_test = data.get_data('test')
+        x_train, y_train = data.get_data('train')
+
+        # get cluster Id's from training set, derive mapping to digit labels, then do test set
+        self.cluster_ids = {'train': self.model.assign(x_train),
+                            'test': self.model.assign(x_test)}
+        self.label_map = self._get_cluster_labels(self.cluster_ids['train'], y_train)
+        self.pred_labels = {'train': np.array([self.label_map[c]
+                                               for c in self.cluster_ids['train']]),
+                            'test': np.array([self.label_map[c]
+                                              for c in self.cluster_ids['test']])}
+        self.true_labels = {'train': y_train,
+                            'test': y_test}
+        self.accuracy = self._get_accuracy()
+
+    def _get_cluster_labels(self, ids, labels):
         if self.k == 2:
-            err_rate = np.mean(self.cluster_ids != self.true_labels)
+            err_rate = np.mean(ids != labels)
             if err_rate > 0.5:
                 return {0: 1, 1: 0}
             else:
@@ -89,24 +99,27 @@ class MNISTResult(object):
             cost_matrix = np.zeros((self.k, self.k))
             for i in range(self.k):
                 for j in range(self.k):
-                    cost_matrix[i, j] = -np.sum((self.cluster_ids == i) & (self.true_labels == j))
+                    cost_matrix[i, j] = -np.sum((ids == i) & (labels == j))
             indexes = m.compute(cost_matrix)
             cluster_label_map = {i: j for i, j in indexes}
             return cluster_label_map
 
     def _get_accuracy(self):
-        if self.true_labels is None:
-            raise ValueError("True labels are not provided.")
-        return np.mean(self.pred_labels == self.true_labels)
-    
-    def _get_confusion_matrix(self):
+        return {'train': np.mean(self.pred_labels['train'] == self.true_labels['train']),
+                'test': np.mean(self.pred_labels['test'] == self.true_labels['test'])}
+
+    def _get_confusion_matrix(self, which='test'):
         """
         element i,j is the fraction of samples with label j were correctly assigned to cluster i
         """
-        if self.true_labels is None:
-            raise ValueError("True labels are not provided.")
-        conf_mat = np.zeros((self.k, self.k))
-        for i in range(self.k):
-            for j in range(self.k):
-                conf_mat[i, j] = np.sum((self.pred_labels == i) & (self.true_labels == j)) / np.sum(self.true_labels == j)
-        return conf_mat
+        def _get_mat(true_labels, pred_labels):
+            conf_mat = np.zeros((self.k, self.k))
+            for i in range(self.k):
+                for j in range(self.k):
+                    conf_mat[i, j] = np.sum((pred_labels == j) & (true_labels == i)) / \
+                        np.sum(true_labels == j)
+            return conf_mat
+        if which == 'train':
+            return _get_mat(self.true_labels['train'], self.pred_labels['train'])
+        else:
+            return _get_mat(self.true_labels['test'], self.pred_labels['test'])
