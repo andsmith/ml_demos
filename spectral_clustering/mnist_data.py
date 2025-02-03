@@ -90,9 +90,9 @@ class MNISTSample(object):
                               for d in self.digits}
 
         if self.pca_dim > 0:
-            logging.info("Computing PCA with %s components." % (self.pca_dim, ))
             self.pca_transf = PCATransf(n_components=self.pca_dim, whiten=False)  # few percent better without whitening
             train_x = np.vstack([data.train[d][self.train_inds[d]] for d in self.digits])
+            logging.info("Computing PCA with %s components on %i points." % (self.pca_dim, train_x.shape[0]))
             self.pca_transf.fit(train_x)
             var_sum = np.sum(self.pca_transf.explained_variance_ratio_[:self.pca_dim])
             sd_range = np.sqrt(self.pca_transf.explained_variance_ratio_[0]), np.sqrt(self.pca_transf.explained_variance_ratio_[-1])

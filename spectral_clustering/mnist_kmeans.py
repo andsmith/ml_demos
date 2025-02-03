@@ -84,6 +84,7 @@ class KMeansFull(object):
         Plot 1:  mean confusion matrix over all bootstraps on the left, histogram of accuracies on the right.
         Plot 2:  Color-coded embedding of all digits, using best result
         """
+        logging.info("Drawing figures...")
         # show embedding
         # title = "KMeans 10-digit embedding, PCA dim=%i\n(%i samples/digit, %i trials)\ncolor by cluster ID" % (
         #    self._dim, self._n_samples, self._n_bootstraps)
@@ -163,25 +164,28 @@ class KMeansPairwise(object):
 
     def plot_results(self, prefix="KMeans"):
         # show pairwise clusterings for TEST data
+        logging.info("Drawing figures...")
         fig, ax = plt.subplots(figsize=(7, 6))
-        plot_pairwise_clusterings(ax, self._all_results, self._data)
-        ax.set_title("%s Pairwise Clustering (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
-            prefix, self._dim, self._n_samples, self._n_rep))
+        which='train'
+        plot_pairwise_clusterings(ax, self._all_results, self._data,which=which)
+        ax.set_title("%s Pairwise Clustering (PCA dim=%i)\n(%i samples/digit, best of %i trials, %s data)" % (
+            prefix, self._dim, self._n_samples, self._n_rep,which))
         plt.tight_layout()
         # plt.show()
        
         # show pairwise accuracy matrix for TEST data
         fig, ax = plt.subplots()
-        img = plot_pairwise_digit_confusion(ax, self._all_results)
-        ax.set_title("%s pairwise accuracy (PCA dim=%i)\n(%i samples/digit, best of %i trials)" % (
-            prefix, self._dim, self._n_samples, self._n_rep))
+        which='test'
+        img = plot_pairwise_digit_confusion(ax, self._all_results, which=which)
+        ax.set_title("%s pairwise accuracy (PCA dim=%i)\n(%i samples/digit, best of %i trials, %s data)" % (
+            prefix, self._dim, self._n_samples, self._n_rep,which))
         fig.colorbar(img, ax=ax)
         # plt.show()
-        return
 
         # show best & worst pairs for TEST data
+        which='test'
         title = "%s(pca=%i)" % (prefix, self._dim)
-        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title)
+        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title, which=which)
        
 
 def _test_kmeans(work):
@@ -248,7 +252,7 @@ if __name__ == "__main__":
     km.plot_results()
     #plt.show()
 
-    #km = KMeansFull()
+    km = KMeansFull()
     #km.plot_results()
     # plt.show()
 

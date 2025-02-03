@@ -227,7 +227,6 @@ def test_graph_stats():
         mat = sim_graph.get_matrix()
         plot_graph_stats(fig, axes[1], mat)
 
-    # import ipdb; ipdb.set_trace()
     _n_clusters(axes[0], 10, EpsilonSimGraph, {'epsilon': 1.5})
     _n_clusters(axes[1], 2, EpsilonSimGraph, {'epsilon': 0.5})
     _n_clusters(axes[2], 1, FullSimGraph, {'sigma': 3.5})
@@ -241,9 +240,10 @@ def project_binary_clustering(points, labels, whiten=False):
     :param labels: N array of integers in [0, 1], cluster assignments
     :return: 2D projection of points (N x 2 array) in the unit square
     """
+    pair = np.sort(np.unique(labels))
     points = points - np.mean(points, axis=0)
-    p0 = np.mean(points[labels == 0], axis=0)
-    p1 = np.mean(points[labels == 1], axis=0)
+    p0 = np.mean(points[labels == pair[0]], axis=0)
+    p1 = np.mean(points[labels == pair[1]], axis=0)
     horizontal = p1 - p0
     horizontal /= np.linalg.norm(horizontal)
     points_deflated = points - np.dot(points, horizontal[:, np.newaxis]) * horizontal
@@ -251,8 +251,8 @@ def project_binary_clustering(points, labels, whiten=False):
     dirs, _ = pca(points_deflated, 2)
     vert = dirs[:, 0]
 
-    #check = np.abs(np.dot(horizontal, vert))
-    #print("Check orthogonality: %f" % check)
+    # check = np.abs(np.dot(horizontal, vert))
+    # print("Check orthogonality: %f" % check)
 
     proj_mat = np.column_stack((horizontal, vert))
     projected = points @ proj_mat
@@ -265,30 +265,33 @@ def project_binary_clustering(points, labels, whiten=False):
     return unit
 
 
-def plot_binary_clustering(ax, points, labels, true_labels=None, point_size=5, circle_size=50):
+def plot_binary_clustering(ax, points, pred_labels, true_labels=None, point_size=5, circle_size=50):
     """
     (Will flip predicted labels if more than half are wrong)
     :param ax: matplotlib axis object
     :param points: N x 2 array of points
-    :param labels: N array of integers in [0, 1], cluster assignments
+    :param pred_labels: N array of integers in [0, 1], cluster assignments
     :param true_labels: N array of integers in [0, 1], ground truth labels
     """
-    labels = np.array(labels, dtype=np.int32)
+    pred_labels = np.array(pred_labels, dtype=np.int32)
     colors = np.array([(0.122, 0.467, 0.706),  # matplotlib blue
                        (1.0, 0.498, 0.055)])
-    correct_artists = ax.scatter(points[:, 0], points[:, 1], c=colors[labels], s=point_size)
+    correct_artists = ax.scatter(points[:, 0], points[:, 1], c=colors[pred_labels], s=point_size)
 
     if true_labels is None:
         return
 
     true_labels = np.array(true_labels, dtype=np.int32)
-    error = labels != true_labels
-    if np.mean(error) > .5:
-        labels = 1 - labels
-        error = labels != true_labels
+    error = pred_labels != true_labels
+    false_0, false_1 = (pred_labels == 0) & (true_labels == 1), (pred_labels == 1) & (true_labels == 0)
+    #n_false_0, n_false_1 = np.sum(false_0), np.sum(false_1)
+    #print("Error rate: %i / %i (False-0:  %i False-1: %i)" % (np.sum(error), error.size, n_false_0, n_false_1))
+    #print("\tFalse_0:\n\t"+"\n\t\t".join(["%i"%i for i in np.where(false_0)[0]]))
+    #print("\tFalse_1:\n\t"+"\n\t\t".join(["%i"%i for i in np.where(false_1)[0]]))
     # circles around errors, edge color of correct label (no face color)
     correct_colors = colors[true_labels[error]]
-    incorrect_artists = ax.scatter(points[error, 0], points[error, 1], s=circle_size, edgecolors=correct_colors, facecolors='none')
+    incorrect_artists = ax.scatter(points[error, 0], points[error, 1], s=circle_size,
+                                   edgecolors=correct_colors, facecolors='none')
     return correct_artists, incorrect_artists
 
 
@@ -306,7 +309,6 @@ def test_project_binary_clustering():
     plot_binary_clustering(ax, points_flattened, pred_labels, true_labels)
     plt.title("Projected points (dim %i -> %i),\nerrors circled w/correct colors." % (d, 2))
     plt.show()
-
 
 
 if __name__ == "__main__":
