@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from make_data import make_bump
 from classify import plot_classifier
 from scipy.optimize import minimize
-
+from multiprocessing import Pool, cpu_count
 
 class DecisionStump(object):
     def __init__(self):
@@ -104,18 +104,28 @@ class DecisionStump(object):
             lims = axis.get_xlim()
             p0 = np.array([lims[0], self._thresh])
             p1 = np.array([lims[1], self._thresh])
-        axis.plot([p0[0], p1[0]], [p0[1], p1[1]],':' ,color='black', *args, **kwargs)
+        axis.plot([p0[0], p1[0]], [p0[1], p1[1]],'--' ,color='black', *args, **kwargs)
 
+def activation_fn(excitation):
+    # use tanh for the activation function
+    return np.tanh(excitation)
 
 class Perceptron(object):
     def __init__(self):
         self._weights = None
         self._bias = None
 
+    def __str__(self):
+        return "Perceptron(weights=%s, bias=%s)" % (self._weights, self._bias)
 
     def predict_proba(self, X):
-        p_1 =  1. / (1 + np.exp(-np.dot(X, self._weights) - self._bias)).reshape(-1,1)
-        return np.hstack([1 - p_1, p_1])
+        #p_1 =  1. / (1 + np.exp(-np.dot(X, self._weights) - self._bias)).reshape(-1,1)
+        
+        excitation = np.dot(X, self._weights) + self._bias
+        activation= activation_fn(excitation)  # now in[-1, 1]
+        p_0, p_1 = (1 - activation) / 2, (1 + activation) / 2
+        rep_array = np.hstack([p_0.reshape(-1,1), p_1.reshape(-1,1)])
+        return rep_array
 
     def fit(self, X, y, sample_weight = None):
         """
@@ -128,7 +138,7 @@ class Perceptron(object):
         N, d = X.shape
         if sample_weight is None:
             sample_weight = np.ones(N).astype(np.float64) 
-
+        sample_weight /= np.sum(sample_weight)
         # minimize the weighted error
         def loss(wb):
             w = wb[:-1]
@@ -149,16 +159,22 @@ class Perceptron(object):
         :param X: data to predict (N x d)
         :return: predicted labels (N x 1)
         """
-        return self.predict_proba(X)[:,1] > .5
+        return np.sign(self.predict_proba(X)[:,1] -.5)
     
-    def score(self, X, y):
+    def score(self, X, y, sample_weight = None):
         """
         Return the accuracy of the model on the data.
         :param X: data to predict (N x d)
         :param y: true labels (N x 1)
         :return: accuracy
         """
-        return np.mean(self.predict(X) == y)
+        y_hat = self.predict(X)
+        if sample_weight is None:
+            return np.mean(y_hat== y)
+        else:
+            sample_weight = np.array(sample_weight)
+            sample_weight /= np.sum(sample_weight)
+            return np.sum(sample_weight * (y_hat == y))
     
     def plot(self, axis, *args, **kwargs):
         """
@@ -178,6 +194,39 @@ class Perceptron(object):
                           
         axis.plot([p0[0], p1[0]], [p0[1], p1[1]], color='black',*args, **kwargs)  
     
+
+def _fit_perceptron(work):
+    X, y, sample_weight = work
+    clf = Perceptron()
+    clf.fit(X, y, sample_weight)
+    score= clf.score(X, y ,sample_weight)
+    return clf, score
+
+class ParallelPerceptron(Perceptron):
+    def __init__(self, n_cpus= 0):
+        super().__init__()
+        self._n_cpus = n_cpus if n_cpus > 0 else cpu_count()-1
+
+    def fit(self, X, y, sample_weight = None):
+        """
+        Fit N models, return the one with the best training accuracy.
+        """
+        results = []
+        work = [(X, y, sample_weight) for _ in range(self._n_cpus)]
+        import ipdb; ipdb.set_trace()
+        if self._n_cpus==1:
+            results = [_fit_perceptron(work_items) for work_items in work]
+        else:
+            with Pool(self._n_cpus) as pool:
+                results = pool.map(_fit_perceptron, work)
+        best_ind = np.argmax([score for _, score in results])
+        print("Best model has accuracy %.3f" % results[best_ind][1])
+        print("\tall_scores: ", ["%.3f"%score for _, score in results])
+        self._weights = results[best_ind][0]._weights
+        self._bias = results[best_ind][0]._bias
+        return self
+    
+
         
 def test_and_plot_stump():
     fig, ax = plt.subplots(2, 2)
@@ -195,9 +244,9 @@ def test_and_plot_stump():
 
     clf = DecisionStump()
     clf.fit(X, y)
-
+    acc = clf.score(X, y)
     plot_classifier(ax[0,1], X, y, clf, None, markersize=2)
-    ax[0,1].set_title('Decision Stump\nunweighted')
+    ax[0,1].set_title('Decision Stump\nunweighted\n %.2f' % acc)
     plt.tight_layout()
     
 
@@ -208,66 +257,71 @@ def test_and_plot_stump():
     w = np.ones(X.shape[0]) / X.shape[0]
     w[(y==-1 ) & (X[:,1] >= 0.5)] *= 0.01
     clf2.fit(X, y, sample_weight=w)
+    acc = clf2.score(X, y)
     plot_classifier(ax[1,0], X, y, clf2,None, markersize=2)
 
-    ax[1,0].set_title('D-Stump, \n(bump wt. x .01)')
+    ax[1,0].set_title('D-Stump, \n(bump wt. x .01)\nacc %.2f' % acc)
     
     clf3 = DecisionStump()
     # set weights of "bump" to 100x original
     w = np.ones(X.shape[0]) / X.shape[0]
     w[(y==-1 ) & (X[:,1] >= 0.5)] *= 100
     clf3.fit(X, y, sample_weight=w)
-    
+    acc = clf3.score(X, y)
     plot_classifier(ax[1,1], X, y, clf3,None, markersize=2)
-    ax[1,1].set_title('D-Stump\n(bump wt. x 100)')
+    ax[1,1].set_title('D-Stump\n(bump wt. x 100)\nacc %.2f' % acc)
     plt.tight_layout()
     plt.show()
 
 def test_and_plot_perceptron():
     fig, ax = plt.subplots(2, 2)
-
-    # data
     X, y = make_bump(20, 0.3, 0.5, 0.0, 0.0, random=False, separable=True)
-    y = np.int32(y)
-    ax[0,0].plot(X[y==0, 0], X[y==0, 1], '.', color='red',  markersize=2)
+
+    # plot data
+    ax[0,0].plot(X[y==-1, 0], X[y==-1, 1], '.', color='red',  markersize=2)
     ax[0,0].plot(X[y==1, 0], X[y==1, 1], '.', color='blue', markersize=2)
     ax[0,0].set_title('Bump dataset (0=red, 1=blue)')
-
     ax[0,0].set_aspect('equal')
     ax[0,0].yaxis.set_visible(False)
     ax[0,0].xaxis.set_visible(False)
-    # fit perceptron to unweighted data
 
-    clf1 = Perceptron()
-    clf1.fit(X, y)
-    print(clf1._weights, clf1._bias)
-    plot_classifier(ax[0,1], X, y, clf1,None, markersize=2)
-    ax[0,1].set_title('Perceptron, unweighted data')
+    clf = Perceptron()
+    clf.fit(X, y)
+    print(clf)
+
+    plot_classifier(ax[0,1], X, y, clf, None, markersize=2)
+    ax[0,1].set_title('Perceptron, unweighted\nacc = %.2f' % clf.score(X, y))
+    plt.tight_layout()
+    """
+    wtx = 2.0
 
     # fit perceptron to weighted data (light bump)
     clf2 = Perceptron()
     # set weights of "bump" to 1% original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 0.01
+    w[(y==-1 ) & (X[:,1] >= 0.5)] /= wtx
     clf2.fit(X, y, sample_weight=w)
+    print(clf2)
     plot_classifier(ax[1,0], X, y, clf2,None, markersize=2)
 
-    ax[1,0].set_title('Perceptron, \n(bump wt. x .01)')
+    ax[1,0].set_title('Perceptron, bump wt. x %.2f\nacc = %.2f' % (1/wtx, clf2.score(X, y)))
     
-    # fit perceptron to weighted data (heavy bump)
     clf3 = Perceptron()
-    # set weights of "bump" to 10% original
+    # set weights of "bump" to 100x original
     w = np.ones(X.shape[0]) / X.shape[0]
-    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 100
+    w[(y==-1 ) & (X[:,1] >= 0.5)] *= 2
     clf3.fit(X, y, sample_weight=w)
-    
+    print(clf3)
     plot_classifier(ax[1,1], X, y, clf3,None, markersize=2)
-    ax[1,1].set_title('Perceptron\n(bump wt. x 100)')
+    ax[1,1].set_title('Perceptron\n(bump wt.x %.2f)\nacc = %.2f' % (wtx, clf3.score(X, y)))
+
+    """
     plt.tight_layout()
     plt.show()
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    test_and_plot_stump()
+    #test_and_plot_stump()
+    test_and_plot_perceptron()
 

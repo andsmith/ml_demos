@@ -3,8 +3,8 @@ Show each iteration of adaboost.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from perceptron import DecisionStump
-from make_data import make_bump, make_spiral_data, make_minimal_data, make_checker_data
+from perceptron import DecisionStump, Perceptron
+from make_data import make_bump, make_spiral_data, make_minimal_data, make_checker_data, make_xor_data
 import logging
 from plotting import plot_dataset, plot_classifier, get_plot_size
 import argparse
@@ -37,23 +37,29 @@ class AdaDemo(object):
         * In the right column shows the weighted data and the new classifier added to the ensemble.    
     """
 
-    def __init__(self, n_side_pts=40,max_iter=100, n_rows=3, skip_interval=1, kind='bump', pausing=True):
+    def __init__(self, n_side_pts=40,max_iter=100, n_rows=3, skip_interval=1, kind='bump', pausing=True,
+                 weak_learner=DecisionStump):
         """
         :param n_side_pts: number of points on each side of the square
         :param n_rows: number of rows in the plot
         :param skip_interval: only plot every skip_interval iterations
         :param kind: 'bump', 'spiral', 'minimal', 'checker' (which dataset to use)
+        :param pausing: if True, wait for user input between iterations
+        :param weak_learner: class of weak learner to use
         """
+        self._weak_learner_class = weak_learner
         self._max_iter=max_iter
         self._pausing = pausing
         if kind == 'bump':
-            self._points, labels = make_bump(n_side_pts, 0.15, 0.2, 0.0, noise_frac=0.03, separable=True)
+            self._points, labels = make_bump(n_side_pts, 0.15, 0.2, 0.0, noise_frac=0.2, separable=True)
         elif kind == 'spiral':
-            self._points, labels, _ = make_spiral_data(n_side_pts, turns=2.0, ecc=1.0, margin=0.04, random=True)
+            self._points, labels, _ = make_spiral_data(n_side_pts, turns=.5, ecc=1.0, margin=0.04, random=False)
         elif kind == 'minimal':
             self._points, labels = make_minimal_data()
         elif kind == 'checker':
             self._points, labels = make_checker_data(n_side_pts, clip_cols=1)
+        elif kind == 'xor':
+            self._points, labels = make_xor_data()
         else:
             raise ValueError("Unknown AdaDemo kind %s" % kind)
 
@@ -93,6 +99,8 @@ class AdaDemo(object):
         self._run()
 
     def eval_ensenble(self, points=None, sign=True):
+        #import ipdb; ipdb.set_trace()
+
         points = points if points is not None else self._points
         preds = np.zeros(points.shape[0])
         for model, alpha in zip(self._models, self._alphas):
@@ -209,7 +217,7 @@ class AdaDemo(object):
             self._plot_weights(self._weights, self._next_row, self._iter)
 
             # logging.info("Iteration %i training w/weights:  %s" % (self._iter, self._weights))
-            new_model = DecisionStump()  #
+            new_model = self._weak_learner_class()
             new_model.fit(self._points, self._labels, sample_weight=self._weights)
 
             new_predictions = new_model.predict(self._points)
@@ -281,25 +289,27 @@ class AdaDemo(object):
         predictions = self.eval_ensenble()
         accuracy = np.mean(predictions == self._labels)
         return accuracy
-
+LEARNERS = {'decision_stump': DecisionStump, 'perceptron': Perceptron}
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--kind', '-k', default='bump', help='bump, spiral, minimal, checker')
+    learner_names = ', '.join(LEARNERS.keys())
+    parser.add_argument('--kind', '-k', default='bump', help='bump, spiral, minimal, checker, xor')
     parser.add_argument('--max_iter', '-x', default=100, type=int, help='Maximum number of weak learners')
     parser.add_argument('--n_side_pts', '-n', default=25, type=int,
                         help='Use a square grid of points w/ this many points on each side')
     parser.add_argument('--n_rows', '-r', default=3, type=int, help='Number of rows in the plot')
     parser.add_argument('--fast', '-f', action='store_true', help="Don't wait for user input between iterations")
     parser.add_argument('--skip_interval', '-s', default=1, type=int, help='Only plot every skip_interval iterations')
-
+    parser.add_argument('--weak_learner', '-w', type=str, default='decision_stump', help="Weak learner to use, one of [%s]" % learner_names)
     args = parser.parse_args()
 
     AdaDemo(n_side_pts=args.n_side_pts,
             max_iter=args.max_iter,
             n_rows=args.n_rows,
             skip_interval=args.skip_interval,
-            kind=args.kind, pausing=not args.fast)
+            kind=args.kind, pausing=not args.fast,
+            weak_learner=LEARNERS[args.weak_learner])
     plt.show()

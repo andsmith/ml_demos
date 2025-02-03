@@ -78,7 +78,7 @@ if __name__ == '__main__':
         n_points = 50
         
     if 'spiral' in sys.argv:
-        X, y, _ = make_spiral_data(n_points, turns=1.0, ecc=1.0, margin=0.04, random=False)
+        X, y, _ = make_spiral_data(n_points, turns=1.4, ecc=1.0, margin=0.04, random=False)
     elif 'minimal' in sys.argv:
         X, y = make_minimal_data()
     elif 'checker' in sys.argv:

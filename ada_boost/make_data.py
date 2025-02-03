@@ -9,7 +9,7 @@ from plotting import plot_dataset, plot_classifier, LABEL_COLORS
 import logging
 
 
-def make_spiral_data(n_points, turns=2.0, ecc=1.0, margin=0.04, random=False):
+def make_spiral_data(n_points, turns=.75, ecc=1.0, margin=0.04, random=False):
     """
     Create two classes separated by a spiraling
     decision boundary.  
@@ -126,11 +126,19 @@ def make_minimal_data():
     """
     points = np.array([[0, 0], # -
                        [1, 0],# -
-                       [2, 1.25], # +
-                       [-1, 1.75], # -
+                       #[2, 1.25], # +
+                       #[-1, 1.75], # -
                        [1, 3], # +
                        [0, 3]]) # +
-    labels = np.array([-1, -1, 1, -1, 1, 1], dtype=np.float64)
+    labels = np.array([-1, 1, -1, 1, ], dtype=np.float64)
+    return points, labels
+
+def make_xor_data():
+    points = np.array([[0, 0], # -)
+                          [0, 1], # +
+                          [1, 0], # +
+                          [1, 1]]) # -
+    labels = np.array([-1, 1, 1, -1], dtype=np.float64)
     return points, labels
     
 

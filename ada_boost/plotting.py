@@ -15,6 +15,7 @@ def get_plot_size(n_points):
 
 def plot_dataset(ax, x, y, *args, **kwargs):
     labels = np.unique(y)
+    print("unique labels",  (labels))
     
     markersize, bubble_size,_ = get_plot_size(x.shape[0])
     if 'markersize' not in kwargs:
@@ -24,7 +25,7 @@ def plot_dataset(ax, x, y, *args, **kwargs):
     if len(labels) > 2:
 
         raise ValueError("Can only plot binary classification, got labels %s." % (labels,))
-
+    print(labels)
     for label in labels:
         ax.plot(x[y == label, 0], x[y == label, 1], '.', color=LABEL_COLORS[label], **kwargs)
 
@@ -81,8 +82,8 @@ def plot_classifier(ax, x, y, model, boundary, res=500, invert_incorrect_colors=
     # show true boundary
     # ax.plot(boundary[1:-1, 0], boundary[1:-1, 1], 'r-')
     ax.set_aspect('equal')
-    ax.yaxis.set_visible(False)
-    ax.xaxis.set_visible(False)
-    ax.set_xlim(x_lim)
-    ax.set_ylim(y_lim)
+    ax.yaxis.set_visible(True)
+    ax.xaxis.set_visible(True)
+    #ax.set_xlim(x_lim)
+    #ax.set_ylim(y_lim)
     return accuracy
