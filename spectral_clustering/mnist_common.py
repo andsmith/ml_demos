@@ -7,10 +7,10 @@ The general process is:
   3. Assign cluster ids to class labels to maximize accuracy.
 """
 import logging
-import argparse
 import numpy as np
 from similarity import FullSimGraph, NNSimGraph, SoftNNSimGraph, EpsilonSimGraph
 from munkres import Munkres
+import json
 
 
 class SoftNNSimGraphAdditive(SoftNNSimGraph):
@@ -69,15 +69,14 @@ class MNISTResult(object):
         self.pca_dim = data.pca_dim
         self.inds = {'train': data.train_inds,
                      'test': data.test_inds}
-        self.model = model
         self.pca_transf = data.pca_transf  # for transforming new data
 
         x_test, y_test = data.get_data('test')
         x_train, y_train = data.get_data('train')
 
         # get cluster Id's from training set, derive mapping to digit labels, then do test set
-        self.cluster_ids = {'train': self.model.assign(x_train),
-                            'test': self.model.assign(x_test)}
+        self.cluster_ids = {'train': model.assign(x_train),
+                            'test': model.assign(x_test)}
         self.label_map = self._get_cluster_labels(self.cluster_ids['train'], y_train)
         self.pred_labels = {'train': self.label_map[self.cluster_ids['train']],
                             'test': self.label_map[self.cluster_ids['test']]}
@@ -92,9 +91,9 @@ class MNISTResult(object):
         if name not in self._info:
             return None
         return self._info.get(name, None)
-    def set_info(self, name, value):    
-        self._info[name] = value
 
+    def set_info(self, name, value):
+        self._info[name] = value
 
     def _get_cluster_labels(self, ids, labels):
         """
@@ -143,3 +142,31 @@ class MNISTResult(object):
             return _get_mat(self.true_labels['train'], self.pred_labels['train'])
         else:
             return _get_mat(self.true_labels['test'], self.pred_labels['test'])
+
+
+baseline_filename = "KM_baselines.json"
+
+
+class Baselines(object):
+    """
+    For adding K-means/fisher accuracies to other plots for comparison.
+    """
+
+    def __init__(self, file=baseline_filename):
+        self._data = {}
+        self._file = file
+        self._load()
+
+    def _load(self):
+        with open(self._file, 'r') as f:
+            self._data = json.load(f)
+        logging.info("Loaded baselines for: [%s]" % ', '.join(self._data.keys()))
+
+
+def test_baselines():
+    b = Baselines()
+
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.INFO)
+    test_baselines()
+    print("Done.")

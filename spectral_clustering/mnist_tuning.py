@@ -305,7 +305,7 @@ def _test_params_full(work):
         info['param_name'] = param_name
         result = MNISTResult(10, model, data)
         result.set_info('aux', info)
-        print("Graph %s, trial %i/%i, param %s = %s, acc = %s" %
+        print("\tgraph %s, trial %i/%i, param %s = %s, acc = %s" %
               (graph_name, info['trial']+1, info['n_trials'], param_name, param, result.accuracy))
         results.append({'param_val': param, 'result': result})
     return results
@@ -316,13 +316,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     if True:
-        t = MNISTPairwiseTuner(8,n_samp=(1000,500))
+        t = MNISTPairwiseTuner(6,n_samp=(1000,500), no_compute=False)
         t.run()
         t.plot_results()
         del t
 
     if True:
-        t = MNISTFullTuner(2,n_samp=(500,500))
+        t = MNISTFullTuner(4,n_samp=(500,500))
         t.run()
         t.plot_results()
         del t

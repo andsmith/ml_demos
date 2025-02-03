@@ -93,6 +93,7 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         self._g = sim_graph
         self._tree = self._g.get_tree()  # for clustering new points
         self._solve()
+        self._kmeans = None
 
     def _solve(self):
         w = self._g.get_matrix().copy()
@@ -135,6 +136,8 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         return self._eigvals, self._eigvecs 
     
     def assign(self, x):
+        if self._kmeans is None:
+            raise ValueError("Model has not been fit() yet.")
         # get index of nearest neighbor to x
         n_ind = self._tree.query(x, k=1)[1]
         return self._kmeans.labels_[n_ind]
