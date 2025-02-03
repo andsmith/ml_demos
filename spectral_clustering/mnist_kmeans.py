@@ -10,7 +10,8 @@ from mnist_common import MNISTResult
 from mnist_data import MNISTData
 from clustering import KMeansAlgorithm
 from mnist_plots import (plot_pairwise_digit_confusion, plot_pairwise_clusterings,
-                         plot_extreme_pairs, plot_full_confusion, plot_full_embedding)
+                         plot_extreme_pairs, plot_full_confusion, plot_full_embedding,
+                         plot_pairwise_accuracy_boxplot)
 import pickle
 from multiprocessing import Pool, cpu_count
 import os
@@ -26,7 +27,7 @@ N_REP = 20
 N_SAMP = 1000
 N_TEST = 800
 N_BOOT = 50
-N_CPU = 10
+N_CPU = 1
 
 
 class KMeansFull(object):
@@ -86,13 +87,14 @@ class KMeansFull(object):
         """
         logging.info("Drawing figures...")
         # show embedding
-        # title = "KMeans 10-digit embedding, PCA dim=%i\n(%i samples/digit, %i trials)\ncolor by cluster ID" % (
-        #    self._dim, self._n_samples, self._n_bootstraps)
-        # plot_full_embedding(self._all_results, self._data, title, max_n_imgs=200, image_extent_frac=0.015)
+        which='train'
+        title = "KMeans 10-digit embedding, PCA dim=%i\n(%i samples/digit, %i trials)\ncolor by cluster ID, data: %s" % (
+            self._dim, self._n_samples, self._n_bootstraps,which)
+        plot_full_embedding(self._all_results, self._data, title, max_n_imgs=200, image_extent_frac=0.015,which=which)
         # calls plt.show() at the end
 
         # show confusion matrices & histograms in one figure
-        fig, ax = plt.subplots(2, 2, figsize=(5, 8))
+        fig, ax = plt.subplots(2, 2, figsize=(6, 8))
 
         #    train
         def _show_confusion(ax, results, which):
@@ -120,7 +122,7 @@ class KMeansFull(object):
 
         fig.suptitle("KMeans 10-digit classification, PCA dim=%i\n(%i samples/digit, %i trials)" % (
             self._dim, self._n_samples, self._n_bootstraps))
-
+        plt.tight_layout()
 
 class KMeansPairwise(object):
     def __init__(self, dim=DIM, n_rep=N_REP, n_samp=(N_SAMP, N_TEST), n_cpu=N_CPU):
@@ -163,6 +165,16 @@ class KMeansPairwise(object):
         return results
 
     def plot_results(self, prefix="KMeans"):
+
+        # show boxplot for each digit pair (if statistics exist)
+        if self._n_rep > 1:
+            which='test'
+            fig,ax = plt.subplots(figsize=(10,4))
+            title = "%s accuracy dist. by digit pair (PCA dim=%i)\n(%i samples/digit, %i trials, %s data)" % (
+                prefix, self._dim, self._n_samples, self._n_rep,which)
+            plot_pairwise_accuracy_boxplot(ax, self._all_results, title, which=which)
+            fig.tight_layout()
+
         # show pairwise clusterings for TEST data
         logging.info("Drawing figures...")
         fig, ax = plt.subplots(figsize=(7, 6))
@@ -183,9 +195,11 @@ class KMeansPairwise(object):
         # plt.show()
 
         # show best & worst pairs for TEST data
-        which='test'
-        title = "%s(pca=%i)" % (prefix, self._dim)
-        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title, which=which)
+       # which='test'
+       # title = "%s(pca=%i)" % (prefix, self._dim)
+       # fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title, which=which)
+        
+        
        
 
 def _test_kmeans(work):
@@ -200,23 +214,26 @@ def _test_kmeans(work):
     x, y = work['data'].get_data('train')
     k = np.unique(y).size
     best_result = None
+    accuracies = {'train': [], 'test': []}
     for _ in range(n_trials):
         km = KMeansAlgorithm(k)
         km.fit(x)
         result = MNISTResult(k, km, work['data'])
         if best_result is None or result.accuracy['train'] > best_result.accuracy['train']:
             best_result = result
+        accuracies['train'].append(result.accuracy['train'])
+        accuracies['test'].append(result.accuracy['test'])
 
     if work['aux'] is not None:
         print("Tested K-Means({}):  {} samples, {} times, best results: info={}.  accuracy={}".format(
             k, len(y), n_trials, work['aux'], best_result.accuracy))
-
+    best_result.set_info('accuracies', accuracies)
     return best_result
 
 
 class FisherPairwise(KMeansPairwise):
-    def __init__(self, dim=DIM, n_samp=N_SAMP):
-        super().__init__(dim, 0, n_samp, n_cpu=1)
+    def __init__(self, dim=DIM, n_samp=(N_SAMP, N_TEST)):
+        super().__init__(dim, 1, n_samp, n_cpu=1)
 
     def _init_data(self):
         return load_cached(self._get_fisher_results, "Fisher_pairwise_n=%i.pkl" % (self._n_samples))
@@ -235,8 +252,14 @@ class FisherPairwise(KMeansPairwise):
 def _test_fisher(work):
     data = work['data']
     model = FisherLDA()
-    model.fit(data[0], data[1])
-    result = MNISTResult(2, model, data[0], data[1], sample_indices=work['inds'], aux=work['aux'])
+    x, y = data.get_data('train')
+    labels = np.unique(y)
+    bin_labels = np.zeros(y.shape)
+    bin_labels[y == labels[0]] = 0
+    bin_labels[y == labels[1]] = 1
+    model.fit(x,bin_labels)
+    #import ipdb; ipdb.set_trace()
+    result = MNISTResult(2, model, data)
 
     print("Tested Fisher LDA on digits %s:  (Accuracy:  %s)" % (
         work['aux'], result.accuracy))
@@ -248,14 +271,14 @@ if __name__ == "__main__":
     logging.info("Running KMeansPairwise.")
 
 
-    km = KMeansPairwise()
-    km.plot_results()
-    #plt.show()
-
-    km = KMeansFull()
-    #km.plot_results()
+    # km = KMeansPairwise(n_rep=200)
+    # km.plot_results()
     # plt.show()
 
-    # f = FisherPairwise()
-    # f.plot_results()
+    # km = KMeansFull()
+    # km.plot_results()
+    # plt.show()
+
+    f = FisherPairwise()
+    f.plot_results()
     plt.show()

@@ -86,6 +86,16 @@ class MNISTResult(object):
 
         self.accuracy = self._get_accuracy()
 
+        self._info = {}  # for storing additional plotting info
+
+    def get_info(self, name):
+        if name not in self._info:
+            return None
+        return self._info.get(name, None)
+    def set_info(self, name, value):    
+        self._info[name] = value
+
+
     def _get_cluster_labels(self, ids, labels):
         """
         Cluster IDs are in [0, k-1], labels are one of self.digits,

@@ -49,7 +49,7 @@ class FisherLDA(object):
         :param x: data points (N x D)
         :return: projected data points (N)
         """
-        return x @ self.w > self.threshold
+        return (x @ self.w > self.threshold).astype(int)
     
     def get_k(self):
         # for compatibility with clustering algorithms

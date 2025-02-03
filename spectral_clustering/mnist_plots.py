@@ -172,7 +172,7 @@ def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
     return fig, axes
 
 
-def plot_full_embedding(results, data, title, **kwargs):
+def plot_full_embedding(results, data, title, which='train',**kwargs):
     """
     Plot the full embedding of all digits, color-coded by the best result.
     :param ax: matplotlib axis
@@ -183,12 +183,18 @@ def plot_full_embedding(results, data, title, **kwargs):
     ax_data = fig.add_subplot()
     fig.subplots_adjust(right=.8)
 
-    best_result = max(results, key=lambda res: res.accuracy)
-    best_labels = best_result.pred_labels
-    true_labels = best_result.true_labels
-    indices = best_result.inds
-    all_data = np.vstack([data.get_digit(i)[indices[i]] for i in range(10)])
-    all_imgs = np.vstack([data.get_images(i)[indices[i]] for i in range(10)])
+    best_result = max(results, key=lambda res: res.accuracy[which])
+
+
+    best_labels = best_result.pred_labels[which]
+    #true_labels = best_result.true_labels[which]
+    indices = best_result.inds[which]
+    if which == 'train':
+        all_data = np.vstack([data.train[i][indices[i]] for i in range(10)])
+    else:
+        all_data = np.vstack([data.test[i][indices[i]] for i in range(10)])
+    all_imgs = all_data.reshape(-1, 28, 28)
+
     artists, colors = show_digit_cluster_collage_full(ax_data, all_imgs, all_data, best_labels, **kwargs)
     # extract colors for each digit
 
@@ -231,6 +237,9 @@ def plot_full_embedding(results, data, title, **kwargs):
     button.on_clicked(lambda event: _toggle_all())
     buttons.append(button)
     plt.suptitle(title)
+    # turn off ticks
+    ax_data.set_xticks([])
+    ax_data.set_yticks([])
 
 
 def show_digit_cluster_collage_full(ax, images, points, true_labels, max_n_imgs=100, image_extent_frac=0.01):
@@ -348,6 +357,28 @@ def show_digit_cluster_collage_binary(ax, images, points, pred_labels, true_labe
     ax[1].set_yticks([])
     ax[0].set_ylabel("Accuracy: %.3f" % accuracy)
 
+
+def plot_pairwise_accuracy_boxplot(ax, results,title, which='test'):
+    """
+    Plot the pairwise accuracy as a boxplot.
+    :param ax: matplotlib axis
+    :param results: list of MNISTResult objects
+    """
+    accs = [res.get_info('accuracies')[which] for res in results]
+    pairs = [res.digits for res in results]
+    ax.boxplot(accs)
+    ax.set_xticklabels(["%i - %i" % (pair[0], pair[1]) for pair in pairs], rotation=90)
+    ax.set_ylabel("Accuracy")
+    ax.set_title(title)
+    ax.grid(axis='both')
+
+
+
+
+
+#######################################################
+# Testing functions
+#######################################################
 
 def test_show_digit_cluster_collage_binary():
     # making test data
