@@ -16,7 +16,6 @@ Run for both pairwise and 10-class tasks.
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from mnist_data import MNISTDataPCA
 from mnist_common import GRAPH_TYPES, GRAPH_PARAM_NAMES
 from multiprocessing import Pool, cpu_count
 from util import load_cached
@@ -45,17 +44,17 @@ class SimGraphResultPlotter(object):
 
         elif param_name in ['epsilon', 'sigma']:
             # for epsilon & full graphs (hard/soft thresholding on euclidean distance)
-            data = np.vstack([data.get_digit(i) for i in range(10)])
+            x = np.vstack([data.train[i] for i in range(10)])
             n_s = 100000
-            sample_pairs_a = np.random.choice(data.shape[0], n_s, replace=True)
-            sample_pairs_b = np.random.choice(data.shape[0], n_s, replace=True)
+            sample_pairs_a = np.random.choice(x.shape[0], n_s, replace=True)
+            sample_pairs_b = np.random.choice(x.shape[0], n_s, replace=True)
             valid = sample_pairs_a != sample_pairs_b
             sample_pairs_a = sample_pairs_a[valid]
             sample_pairs_b = sample_pairs_b[valid]
-            distances = np.linalg.norm(data[sample_pairs_a] - data[sample_pairs_b], axis=1)
-            #fig, ax = plt.subplots()
-            #ax.hist(distances, bins=100)
-            #plt.show()
+            distances = np.linalg.norm(x[sample_pairs_a] - x[sample_pairs_b], axis=1)
+            # fig, ax = plt.subplots()
+            # ax.hist(distances, bins=100)
+            # plt.show()
             if param_name == 'epsilon':
                 val_range = np.min(distances)/100, np.percentile(distances, (20))
             else:  # sigma
@@ -68,7 +67,6 @@ class SimGraphResultPlotter(object):
 
         logging.info("%s range: %f to %f  (%i values)" % (param_name, values[0], values[-1], values.size))
         return values
-
 
     def plot_results(self):
         """
@@ -237,13 +235,13 @@ def _calc_cost(sim, y):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
- 
+
     sg = SimGraphTunerPairwise()
     sg.run()
     sg.plot_results()
- 
+
     sf = SimGraphTunerFull()
     sf.run()
     sf.plot_results()
- 
+
     plt.show()
