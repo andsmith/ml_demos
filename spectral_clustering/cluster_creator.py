@@ -245,7 +245,7 @@ class ClusterCreator(object):
         algorithm_name = self.windows[Windows.toolbar].get_value('algorithm')
         if algorithm_name == 'K-means':
             ka = KMeansAlgorithm(n_clusters)
-            cluster_ids = ka.cluster(self._points)
+            cluster_ids = ka.fit(self._points)
         elif algorithm_name == 'Spectral':
             if self._spectrum is None:
                 self.recompute_spectrum()  # too slow to automatically recompute?
