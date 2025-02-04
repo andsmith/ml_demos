@@ -17,7 +17,7 @@ In "Full Mode", for each parameter value:
 import numpy as np
 import matplotlib.pyplot as plt
 import logging
-from mnist_common import GRAPH_TYPES, GRAPH_PARAM_NAMES, MNISTResult
+from mnist_common import GRAPH_TYPES, GRAPH_PARAM_NAMES, MNISTResult, Baselines
 from clustering import SpectralAlgorithm, KMeansAlgorithm
 from multiprocessing import Pool, cpu_count
 from pprint import pprint
@@ -36,21 +36,32 @@ N_BOOT = 8  # bootstraps for error estimation
 
 class MNISTPairwiseTuner(object):
 
-    def __init__(self, n_cpu=10, pca_dim=DIM, n_samp=(1000,500), no_compute=False):
+    def __init__(self, n_cpu=10, pca_dim=DIM, n_samp=(1000, 500), no_compute=False):
         self._helper_func = _test_params
         self._dim = pca_dim
         self._no_compute = no_compute  # just load/plot if True
         self._data = MNISTData(pca_dim=self._dim)
         self._n_samples, self._n_test = n_samp
         self._n_cpu = n_cpu if n_cpu > 0 else cpu_count() - 1
+        self._load_baseline_data()
         self._digit_pairs = [(a, b) for a in range(9) for b in range(a+1, 10)]
         logging.info("Anlyzing %i graph types and %i digit pairs." % (len(GRAPH_TYPES), len(self._digit_pairs)))
+
+    def _load_baseline_data(self):
+        pairwise_accuracies = Baselines().data['pairwise']
+
+        def get_acc_stats(which):
+            accs = np.array([result[which] for _, result in pairwise_accuracies.items()])
+            return {'mean': np.mean(accs), 'sd': np.std(accs)}
+        self._baseline_acc = {'train': get_acc_stats('train'),
+                              'test': get_acc_stats('test')}
+        logging.info("Loaded baseline accuracies for pairwise clustering: %s" % str(self._baseline_acc))
 
     def run(self):
         self._results = {}
         for graph_name in GRAPH_TYPES:
             # ,'n-neighbors_mutual','soft_neighbors_additive','soft_neighbors_multiplicative']:
-            #if graph_name in ['full', 'epsilon']:
+            # if graph_name in ['full', 'epsilon']:
             #    continue
             cache_filename = "%s_%s_n=%i_pca=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples, self._dim)
             self._results[graph_name] = load_cached(
@@ -77,7 +88,9 @@ class MNISTPairwiseTuner(object):
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 
         param_vals = {0: None, 1: None}
+        param_ranges = {0: None, 1: None}
         n_trials = []
+
         def _add_results(ax_ind, results):
             if results is None:
                 return
@@ -90,21 +103,39 @@ class MNISTPairwiseTuner(object):
             means = np.mean(accs, axis=0)
             sds = np.std(accs, axis=0)
             # print(means.shape, sds.shape)
-            param_vals[ax_ind] = param_values
+            param_vals[ax_ind] = param_values if param_vals[ax_ind] is None or \
+                np.max(param_values) > np.max(param_vals[ax_ind]) else param_vals[ax_ind]
+            param_ranges[ax_ind] = (np.min(param_values), np.max(param_values)) if param_ranges[ax_ind] is None \
+                else (np.min((np.min(param_values), param_ranges[ax_ind][0])),
+                      np.max((np.max(param_values), param_ranges[ax_ind][1])))
 
-            label = "%s: %s" % (graph_name, param_name)
+            label = "spectral %s: %s" % (graph_name, param_name)
             self._plot_bands(ax[ax_ind], param_values, means, sds, label)
+
+        def _add_baseline(ax_ind):
+            # show mean/sd of accuracy for kmeans
+            # ax[ax_ind].axhline(y=self._baseline_acc[which]['mean'], color='black',
+            #                   linestyle='--', label="K-Means" )
+            baseline_means = [self._baseline_acc[which]['mean']] * len(param_vals[ax_ind])
+            baseline_sd = [self._baseline_acc[which]['sd']] * len(param_vals[ax_ind])
+            self._plot_bands(ax[ax_ind], param_vals[ax_ind],
+                             baseline_means, baseline_sd, "K-Means avg.", alpha=0, color='black')
 
         for graph_name in self._results:
             g_results = self._results[graph_name]  # list of MNISTResult
             _add_results(plot_side[graph_name], g_results)
 
         for ax_ind in range(2):
+            _add_baseline(ax_ind)
             if param_vals[ax_ind] is not None:
                 # set x-scale log
-                # ax[ax_ind].set_xscale('log')
-                ax[ax_ind].set_xticks(param_vals[ax_ind])
-                ax[ax_ind].set_xlabel(axis_labels[ax_ind])
+                ax[ax_ind].set_xscale('log')
+                y_lim_0 = max(0, ax[ax_ind].get_ylim()[0])
+                y_lim_1 = min(1, ax[ax_ind].get_ylim()[1])
+                ax[ax_ind].set_ylim([y_lim_0, y_lim_1])
+                # ax[ax_ind].set_xticks(param_vals[ax_ind])
+                ax[ax_ind].set_xlabel(axis_labels[ax_ind] + ":  %.1f - %.1f" % (param_ranges[ax_ind]))
+
                 ax[ax_ind].set_ylabel("Accuracy")
                 ax[ax_ind].legend()
         if len(np.unique(n_trials)) > 1:
@@ -112,11 +143,10 @@ class MNISTPairwiseTuner(object):
         n_trials = n_trials[0]
         plt.legend()
 
-
     def plot_results(self, which='test'):
         self._plot_accuracy_curves(which)
         title = "Spectral clustering - MNIST pairwise, %s data\n(pca_dim=%i, samples/digit=%i, avgs over %i trials)" %\
-                        (which, self._dim, self._n_samples, len(self._digit_pairs))
+            (which, self._dim, self._n_samples, len(self._digit_pairs))
         plt.suptitle(title)
 
     def _compute(self, graph_name):
@@ -127,7 +157,7 @@ class MNISTPairwiseTuner(object):
         param_vals = self._get_param_vals(graph_name, param_name, self._data)
         work = []
         for pair in self._digit_pairs:
-            
+
             data = self._data.get_sample(digits=pair,
                                          n_train=self._n_samples,
                                          n_test=self._n_test)
@@ -136,8 +166,8 @@ class MNISTPairwiseTuner(object):
                          'aux': {'pair': pair},
                          'data': data,
                          'param': (param_name, param_vals),
-                         'k': 2,}
-                         )
+                         'k': 2, }
+                        )
         logging.info("About to run pairwise tuning with %i tasks for graph type:  %s." % (len(work), graph_name))
         if self._n_cpu == 1:
             logging.info("Running %s in single process." % self._get_prefixes()[0])
@@ -148,12 +178,13 @@ class MNISTPairwiseTuner(object):
                 results = pool.map(self._helper_func, work)
         return results
 
-    def _plot_bands(self, ax, param_values, means, sds, label):
-        ax.plot(param_values, means, label=label)
+    def _plot_bands(self, ax, param_values, means, sds, label, alpha=.2, color=None):
+        c_args = {'color': color} if color is not None else {}
+        ax.plot(param_values, means, label=label, **c_args)
         ax.fill_between(param_values,
                         np.array(means) - np.array(sds),
                         np.array(means) + np.array(sds),
-                        alpha=0.2)
+                        alpha=alpha, **c_args)
 
     def _get_param_vals(self, graph_name, param_name, data):
         """
@@ -197,6 +228,7 @@ class MNISTPairwiseTuner(object):
         logging.info("Testing values for %s: %s" % (param_name, str(values)))
         return values
 
+
 def _test_params(work):
     """
     Subprocess for testing a single set of parameters on a single pair of digits.
@@ -235,11 +267,18 @@ class MNISTFullTuner(MNISTPairwiseTuner):
     Parallelism is over bootstrap samples.
     """
 
-    def __init__(self, n_cpu=2, pca_dim=DIM, n_samp=(500,500), n_boot=N_BOOT, no_compute=False):
+    def __init__(self, n_cpu=2, pca_dim=DIM, n_samp=(500, 500), n_boot=N_BOOT, no_compute=False):
         super().__init__(n_cpu, pca_dim, n_samp, no_compute=no_compute)
         self._helper_func = _test_params_full
         self._n_boot = n_boot
         logging.info("Anlyzing %i graph types and %i random samples." % (len(GRAPH_TYPES), self._n_boot))
+
+    def _load_baseline_data(self):
+        acc = Baselines().data['full']
+        self._baseline_acc = {'test': {'mean': acc['test'], 'sd': 0.0},
+                              'train': {'mean': acc['train'], 'sd': 0.0}}
+
+        logging.info("Loaded baseline accuracies for full clustering: %s" % str(self._baseline_acc))
 
     def _get_prefixes(self):
         # logging info, cache filename prefix
@@ -269,11 +308,12 @@ class MNISTFullTuner(MNISTPairwiseTuner):
                 results = pool.map(self._helper_func, work)
         return results
 
-
     def plot_results(self, which='test'):
         self._plot_accuracy_curves(which)
+        key0 = [k for k in self._results][0]
+        n_boot = len(self._results[key0]    )
         title = "Spectral clustering - MNIST 10-class, %s data\n(pca_dim=%i, samples/digit=%i, avgs over %i trials)" %\
-                        (which, self._dim, self._n_samples, len(self._digit_pairs))
+            (which, self._dim, self._n_samples, n_boot)
         plt.suptitle(title)
 
 
@@ -292,7 +332,7 @@ def _test_params_full(work):
     graph_name = work['graph_name']
     param_name, params = work['param']
     data = work['data']
-    x,_= data.get_data('train')
+    x, _ = data.get_data('train')
     results = []
     print("Starting full test with %s, %s, %i samples (trial %i of %i)." %
           (graph_name, param_name, x.shape[0], 1+work['aux']['trial'], work['aux']['n_trials']))
@@ -314,15 +354,15 @@ def _test_params_full(work):
 if __name__ == "__main__":
 
     logging.basicConfig(level=logging.INFO)
-    
+
     if True:
-        t = MNISTPairwiseTuner(6,n_samp=(1000,500), no_compute=False)
+        t = MNISTPairwiseTuner(6, n_samp=(1000, 500), no_compute=True)
         t.run()
         t.plot_results()
         del t
 
     if True:
-        t = MNISTFullTuner(4,n_samp=(500,500))
+        t = MNISTFullTuner(5, n_samp=(500, 500), n_boot=5)
         t.run()
         t.plot_results()
         del t

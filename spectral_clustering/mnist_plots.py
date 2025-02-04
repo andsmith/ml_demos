@@ -103,13 +103,112 @@ def plot_pairwise_clusterings(ax, results, data, which='test'):
     ax.set_ylim(y_lim)
 
 
-
 def _relabel_binary(true, pred):
     labels = sorted(np.unique(true))
     true_bin = (true == labels[1]).astype(int)
     pred_bin = (pred == labels[1]).astype(int)
     return true_bin, pred_bin
+
+
+def _get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=True):
+    """
+    Show the misclassifications.
+    :param result: MNISTResult object from a pairwise clustering
+    :param data: MNISTData data object
+    """
+    pair = result.digits
+    true_labels = result.true_labels[which]
+    pred_labels = result.pred_labels[which]
+    a_lab, b_lab = (true_labels == pair[0]), (true_labels == pair[1])
+
+    # get the indices of the misclassified points
+    # need to separate these by digit since sample indices are by digit
+    # by convention, the lower digit's data is before the higher digit.
+    bad_label_inds = {0: np.where(a_lab & (pred_labels == pair[1]))[0],
+                      1: np.where(b_lab & (pred_labels == pair[0]))[0] - np.sum(a_lab)}
+
+    print("Found %i bad %i's and %i bad %i's." % (len(bad_label_inds[0]), pair[0], len(bad_label_inds[1]), pair[1]))
+    n_a_bad = min(len(bad_label_inds[0]), max_per_pair//2)
+    n_b_bad = min(len(bad_label_inds[1]), max_per_pair//2)
+
+    # Fit all images in a square
+    square_size =np.ceil(np.sqrt(n_a_bad+ n_b_bad)).astype(int)
+    n_col, n_row = square_size, square_size
+    img = np.zeros((28*n_row, 28*n_col), dtype=np.uint8)
+    col, row = 0, 0
+    # class 0 errors start on left
+    data_src = data.test if which == 'test' else data.train
+    ind_src = result.inds['test'] if which == 'test' else result.inds['train']
+
+    for i in range(n_a_bad):
+        #
+        digit_img = data_src[pair[0]][ind_src[pair[0]][bad_label_inds[0][i]]].reshape(28, 28)
+        img[row*28:(row+1)*28, col*28:(col+1)*28] = digit_img
+        row += 1
+        if row == n_row:
+            row = 0
+            col += 1
+
+    div_col, div_row = col,row
+
+    for i in range(n_b_bad):
+        digit_img = data_src[pair[1]][ind_src[pair[1]][bad_label_inds[1][i]]].reshape(28, 28)
+        img[row*28:(row+1)*28, col*28:(col+1)*28] = digit_img
+        row += 1
+        if row == n_row:
+            row = 0
+            col += 1
+
+    # draw a line between good and bad
+    print("Size: %i x %i (img %i x %i)" % (n_row, n_col, img.shape[0], img.shape[1]))
+    for r in range(n_row):
+        # vertical line
+        col_offset = 1 if r < div_row else 0
+        print(col_offset)
+        x_span = (div_col + col_offset ) * 28 , (div_col + col_offset ) * 28+1
+        y_span = max(0,r * 28), min(img.shape[0],(r+1) * 28)
+        print("v(r-%i, c=%i): (row %i) x: %s,  y: %s"%(div_row, col,r,x_span, y_span))
+        img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
+        
+    if div_row >0:
+        # horizontal 
+        x_span = div_col*28,(div_col+1)*28
+        y_span=(div_row)*28-1,(div_row)*28
+        print("H(r-%i, c=%i): x: %s,  y: %s"%(div_row, div_col, x_span, y_span))
+        img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
+
+
+    if invert:
+        img = 255 - img
+    return img
+
+
+def test_get_failed_pair_img():
+    from mnist_data import MNISTData
+    from mnist_common import make_fake_pairwise_result
+    data = MNISTData(pca_dim=30)
+    sample = data.get_sample(500, 500, digits=(5, 8))
     
+    for p,n_wrong in enumerate( [0, 1, 5, 10, 20, 40, 50, 100, 150]):
+        result = make_fake_pairwise_result(sample, (5, 8), n_wrong)
+        img = _get_failed_pair_img(result, data)
+        plt.subplot(3,3, p+1)
+        plt.imshow(img, cmap='gray')
+        # axis box off
+        plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+    
+
+
+def show_failed_pairs(ax, results, data, max_per_pair=100, which='test'):
+    """
+    For each pair of digits, create an image showing each digit that was misclassified.
+    Put the false pair[0] digits on the left, false pair[0] digits on the right.
+    Show each image in a 9x8 grid, as the pairwise clusterings.
+    """
+    raise Exception("Not written yet.")
+
 
 def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
     """
@@ -130,15 +229,15 @@ def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
         pair = result.digits
         inds = result.inds[which]
 
-        if which =='test':
+        if which == 'test':
             x0, x1 = data.test[pair[0]][inds[pair[0]]], data.test[pair[1]][inds[pair[1]]]
         else:
             x0, x1 = data.train[pair[0]][inds[pair[0]]], data.train[pair[1]][inds[pair[1]]]
 
         images0 = x0.reshape(-1, 28, 28)
         images1 = x1.reshape(-1, 28, 28)
-        x0=result.pca_transf.transform(x0)
-        x1=result.pca_transf.transform(x1)
+        x0 = result.pca_transf.transform(x0)
+        x1 = result.pca_transf.transform(x1)
         points = np.vstack((x0, x1))
 
         true_labels = np.hstack((np.ones(len(inds[pair[0]]))*pair[0],
@@ -172,7 +271,7 @@ def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
     return fig, axes
 
 
-def plot_full_embedding(results, data, title, which='train',**kwargs):
+def plot_full_embedding(results, data, title, which='train', **kwargs):
     """
     Plot the full embedding of all digits, color-coded by the best result.
     :param ax: matplotlib axis
@@ -185,9 +284,8 @@ def plot_full_embedding(results, data, title, which='train',**kwargs):
 
     best_result = max(results, key=lambda res: res.accuracy[which])
 
-
     best_labels = best_result.pred_labels[which]
-    #true_labels = best_result.true_labels[which]
+    # true_labels = best_result.true_labels[which]
     indices = best_result.inds[which]
     if which == 'train':
         all_data = np.vstack([data.train[i][indices[i]] for i in range(10)])
@@ -358,7 +456,7 @@ def show_digit_cluster_collage_binary(ax, images, points, pred_labels, true_labe
     ax[0].set_ylabel("Accuracy: %.3f" % accuracy)
 
 
-def plot_pairwise_accuracy_boxplot(ax, results,title, which='test'):
+def plot_pairwise_accuracy_boxplot(ax, results, title, which='test'):
     """
     Plot the pairwise accuracy as a boxplot.
     :param ax: matplotlib axis
@@ -371,9 +469,6 @@ def plot_pairwise_accuracy_boxplot(ax, results,title, which='test'):
     ax.set_ylabel("Accuracy")
     ax.set_title(title)
     ax.grid(axis='both')
-
-
-
 
 
 #######################################################
@@ -450,9 +545,10 @@ def test_plot_full_confusion():
 
 if __name__ == '__main__':
     # show_clusters(np.random.randn(100, 2), np.random.randint(0, 10, 100))
-    
+
     # test_plot_full_embedding()
     # test_plot_extreme_pairs()
     # test_plot_full_confusion()
-    test_show_digit_cluster_collage_binary()
+    # test_show_digit_cluster_collage_binary()
     # plt.show()
+    test_get_failed_pair_img()

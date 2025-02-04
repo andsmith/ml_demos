@@ -56,7 +56,7 @@ class MNISTResult(object):
      and will computer accuracy.  (Keep classes balanced for best results.)
     """
 
-    def __init__(self, k, model, data):
+    def __init__(self, k, model, data, cluster_ids=None):
         """
         :param model: ClusteringAlgorithm, with fit() called.
         :param data: MNISTSamples object
@@ -76,7 +76,7 @@ class MNISTResult(object):
 
         # get cluster Id's from training set, derive mapping to digit labels, then do test set
         self.cluster_ids = {'train': model.assign(x_train),
-                            'test': model.assign(x_test)}
+                            'test': model.assign(x_test)} if cluster_ids is None else cluster_ids
         self.label_map = self._get_cluster_labels(self.cluster_ids['train'], y_train)
         self.pred_labels = {'train': self.label_map[self.cluster_ids['train']],
                             'test': self.label_map[self.cluster_ids['test']]}
@@ -144,6 +144,39 @@ class MNISTResult(object):
             return _get_mat(self.true_labels['test'], self.pred_labels['test'])
 
 
+def make_fake_pairwise_result(sample, pair, n_bad=20):
+    """
+    Create a fake pairwise result for testing.
+    :param sample: MNISTSample object
+    :param pair: tuple of digits to compare
+    :param n_bad: number of bad pairs to add (randomly)
+    :returns: MNISTResult with all correct pred_labels in test and train, but n_bad of each class.
+    """
+    def _make_pred_labels(which):
+        src = sample.test if which == 'test' else sample.train
+        labels0 = np.zeros(src[pair[0]].shape[0], dtype=int)
+        labels0[np.random.choice(labels0.size, n_bad, replace=False)] = 1
+        labels1 = np.ones(src[pair[1]].shape[0], dtype=int)
+        labels1[np.random.choice(labels1.size, n_bad, replace=False)] = 0
+        return np.hstack([labels0, labels1])
+
+    cluster_ids = {'train': _make_pred_labels('train'),
+                   'test': _make_pred_labels('test')}
+    result = MNISTResult(2, None, sample, cluster_ids)
+    return result
+
+
+def test_fake_result():
+    import mnist_data
+    data = mnist_data.MNISTData(pca_dim=30)
+    sample = data.get_sample(100, 50, [5, 8])
+
+    res = make_fake_pairwise_result(sample, (5, 8), 5)
+    print(res.accuracy)
+    assert res.accuracy['train'] == 0.95, "Train accuracy should be 0.95, but was %f" % res.accuracy['train']
+    assert res.accuracy['test'] == 0.9, "Test accuracy should be 0.9, but was %f" % res.accuracy['test']
+
+
 baseline_filename = "KM_baselines.json"
 
 
@@ -153,18 +186,31 @@ class Baselines(object):
     """
 
     def __init__(self, file=baseline_filename):
-        self._data = {}
         self._file = file
-        self._load()
+        raw = self._load()
+        self.data = {'fisher': self._decode_pairwise(raw['fisher_pairwise']),
+                    'pairwise': self._decode_pairwise(raw['km_pairwise']),
+                    'full': raw['km_full']}
+    
+    def _decode_pairwise(self, raw):
+        # split key from float A.B  to (A, B)
+        def str_to_pair(s_pair):
+            p = float(s_pair)
+            return int(p), int((p - int(p)) * 10)
+        
+        return {str_to_pair(k): v for k, v in raw.items()}
+    
 
     def _load(self):
         with open(self._file, 'r') as f:
-            self._data = json.load(f)
-        logging.info("Loaded baselines for: [%s]" % ', '.join(self._data.keys()))
+            items= json.load(f)
+        logging.info("Loaded baselines for: [%s]" % ', '.join(items.keys()))
+        return items
+
 
 
 def test_baselines():
-    b = Baselines()
+    b= Baselines()
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)

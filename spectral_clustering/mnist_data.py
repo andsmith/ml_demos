@@ -20,7 +20,7 @@ class MNISTData(object):
                                                            "MNIST_raw_data.pkl")
         self.train = {d: np.array([img.reshape(-1) for img in x_train[y_train == d]]) for d in range(10)}
         self.test = {d: np.array([img.reshape(-1) for img in x_test[y_test == d]]) for d in range(10)}
-        # self.print_digit_stats()
+        self.print_digit_stats()
 
     def print_digit_stats(self):
         """

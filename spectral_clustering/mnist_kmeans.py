@@ -211,9 +211,9 @@ class KMeansPairwise(object):
         # plt.show()
 
         # show best & worst pairs for TEST data
-       # which='test'
-       # title = "%s(pca=%i)" % (prefix, self._dim)
-       # fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title, which=which)
+        which='test'
+        title = "%s(pca=%i)" % (prefix, self._dim)
+        fig, ax = plot_extreme_pairs(self._all_results, self._data, n=3, title=title, which=which)
 
     def get_baseline(self):
         """
@@ -314,19 +314,19 @@ if __name__ == "__main__":
     logging.info("Running KMeansPairwise.")
 
     kmp = KMeansPairwise(n_rep=200)
-    #kmp.plot_results()
+    kmp.plot_results()
 
     kmf = KMeansFull()
-    #kmf.plot_results()
+    kmf.plot_results()
 
     f = FisherPairwise()
-    #f.plot_results()
+    f.plot_results()
 
     baselines = {'km_pairwise': kmp.get_baseline(),
                  'km_full': kmf.get_baseline(),
                  'fisher_pairwise': f.get_baseline()}
-    logging.info("Writing baseline results to %s" % baseline_filename)
-    with open(baseline_filename, 'w') as f:
-        json.dump(baselines, f, indent=2)
+    #logging.info("Writing baseline results to %s" % baseline_filename)
+    #with open(baseline_filename, 'w') as f:
+    #    json.dump(baselines, f, indent=2)
 
     plt.show()
