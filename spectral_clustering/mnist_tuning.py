@@ -83,9 +83,11 @@ class MNISTPairwiseTuner(object):
                      'soft_neighbors_multiplicative': 0,
                      'full': 1,
                      'epsilon': 1}
+        max_x={0:250, 1:None}
         axis_labels = {0: 'k/alpha', 1: 'epsilon/sigma'}
 
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
+        ax[1].sharey(ax[0])
 
         param_vals = {0: None, 1: None}
         param_ranges = {0: None, 1: None}
@@ -129,14 +131,15 @@ class MNISTPairwiseTuner(object):
             _add_baseline(ax_ind)
             if param_vals[ax_ind] is not None:
                 # set x-scale log
-                ax[ax_ind].set_xscale('log')
+                #ax[ax_ind].set_xscale('log')
                 y_lim_0 = max(0, ax[ax_ind].get_ylim()[0])
                 y_lim_1 = min(1, ax[ax_ind].get_ylim()[1])
                 ax[ax_ind].set_ylim([y_lim_0, y_lim_1])
                 # ax[ax_ind].set_xticks(param_vals[ax_ind])
-                ax[ax_ind].set_xlabel(axis_labels[ax_ind] + ":  %.1f - %.1f" % (param_ranges[ax_ind]))
-
-                ax[ax_ind].set_ylabel("Accuracy")
+                #ax[ax_ind].set_xlabel(axis_labels[ax_ind] + ":  %.1f - %.1f" % (param_ranges[ax_ind]))
+                x_0,_ = ax[ax_ind].get_xlim()
+                ax[ax_ind].set_xlim([0, max_x[ax_ind]])
+                ax[ax_ind].set_ylabel("Accuracy +/- 1 sd.")
                 ax[ax_ind].legend()
         if len(np.unique(n_trials)) > 1:
             logging.warning("Different number of trials for different graph types: %s" % str(n_trials))
