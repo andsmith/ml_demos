@@ -145,7 +145,7 @@ class MNISTPairwiseTuner(object):
             logging.warning("Different number of trials for different graph types: %s" % str(n_trials))
         n_trials = n_trials[0]
         plt.legend()
-        return fig, ax, plot_values, plot_side
+        return fig, ax, plot_values
 
     def plot_results(self, which='test'):
         self._plot_accuracy_curves(which)

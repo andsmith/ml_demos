@@ -110,7 +110,7 @@ def _relabel_binary(true, pred):
     return true_bin, pred_bin
 
 
-def _get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=True):
+def get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=True):
     """
     Show the misclassifications.
     :param result: MNISTResult object from a pairwise clustering
@@ -126,11 +126,10 @@ def _get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=Tru
     # by convention, the lower digit's data is before the higher digit.
     bad_label_inds = {0: np.where(a_lab & (pred_labels == pair[1]))[0],
                       1: np.where(b_lab & (pred_labels == pair[0]))[0] - np.sum(a_lab)}
-
-    print("Found %i bad %i's and %i bad %i's." % (len(bad_label_inds[0]), pair[0], len(bad_label_inds[1]), pair[1]))
     n_a_bad = min(len(bad_label_inds[0]), max_per_pair)
     n_b_bad = min(len(bad_label_inds[1]), max_per_pair)
-
+    print("Found %i bad %i's and %i bad %i's." % (len(bad_label_inds[0]), pair[0], len(bad_label_inds[1]), pair[1]))
+    
     # Fit all images in a square
     square_size =np.ceil(np.sqrt(n_a_bad+ n_b_bad)).astype(int)
 
@@ -159,24 +158,20 @@ def _get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=Tru
         if row == n_row:
             row = 0
             col += 1
-
-    # draw a line between good and bad
-    print("Size: %i x %i (img %i x %i)" % (n_row, n_col, img.shape[0], img.shape[1]))
-    for r in range(n_row):
-        # vertical line
-        col_offset = 1 if r < div_row else 0
-        print(col_offset)
-        x_span = (div_col + col_offset ) * 28 , (div_col + col_offset ) * 28+1
-        y_span = max(0,r * 28), min(img.shape[0],(r+1) * 28)
-        print("v(r-%i, c=%i): (row %i) x: %s,  y: %s"%(div_row, col,r,x_span, y_span))
-        img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
-        
-    if div_row >0:
-        # horizontal 
-        x_span = div_col*28,(div_col+1)*28
-        y_span=(div_row)*28-1,(div_row)*28
-        print("H(r-%i, c=%i): x: %s,  y: %s"%(div_row, div_col, x_span, y_span))
-        img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
+    if n_b_bad >0 and n_a_bad>0:
+        # draw a line between good and bad
+        for r in range(n_row):
+            # vertical line
+            col_offset = 1 if r < div_row else 0
+            x_span = (div_col + col_offset ) * 28 , (div_col + col_offset ) * 28+1
+            y_span = max(0,r * 28), min(img.shape[0],(r+1) * 28)
+            img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
+                
+        if div_row >0:
+            # horizontal 
+            x_span = div_col*28,(div_col+1)*28
+            y_span=(div_row)*28-1,(div_row)*28
+            img[y_span[0]: y_span[1], x_span[0]: x_span[1]] = 255
 
 
     if invert:
@@ -192,7 +187,7 @@ def test_get_failed_pair_img():
     
     for p,n_wrong in enumerate( [0, 1, 5, 10, 20, 40, 52, 104, 155]):
         result = make_fake_pairwise_result(sample, (5, 8), n_wrong)
-        img = _get_failed_pair_img(result, data)
+        img = get_failed_pair_img(result, data)
         plt.subplot(3,3, p+1)
         plt.imshow(img, cmap='gray')
         # axis box off
