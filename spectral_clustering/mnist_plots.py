@@ -128,11 +128,12 @@ def _get_failed_pair_img(result, data, max_per_pair=50, which='test', invert=Tru
                       1: np.where(b_lab & (pred_labels == pair[0]))[0] - np.sum(a_lab)}
 
     print("Found %i bad %i's and %i bad %i's." % (len(bad_label_inds[0]), pair[0], len(bad_label_inds[1]), pair[1]))
-    n_a_bad = min(len(bad_label_inds[0]), max_per_pair//2)
-    n_b_bad = min(len(bad_label_inds[1]), max_per_pair//2)
+    n_a_bad = min(len(bad_label_inds[0]), max_per_pair)
+    n_b_bad = min(len(bad_label_inds[1]), max_per_pair)
 
     # Fit all images in a square
     square_size =np.ceil(np.sqrt(n_a_bad+ n_b_bad)).astype(int)
+
     n_col, n_row = square_size, square_size
     img = np.zeros((28*n_row, 28*n_col), dtype=np.uint8)
     col, row = 0, 0
@@ -189,7 +190,7 @@ def test_get_failed_pair_img():
     data = MNISTData(pca_dim=30)
     sample = data.get_sample(500, 500, digits=(5, 8))
     
-    for p,n_wrong in enumerate( [0, 1, 5, 10, 20, 40, 50, 100, 150]):
+    for p,n_wrong in enumerate( [0, 1, 5, 10, 20, 40, 52, 104, 155]):
         result = make_fake_pairwise_result(sample, (5, 8), n_wrong)
         img = _get_failed_pair_img(result, data)
         plt.subplot(3,3, p+1)
@@ -199,15 +200,6 @@ def test_get_failed_pair_img():
     plt.tight_layout()
     plt.show()
     
-
-
-def show_failed_pairs(ax, results, data, max_per_pair=100, which='test'):
-    """
-    For each pair of digits, create an image showing each digit that was misclassified.
-    Put the false pair[0] digits on the left, false pair[0] digits on the right.
-    Show each image in a 9x8 grid, as the pairwise clusterings.
-    """
-    raise Exception("Not written yet.")
 
 
 def plot_extreme_pairs(results, data, n=3, title=None, which='test'):
@@ -541,7 +533,6 @@ def test_plot_full_confusion():
     img = plot_full_confusion(ax, results)
     fig.colorbar(img, ax=ax)
     plt.show()
-
 
 if __name__ == '__main__':
     # show_clusters(np.random.randn(100, 2), np.random.randint(0, 10, 100))

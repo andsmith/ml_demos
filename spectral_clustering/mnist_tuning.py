@@ -31,7 +31,7 @@ from scipy.spatial.distance import pdist
 from util import load_cached
 # Common params for full and pairwise experiments
 DIM = 30
-N_BOOT = 8  # bootstraps for error estimation
+N_BOOT = 5  # bootstraps for error estimation
 
 
 class MNISTPairwiseTuner(object):
@@ -84,7 +84,6 @@ class MNISTPairwiseTuner(object):
                      'full': 1,
                      'epsilon': 1}
         max_x={0:250, 1:None}
-        axis_labels = {0: 'k/alpha', 1: 'epsilon/sigma'}
 
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
         ax[1].sharey(ax[0])
@@ -113,6 +112,8 @@ class MNISTPairwiseTuner(object):
 
             label = "spectral %s: %s" % (graph_name, param_name)
             self._plot_bands(ax[ax_ind], param_values, means, sds, label)
+            return param_values, means
+        
 
         def _add_baseline(ax_ind):
             # show mean/sd of accuracy for kmeans
@@ -122,10 +123,11 @@ class MNISTPairwiseTuner(object):
             baseline_sd = [self._baseline_acc[which]['sd']] * len(param_vals[ax_ind])
             self._plot_bands(ax[ax_ind], param_vals[ax_ind],
                              baseline_means, baseline_sd, "K-Means avg.", alpha=0, color='black')
-
+        plot_values = {}
         for graph_name in self._results:
             g_results = self._results[graph_name]  # list of MNISTResult
-            _add_results(plot_side[graph_name], g_results)
+            p_vals, mean_acc = _add_results(plot_side[graph_name], g_results)
+            plot_values[graph_name] = {'param_vals': p_vals, 'mean_acc': mean_acc, 'plot_side': plot_side[graph_name]}
 
         for ax_ind in range(2):
             _add_baseline(ax_ind)
@@ -135,9 +137,7 @@ class MNISTPairwiseTuner(object):
                 y_lim_0 = max(0, ax[ax_ind].get_ylim()[0])
                 y_lim_1 = min(1, ax[ax_ind].get_ylim()[1])
                 ax[ax_ind].set_ylim([y_lim_0, y_lim_1])
-                # ax[ax_ind].set_xticks(param_vals[ax_ind])
-                #ax[ax_ind].set_xlabel(axis_labels[ax_ind] + ":  %.1f - %.1f" % (param_ranges[ax_ind]))
-                x_0,_ = ax[ax_ind].get_xlim()
+                # x_0,_ = ax[ax_ind].get_xlim()
                 ax[ax_ind].set_xlim([0, max_x[ax_ind]])
                 ax[ax_ind].set_ylabel("Accuracy +/- 1 sd.")
                 ax[ax_ind].legend()
@@ -145,6 +145,7 @@ class MNISTPairwiseTuner(object):
             logging.warning("Different number of trials for different graph types: %s" % str(n_trials))
         n_trials = n_trials[0]
         plt.legend()
+        return fig, ax, plot_values, plot_side
 
     def plot_results(self, which='test'):
         self._plot_accuracy_curves(which)
@@ -359,13 +360,13 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     if True:
-        t = MNISTPairwiseTuner(6, n_samp=(1000, 500), no_compute=True)
+        t = MNISTPairwiseTuner(6)
         t.run()
         t.plot_results()
         del t
 
     if True:
-        t = MNISTFullTuner(5, n_samp=(500, 500), n_boot=5)
+        t = MNISTFullTuner(5)
         t.run()
         t.plot_results()
         del t
