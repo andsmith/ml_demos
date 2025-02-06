@@ -70,13 +70,13 @@ LAYOUT = {'control_ax_loc': [w_margin, w_margin, x_left-w_margin*2, y_ctrl_div-w
           'digit_ax_loc': [x_left+w_margin, w_margin, 1.0 - x_left - w_margin*2, 1-w_margin*2]}
 
 # keys should match values in GRAPH_PARAM_NAMES
-PARAM_RANGES = {'sigma': (0, 3000.),
-                'alpha': (0, 250.),
+PARAM_RANGES = {'sigma': (2., 3000.),
+                'alpha': (1, 200.),
                 'k': (1, 100),
-                'epsilon': (0, 3000.)}
+                'epsilon': (1., 3000.)}
 MARGIN = 0.003
-
-
+_SLIDER_FONT_SIZE = 12
+_RADIO_FONT_SIZE = 12
 class ControlsPlot(object):
     """
       Layout:
@@ -105,8 +105,8 @@ class ControlsPlot(object):
                    'param_slider': [MARGIN+_SLIDER_INDENT, 1/9 + MARGIN, 1-2*MARGIN-_SLIDER_INDENT-_SLIDER_RIGHT, 1/9-MARGIN*2],
                    'n_digits_slider': [MARGIN+_SLIDER_INDENT,  MARGIN, 1-2*MARGIN-_SLIDER_INDENT-_SLIDER_RIGHT, 1/9-MARGIN*2],
                    'run_button': [MARGIN, .45, .2, .1]}
-    _SLIDER_FONT_SIZE = 8
-    _RADIO_FONT_SIZE = 8
+    
+    
 
     _SIM_GRAPH_OPTIONS = {'n-neighbors': 'n-neighbors',
                           'n-neighbors_mutual': 'n-neighbors-mutual',
@@ -126,7 +126,7 @@ class ControlsPlot(object):
             raise ValueError("Invalid option %s" % option)
         return match[0]
 
-    def _get_sim_type(self):
+    def get_sim_type(self):
         option = self._sim_radio.value_selected
         return self._graph_name_from_option(option)
 
@@ -143,7 +143,6 @@ class ControlsPlot(object):
             x0, y0, w, h = bbox
             return [ctrl_x0 + x0*ctrl_w, ctrl_y0 + y0*ctrl_h, w*ctrl_w, h*ctrl_h]
 
-        print(LAYOUT['control_ax_loc'])
         alg_names = [alg_name for alg_name in ALGORITHMS]
         sim_graph_names = [sim_name for sim_name in GRAPH_TYPES]
 
@@ -171,27 +170,27 @@ class ControlsPlot(object):
                                                  valinit=PARAM_RANGES['epsilon'][0])}
 
         self._run_button = Button(plt.axes(_rescale(self.CTRL_LAYOUT['run_button'])), 'Run',)
-        [l.set_fontsize(self._RADIO_FONT_SIZE) for l in self._algo_radio.labels]
-        [l.set_fontsize(self._RADIO_FONT_SIZE) for l in self._sim_radio.labels]
-        self._K_slider.label.set_fontsize(self._SLIDER_FONT_SIZE)
-        self._n_pts_slider.label.set_fontsize(self._SLIDER_FONT_SIZE)
-        self._K_slider.valtext.set_fontsize(self._SLIDER_FONT_SIZE)
-        self._n_pts_slider.valtext.set_fontsize(self._SLIDER_FONT_SIZE)
+        [l.set_fontsize(_RADIO_FONT_SIZE) for l in self._algo_radio.labels]
+        [l.set_fontsize(_RADIO_FONT_SIZE) for l in self._sim_radio.labels]
+        self._K_slider.label.set_fontsize(_SLIDER_FONT_SIZE)
+        self._n_pts_slider.label.set_fontsize(_SLIDER_FONT_SIZE)
+        self._K_slider.valtext.set_fontsize(_SLIDER_FONT_SIZE)
+        self._n_pts_slider.valtext.set_fontsize(_SLIDER_FONT_SIZE)
         self._run_button.on_clicked(self._run)
         self._algo_radio.on_clicked(self._algo_changed)
         self._sim_radio.on_clicked(self._sim_changed)
-        self._K_slider.on_changed(self._N_changed)
+        self._K_slider.on_changed(self._K_changed)
         self._n_pts_slider.on_changed(self._N_changed)
 
         for param_name in self._param_sliders:
 
             def _change_par(new_val):
-                print("Param %s changed to %f" % (param_name, new_val))
+                # param name is invalid here
                 self._param_changed(param_name, new_val)
 
             self._param_sliders[param_name].on_changed(_change_par)
-            self._param_sliders[param_name].label.set_fontsize(self._SLIDER_FONT_SIZE)
-            self._param_sliders[param_name].valtext.set_fontsize(self._SLIDER_FONT_SIZE)
+            self._param_sliders[param_name].label.set_fontsize(_SLIDER_FONT_SIZE)
+            self._param_sliders[param_name].valtext.set_fontsize(_SLIDER_FONT_SIZE)
             self._param_sliders[param_name].set_active(False)
             self._slider_axes[param_name].set_visible(False)
 
@@ -203,12 +202,17 @@ class ControlsPlot(object):
 
         self._set_slider_type()
 
+    def _K_changed(self, val):
+        print("K clusters changed to %i" % val)
+        self.recluster()
+
     def _N_changed(self, val):
         print("n-pts changed to %i" % val)
+        #self.recluster()
 
     def _set_slider_type(self):
         # Turn on the right slider and the others off.
-        sim_type = self._get_sim_type()
+        sim_type = self.get_sim_type()
         for param_name in self._param_sliders:
             self._param_sliders[param_name].set_active(False)
             self._slider_axes[param_name].set_visible(False)
@@ -223,23 +227,24 @@ class ControlsPlot(object):
     def _sim_changed(self, label):
         print("Similarity graph changed to %s" % label)
         self._set_slider_type()
-
-    def _N_changed(self, val):
-        print("K changed to %i" % val)
+        # set algo to 'spectral';
+        self._algo_radio.set_active(1)
 
     def _param_changed(self, param_name, val):
-        print("Param %s changed to %f" % (param_name, val))
+        pass
 
     def _run(self, event):
         print("Running clustering:")
-        graph_type = self._get_sim_type()
+        self.recluster()
+        
+    def recluster(self):
+        graph_type = self.get_sim_type()
         param_name = GRAPH_PARAM_NAMES[graph_type]
         param_val = self._param_sliders[param_name].val
         k = self._K_slider.val
         alg_name = self._algo_radio.value_selected
         n_train = self._n_pts_slider.val
         self._app.run_clustering(alg_name, graph_type, k, {param_name: param_val}, n_train)
-
 
 class EigenvaluesPlot(object):
     # Plot all eigenvalues, zoom in to top 15 by default
@@ -267,13 +272,13 @@ class EigenvaluesPlot(object):
         """
         :param new_values: dict with digits as keys, arrays of eigenvalues as values
         """
-        print("Updating")
+        print("Updating eigenvalues")
         self._values = new_values
         x_vals = np.arange(len(self._values[0]))
         for d in range(10):
             self._plots[d].set_ydata(self._values[d])
             self._plots[d].set_xdata(x_vals)
-            print(self._values[d].mean())
+            # print("Digit %i: %s" % (d, str(self._values[d][:5])))
         self._fix_lims()
         plt.draw()
 
@@ -281,6 +286,7 @@ class EigenvaluesPlot(object):
         self._ax.set_xlim(0, self._init_v_plot)
         ymax = np.max([np.max(v[:self._init_v_plot]) for v in self._values.values()])
         self._ax.set_ylim(-0.02, max(1, ymax))
+
 
 
 def _assemble_images(imgs):
@@ -300,12 +306,18 @@ def _assemble_images(imgs):
 
 
 class DigitGalleryPlot(object):
+    _SLIDER_AX_POS = [.6, .025, .3, .03]
+
     def __init__(self, app, ax):
         self._n_rows = 3
         self._n_cols = 4
         self._ax = ax
         self._app = app
+        self._results, self._sample = None, None
+        self._max_digits_per_cluster_sqrt = 2
         self._init_plot()
+
+
 
     def _init_plot(self):
         # put all images in unit cells in a 5x2 grid
@@ -314,6 +326,22 @@ class DigitGalleryPlot(object):
         self._ax.get_xaxis().set_visible(False)
         self._ax.get_yaxis().set_visible(False)
 
+        # Create slider for sqrt(n_digtits_per_cluster)
+        if True:
+            self._n_digits_slider_ax = plt.axes(self._SLIDER_AX_POS)
+            self._n_digits_slider_ax.get_xaxis().set_visible(False)
+            self._n_digits_slider = Slider(self._n_digits_slider_ax, 'Digits per cluster (sqrt)', 1, 10, valinit=2, valstep=1)
+            self._n_digits_slider.on_changed(self._n_digits_changed)
+            self._n_digits_slider.label.set_fontsize(_SLIDER_FONT_SIZE)
+            self._n_digits_slider.valtext.set_fontsize(_SLIDER_FONT_SIZE)
+
+        # Create slider for n_digits_per_cluster
+
+    def _n_digits_changed(self, val):
+        self._max_digits_per_cluster_sqrt = int(val)
+        #self._app.update_gallery()
+        self._redraw()
+        
     def _arrange_images(self, images):
         """
         Fit N square images in a unit square so they use as much area as possible
@@ -321,7 +349,6 @@ class DigitGalleryPlot(object):
         """
         N = len(images)
         n_per_side = int(np.ceil(np.sqrt(N)))
-        print("Arranging %i images in %i x %i grid" % (N, n_per_side, n_per_side))
         arrangement = []
         col = 0
         row = 0
@@ -330,7 +357,6 @@ class DigitGalleryPlot(object):
         for i, im in enumerate(images):
             x_offset = col*spacing
             y_offset = (n_per_side - (row+1))*spacing
-            print(y_offset)
             extent = (x_offset, x_offset+spacing,
                       y_offset, y_offset+spacing)
             arrangement.append((im, extent))
@@ -338,53 +364,58 @@ class DigitGalleryPlot(object):
             if col >= n_per_side:
                 col = 0
                 row += 1
-        print("\n")
         return arrangement
 
-    def update_gallery(self, data, sample, results, n_max=4):
+    def update_gallery(self,  samples, results, n_max=4):
         """
-        :param data: MNISTData object, for getting images
         :param sample: MNISTSample object, for looking up indices into data
         :param results: dict with digits as keys, arrays of cluster assignments as values
         :param n_max: maximum number of images to show per digit cluster
         """
-        print("Updating gallery")
+        self._sample = samples
+        self._results = results
+        self._redraw()
+
+    def _redraw(self):
+        if self._results is None:
+            print("No results yet, not drawing digits")
+            return
         self._ax.clear()
         spacing = 0.0
         for d in range(10):
             row, col = d//self._n_cols, d % self._n_cols
-            row = self._n_rows - row - 1 # flip so 0 is at top
-            classes = np.unique(results[d])
+            row = self._n_rows - row - 1  # flip so 0 is at top
+            classes = np.unique(self._results[d])
             images = []
             for c in classes:
-                inds = np.where(results[d] == c)[0]
-                digit_images = 255-sample[d].get_images(d, data, inds, 'train')
-                # import ipdb; ipdb.set_trace()
-                images.append(_assemble_images(digit_images[:n_max]))
+                inds = np.where(self._results[d] == c)[0]
+                digit_images = self._sample[d].get_images(d, self._app.data, inds, 'train')
+                images.append(255-_assemble_images(digit_images[:self._max_digits_per_cluster_sqrt**2]))
 
             # show images in a row in the cell
-            # import ipdb; ipdb.set_trace()
             places = self._arrange_images(images)
             for i, (img, extent) in enumerate(places):
                 extent_grid = [extent[0] + col, extent[1] + col, extent[2] + row, extent[3] + row]
                 self._ax.imshow(img, extent=extent_grid, origin='upper', cmap='gray')
-                print(images[i].mean())
             # draw rectangle around cell
             self._ax.plot([col, col, col+1, col+1, col], [row, row+1, row+1, row, row], 'gray')
-            print("")
+
         self._ax.set_ylim(0, self._n_rows)
         self._ax.set_xlim(0, self._n_cols)
         self._ax.set_aspect('equal')
+        graph_name = self._app.ctrl_plot.get_sim_type()
+        k= self._app.ctrl_plot._K_slider.val
+        self._ax.set_title("Clusters for %s, k=%i" % (graph_name, k))
         plt.draw()
 
 
 def test_gallery():
     fig, ax = plt.subplots()
-    data = MNISTData(pca_dim=0)
-    sample = data.get_sample(100, 0)
-    k=5
+    data = MNISTData(pca_dim=30)
+    samples = {d:data.get_sample(100, 0, digits=(d, )) for d in range(10)}
+    k = 5
     results = {d: np.random.randint(0, k, 100) for d in range(10)}
-    DigitGalleryPlot(None, ax).update_gallery(data, sample, results)
+    DigitGalleryPlot(None, ax).update_gallery(data, samples, results)
     plt.show()
 
 
@@ -396,8 +427,8 @@ class DigitClusteringApp(object):
     """
 
     def __init__(self, pca_dim=30):
-        self._data = MNISTData(pca_dim=pca_dim)
-        self._fig = plt.figure()
+        self.data = MNISTData(pca_dim=pca_dim)
+        self._fig = plt.figure(figsize=(14, 7))
         self._update_lock = Lock()
 
         # change K without recomputing sim graph & eigenvectors
@@ -409,7 +440,7 @@ class DigitClusteringApp(object):
         digit_ax = self._fig.add_axes(LAYOUT['digit_ax_loc'])
         eig_ax = self._fig.add_axes(LAYOUT['eigen_ax_loc'])
         self._ev_plot = EigenvaluesPlot(self, eig_ax)
-        self._ctrl_plot = ControlsPlot(self, self._fig)
+        self.ctrl_plot = ControlsPlot(self, self._fig)
         self._digit_plot = DigitGalleryPlot(self, digit_ax)
         plt.show()
 
@@ -420,7 +451,7 @@ class DigitClusteringApp(object):
         def _update_proc():
             print("Running clustering (k=%i) with %s, %s, %s" % (k, alg_name, graph_type, graph_params))
             digits = [i for i in range(10)]
-            samples = {d: self._data.get_sample(n_train, 50, digits=(d,)) for d in digits}
+            samples = {d: self.data.get_sample(n_train, 50, digits=(d,)) for d in digits}
             results = {}
             if alg_name == 'k-means':
                 print("Clustering with K-means, k=%i" % k)
@@ -429,7 +460,6 @@ class DigitClusteringApp(object):
                     km = KMeansAlgorithm(k)
                     km.fit(x)
                     results[d] = km.assign(x)
-                    print(results[d].mean())
                 print("\tDone.")
 
             elif alg_name == 'spectral':
@@ -464,10 +494,9 @@ class DigitClusteringApp(object):
         # t = Thread(target=_update_proc)
         # t.start()
         results, samples = _update_proc()
-        self._digit_plot.update_gallery(self._data, samples,  results)
+        self._digit_plot.update_gallery( samples,  results)
 
 
 if __name__ == '__main__':
-
+    # test_gallery()
     DigitClusteringApp()
-    
