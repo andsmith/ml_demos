@@ -109,6 +109,21 @@ class MNISTSample(object):
                          for d in self.digits}
             self.pca_transf = None
 
+    def get_images(self,d,data, inds, which='train'):
+        """
+        :param d: digit
+        :param data: MNISTData object
+        :param inds: indices of the images to retrieve (inton self.train or self.test
+        :param which: 'train' or 'test'
+        :return: list of images
+        """
+        if which == 'train':
+            return data.train[d][self.train_inds[d][inds]].reshape(-1, 28, 28)
+        elif which == 'test':
+            return data.test[d][self.test_inds[d][inds]].reshape(-1, 28, 28)
+        else:
+            raise ValueError("Unknown data type: %s (should be 'test' or 'train')" % which)
+        
     def get_data(self, which='train'):
         """
         Get the test/training data in single arrays.
