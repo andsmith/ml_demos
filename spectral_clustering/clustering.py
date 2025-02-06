@@ -116,12 +116,12 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         self._eigvecs = eigvecs[:, idx]
 
 
-    def fit(self, n_clusters, n_features):
+    def fit(self, n_clusters, n_features=None):
+        n_features = n_features if n_features is not None else n_clusters
         eig_features = self._eigvecs[:, :n_features]
         if self._normalize:
             # normalize
             eig_features /= np.linalg.norm(eig_features, axis=1)[:, np.newaxis]
-
 
         # kmeans on eigenvectors
         self._kmeans = KMeans(n_clusters=n_clusters)
@@ -142,32 +142,7 @@ class SpectralAlgorithm(ClusteringAlgorithm):
         n_ind = self._tree.query(x, k=1)[1]
         return self._kmeans.labels_[n_ind]
 
-'''  # subsued by MNISTResult
-class ClusterClassifier(object):
-    def __init__(self,k,  fit_model, train_in, train_out):
-        """
-        :param fit_model: subclass of ClusteringAlgorithm
-        :param train_in: N x d array of training points
-        :param train_out: N x 1 array of training cluster assignments
-        """
-        self._model = fit_model
-        if not self._model.is_fit():
-            raise ValueError("ClusteringAlgorithm must be .fit() before converting to classifier.")
-        pred_out = self._model.assign(train_in)
-        mean_err = np.mean(pred_out != train_out)
-        if mean_err > 0.5:
-            # flip the labels
-            self._reverse = True
-        else:
-            self._reverse = False
-    
-    def predict(self, x):
-        pred = self._model.assign(x).astype(np.int32)
-        if self._reverse:
-            pred = 1 - pred
-        return pred
 
-'''
 def test_render_clustering():
     import cv2
     img = np.zeros((480, 640, 3), np.uint8)
