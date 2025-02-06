@@ -60,9 +60,6 @@ class MNISTPairwiseTuner(object):
     def run(self):
         self._results = {}
         for graph_name in GRAPH_TYPES:
-            # ,'n-neighbors_mutual','soft_neighbors_additive','soft_neighbors_multiplicative']:
-            # if graph_name in ['full', 'epsilon']:
-            #    continue
             cache_filename = "%s_%s_n=%i_pca=%i.pkl" % (self._get_prefixes()[1], graph_name, self._n_samples, self._dim)
             self._results[graph_name] = load_cached(
                 self._compute, cache_filename, no_compute=self._no_compute, graph_name=graph_name)

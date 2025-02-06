@@ -24,8 +24,7 @@ from scipy.sparse.csgraph import connected_components
 
 # Common params for full and pairwise experiments
 DIM = 30  # PCA dimension
-N_BOOT = 20  # bootstraps for error estimation (full only)
-N_CPU = 12  # number of CPUs to use for parallel processing
+N_BOOT = 16  # bootstraps for error estimation (full only)
 
 
 class SimGraphResultPlotter(object):
@@ -80,6 +79,8 @@ class SimGraphResultPlotter(object):
         """
         left = 0
         right = 1
+        x_lim={left:250, right:None}
+
         # Top x-axis has K-like parameters, bottom x-axis has sigma-like parameters
         axis_assignment = {'n-neighbors_mutual': 'left',
                            'n-neighbors': 'left',
@@ -121,6 +122,7 @@ class SimGraphResultPlotter(object):
         for row in range(2):
             ax[row][right].set_xlabel("sigma/epsilon")
             ax[row][left].set_xlabel("k/alpha")
+            ax[row][left].set_xlim(0, x_lim[left])
 
             # set left axis to log-y
         ax[0][left].set_yscale('log')
@@ -135,13 +137,12 @@ class SimGraphResultPlotter(object):
         [ax[i][j].legend() for i in range(2) for j in range(2)]
 
         plt.suptitle(self._plot_title)
-        plt.show()
 
 
 class SimGraphTunerPairwise(SimGraphResultPlotter, MNISTPairwiseTuner):
 
-    def __init__(self, n_cpu=N_CPU):
-        super().__init__(n_cpu=n_cpu, pca_dim=DIM, n_samp=1000)
+    def __init__(self, n_cpu=10):
+        super().__init__(n_cpu=n_cpu, pca_dim=DIM, no_compute=False)
         self._helper_func = _test_g_params
         self._plot_title = "MNIST data, similarity graph parameter tuning - PAIRWISE\n(PCA-dim=%d, samples/digit=%d, avg over 45 pairs)" % (
             self._dim, self._n_samples)
@@ -152,8 +153,8 @@ class SimGraphTunerPairwise(SimGraphResultPlotter, MNISTPairwiseTuner):
 
 class SimGraphTunerFull(SimGraphResultPlotter, MNISTFullTuner):
 
-    def __init__(self, n_cpu=N_CPU):
-        super().__init__(pca_dim=DIM, n_samp=500, n_cpu=n_cpu, n_boot=N_BOOT)
+    def __init__(self, n_cpu=5):
+        super().__init__(pca_dim=DIM, n_cpu=n_cpu, n_boot=N_BOOT,n_samp=(500,500))
         self._helper_func = _test_g_params
         self._plot_title = "MNIST data, similarity graph parameter tuning - FULL\n(PCA-dim=%d, samples/digit=%d, avg over %i random samples)" % (
             self._dim, self._n_samples, self._n_boot)
@@ -164,26 +165,26 @@ class SimGraphTunerFull(SimGraphResultPlotter, MNISTFullTuner):
 
 def _test_g_params(work):
     """
-    :param work: dict with:
-        'graph_name': key of GRAPH_TYPES,
-        'aux': {'pair': pair},  pair of digits
-        'param': (param_name, param_values),
-        'inds': (inds0, inds1),  # for locating image
-        'data': (x, y), })
+    :param work: dict with:{'graph_name': string,
+                            'aux': {'pair': (a,b)},
+                            'data': MNISTSample,
+                            'param': (str: param_name, list:  param_vals),
+                            'k': 2, }
+                        )
     :return: list of results dict.
     """
     graph_name = work['graph_name']
     param_name, param_values = work['param']
-    x, y = work['data']
-    info = work['aux']
+    x, y = work['data'].get_data('train')
+    aux = work['aux']
     # inds = work['inds']
     sweep = []
     for param_value in param_values:
         graph = GRAPH_TYPES[graph_name](x, **{param_name: param_value})
         sim = graph.get_matrix()
         cost_results = _calc_cost(sim, y)
-        print("Graph: %s, %s, param: %s=%s, cut, n_cut, n_components: %s" % (
-            graph_name, info, param_name, param_value, cost_results))
+        print("Graph: %s, digits: %s, param: %s=%s, cut, n_cut, n_components: %s" % (
+            graph_name, aux, param_name, param_value, cost_results))
         cost_results['param_name'] = param_name
         cost_results['param_value'] = param_value
         sweep.append(cost_results)
@@ -191,7 +192,7 @@ def _test_g_params(work):
     return {'results': sweep,
             'graph_name': graph_name,
             'param_name': param_name,
-            'aux': info}
+            'aux':aux}
 
 
 def _calc_cost(sim, y):
@@ -235,12 +236,12 @@ def _calc_cost(sim, y):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-
-    sg = SimGraphTunerPairwise()
+    
+    sg = SimGraphTunerPairwise(n_cpu=14)
     sg.run()
     sg.plot_results()
-
-    sf = SimGraphTunerFull()
+    
+    sf = SimGraphTunerFull(n_cpu=4)
     sf.run()
     sf.plot_results()
 
