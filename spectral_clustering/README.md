@@ -180,7 +180,7 @@ With the more accurate pairs, the errors are on the boundary between clusters.  
 
 #### K-means full 10-digit results:
 
-Putting all the data together, looking for 10 clusters in it, and assigning them class labels yields much lower accuracy than attempting to distinguish only two digits at a time:
+Putting all the data together, looking for 10 clusters, and assigning them class labels yields much lower accuracy than attempting to distinguish only two digits at a time:
 
 
 ![datasets](/spectral_clustering/assets/MNIST/KM_full_accuracy.png)
@@ -197,7 +197,7 @@ This experiment is establish good paramter values for constructing the different
  Ideally, there are many edges between all the vertices corresponding to images of the same digit, and few between vertices belonging to different classes.  
 
 
-To measure this, we use as a metric, the **number of connected components**:  if there are $C$ connected components in the similarity graph, spectral clustering is looking for $K$ clusters, and $C$ < $K$, then the $K$ clusters will consist of an arbitrary partitioning of the $C$ components into the $K$ clusters (i.e. the clustering will always give vertices in the same connected component the same cluster label), since the laplacian matrix will have $C$ eigenvalues corresponding to $\lambda=0$, and some have been dropped before the final clustering.  
+To measure this, we use as a metric, the **number of connected components**:  if there are $C$ connected components in the similarity graph, spectral clustering is looking for $K$ clusters, and $C$ > $K$, then the $K$ clusters will consist of an arbitrary partitioning of the $C$ components into the $K$ clusters (i.e. the clustering will always give vertices in the same connected component the same cluster label), since the laplacian matrix will have $C$ eigenvalues corresponding to $\lambda=0$, and some have been dropped before the final clustering.  
 
 Intuitively, this means a fully connective graph should be necessary for a good clustering.
 
@@ -205,7 +205,7 @@ Run `python mnist_simgraphs.py` to test various values of the different similari
 
 ![datasets](/spectral_clustering/assets/MNIST/simgraph_tuning_pairwise.png)
 
-(Plot from the 'pairwise' experiment, results are average number of connected components in graphs made from samples over all 45 unique digit pairs.)
+(Plot from the 'pairwise' experiment, results are averages over all 45 unique digit pairs of the number of connected components in the similarity graphs.)
 
 The left plot shows results using the similarity graph types that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The similarity graph types with parameters that scale with the data space are plotted on the right.
 
