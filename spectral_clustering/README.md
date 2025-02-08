@@ -137,17 +137,17 @@ The [MNIST digit classification dataset](https://keras.io/api/datasets/mnist/) c
 Treating each as a 784-element vector and its digit as the label, how well do the clusters in this dataset conform to class labels?
 
 ### General experiments:
- To explore this, the MNIST scripts contain three types of experiments:
- * **Full clustering**:  If we put all the data together and look for $K=10$ clusters, will the digits be separated by cluster?
- * **Pairwise clustering**:  If we combine the samples from two digits and cluster the result with $K=2$, do the most prominent clusters also separate the digit classes?
- * **Single digit clustering**:  Can we discover subtypes of a single digit, such as crossed and uncrossed sevens?
+ To explore this, the MNIST scripts contain two types of experiments:
+ * **Comparing cluster labels to class labels**:  If we put all the digits together and look for 10 clusters in the data, will it naturally find the 10 digit types?   What if we just put two digits, '0', and '1' together?  What about the other pairs? 
+   * To investigate the 10-digit case (the "full" expriments), we cluster samples from all 10 digits looking for $K=10$ clusters, then measure the similarity between the found clusters and class labels.  The "accuracy" reported is of the best bijective mapping between class labels (digit labels) and cluster IDs. 
+   * To investigate the pairwise case, a similar experiment is done for each of the 45 pairs of digits:  combining their two sets of samples, clustering looking for $K=2$ clusters, and reporting the "accuracy" as the fraction of correct labels, given whichever mapping (Cluster-0 = Digit-A, and Cluster-1 = Digit-B, or the other way around) yields a higher number.
+ * **Single digit clustering**:  Can we discover subtypes of a single digit, such as crossed and uncrossed sevens?  To investigate this, we cluster the samples from each digit separately and report a few examples from each cluster, from each digit.
 
 The general process for comparing clusters to class labels is:
   1. Reduce dimensionality to 30 using PCA on the full dataset.
   2. Cluster for $K=2$ or $10$ clusters, assign cluster--class mapping that results in highest accuracy.
-  3. Repeat step 3 to get the best clustering (10 times seems stable).
 
-For pairwise clustering experiments, average accuracies are computed over all 45 pairs.  For full clustering experiments, averages are over 100 random samples of the full dataset.
+For pairwise clustering experiments, average accuracies are computed over all 45 pairs (using 1000 images of each digit).  For full clustering experiments, averages are over 20 random samples (using 500 images of each digit) of the full dataset.
   
 
 ## Clustering digits with K-Means
@@ -189,48 +189,97 @@ The upper plot shows, in cell $(i,j)$ the proportion of digits with label $j$ th
 
 The lower plot shows the distribution of (all digit) accuracies over the 100 randomly sampled trials. 
 
-## Spectral clustering results
 
-#### Tuning parameters - the Similarity Graph:
+#### Connectivity of the Similarity Graph:
 
-First we need to make a similarity graph from handwritten digits in PCA(30) space.  Ideally, there are many edges between all the vertices corresponding to images of the same digit, and few between vertices belonging to different classes.  We can use two metrics to measure this:
-  * **Number of connected components**:  if there are $C$ connected components in the similarity graph, spectral clustering is looking for $K$ clusters, and $C$ < $K$, then the $K$ clusters will consist of an arbitrary partitioning of the $C$ components, since the laplacian matrix will have $C$ eigenvalues corresponding to $\lambda=0$, and some have been dropped before the final clustering.  
-  * **Normalized cut**:  If, at the other extreme, the graph is too connected, there will be many edges between different digits.  This can be measured with the "[normalized cut](https://en.wikipedia.org/wiki/Segmentation-based_object_categorization#Normalized_cuts)" of the similarity graph.   Since we know the digit labels, we can use them to partition the data into separate classes and count how many edges of a given graph cross the partition.  In general:
-    * if most of the edges (of the binary graphs--the continuous ones sum edge weights) stay within a partition, the normalized cut will be low, or
-    * if a large total mass of edges crosses between partitions, the norm cut will be high.
+This experiment is establish good paramter values for constructing the different kinds of similarity graphs.
 
-For a graph $G$, with verticies partitioned into sets $A$ and $B$, the cut of the partitioning is 
-
-$$
-\text{NormCut}(\{A,B\}) = \frac{\text{Out}(A)}{\text{Deg}(A)} +\frac{\text{Out}(B)}{\text{Deg}(B)} 
-$$
-* $\text{Out}(A) = \sum_{i\in A, j\in B} w_{ij}$ (the sum of edge weight from $A$ to $B$)
-* $\text{Deg}(A) = \sum_{i\in A, j\in G} w_{ij}$ (the sum of edge weight from $A$ to any vertex).
+ Ideally, there are many edges between all the vertices corresponding to images of the same digit, and few between vertices belonging to different classes.  
 
 
-Run `python mnist_simgraphs.py` to test various values of the different similarity graphs' parameters and generate the following plots:
+To measure this, we use as a metric, the **number of connected components**:  if there are $C$ connected components in the similarity graph, spectral clustering is looking for $K$ clusters, and $C$ < $K$, then the $K$ clusters will consist of an arbitrary partitioning of the $C$ components into the $K$ clusters (i.e. the clustering will always give vertices in the same connected component the same cluster label), since the laplacian matrix will have $C$ eigenvalues corresponding to $\lambda=0$, and some have been dropped before the final clustering.  
+
+Intuitively, this means a fully connective graph should be necessary for a good clustering.
+
+Run `python mnist_simgraphs.py` to test various values of the different similarity graphs' parameters in the 10-digit and pairwise experiments:
 
 ![datasets](/spectral_clustering/assets/MNIST/simgraph_tuning_pairwise.png)
-The left two plots show results using the similarity graphs that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The two similarity graph types with parameters that scale with the data space are plotted on the right.
 
-The upper two figures show how the number of connected components (y-axis, log scale) shrinks as higher value of each paramter adds edges to the graph.  The lower two figures show the normalized-cut metric. 
-### Tuning parameters - Spectral clustering
+(Plot from the 'pairwise' experiment, results are average number of connected components in graphs made from samples over all 45 unique digit pairs.)
 
-[ADD EXPERIMENT DESCRIPTION HERE]
+The left plot shows results using the similarity graph types that have a $K$ or $\alpha$ parameter, values between 1 and 50 being tested.  The similarity graph types with parameters that scale with the data space are plotted on the right.
 
-Run `> python mnist_tuning.py` to compare the different resulst on the pairwise and full experiments.  This generate the following figure:
+Observations:
+* All graphs become a single component as their parameter increases (as expected).  
+* Graphs that become a single connected component quickly, `soft_neighbors_additive` with $\alpha=1$   and `n-neighbors` with $n=2$, are the more inclusive version of those two graph types.
+* Their more exclusive counterparts, `soft_neighbors-multiplicative` and `n-neighbors` mutual both require neighboring vertices to be on each other's nearest lists to form an edge between them, and accordingly become connected more slowly.
+* The `full` similarity graph being initially more than one connected component is due to round-off error. 
+* The `epsilon` similarity graph requires a threshold almost as large as the largest distance between points to connect the vertices into a single component.  
 
-[ADD FIGURE & DISCUSSION]
+Conclusions:
+
+The digits should cluster better if the graph is fully connected, for reasons discussed above, so the paramters $K$, $\alpha$, $\epsilon$, and $\sigma$ can be chosen appropriately by consulting the plots above. 
+
+## Spectral clustering results
+
+For these experiments, samples from 2 or 10 digits are concatenated into a single dataset, the algorithm looks for 2 or 10 clusters in the combined data, cluster IDs are mapped to the original labels so as to give the highest accuracy (most resembling class labels), which is plotted over a range of values of the similarity graph parameter.
+
+### Spectral pairwise results - cluster/class relationship:
+Run `> python mnist_pairwise.py` to run the experiment and plot the clustering "accuracy":
+
+![datasets](/spectral_clustering/assets/MNIST/spectral_pairwise_accuracy.png)
+
+#### Discussion
+
+The average using K-Means as the clustering algorithm is plotted for comparison.  Interestingly, for some parameter values, the spectral algorithms are better able to separate the digits just by clustering the data better (i.e. without looking at the digit labels).
+
+Cluster IDs begin to resemble class labels as soon as the similarity graph becomes connected, and as further edges are added (as the parameter is increased) the performance is reduced as spurious edges (i.e. between clusters/classes) are added.  As the graph becomes too complete, cluster lables look less like digit labels.
+
+Interestingtly even after becoming complete graphs, the clusters found by `full` and `epsilon` similarity graph never resembled the digit classes.
+
+### Spectral pairwise results - Error gallery:
+
+Which digits were most often classified incorrectly?  Which samples did the clustering algorithm decide belonged in the wrong class?  To see examples of the erroneously classified digits for the different similarity graph types, run the script `> python mnist_pairwise_show_errors.py`
+
+[NOTE: After running `mnist_pairwise.py`, results files should be generated in the `ml_demos/spectral_clustering/results` subdir.  This script will only show results if those files have been generated.]
+
+This shows the accuracy curves from the pairwise experiment, but mousing over a plot allows the user to select a curve (closest to the mouse) and a parameter value (x), indicated by the title and the dotted vertical line:
+
+![datasets](/spectral_clustering/assets/MNIST/spectral_pairwise_error_gui.png)
 
 
-#### Spectral pairwise results:
+This will load the results from the similarity graph of the selected type built with the selected parameter value and plot a grid showing which samples (or a subset if there are many): 
 
-To compare the results of spectral clustering the digits pairwise using the diferent similarity graph types (and the KMeans results), run `> python mnist_pairwise.py`.  This will generate this figure:
 
-#### Spectral full results:
+![datasets](/spectral_clustering/assets/MNIST/spectral_pairwise_errors.png)
 
-To compare the four similarity graphs with the KMeans resulsts, run `> python mnist_pairwise.py` to generate this figure:
+In each (i,j) cell is an image showing the samples that were erroneously classified as the other digit in the pair, separated by a line.  The cells with many samples had poor classifications, and the many samples they contain look like valid digits.  The (i,j) pairs with just a few samples correspond to a good cluster/class correspondence, and the errors look more
 
-#### Spectral single digit results:
 
-To find digit sub-classes with the spectral clustering algorithms, run `> python mnist_single.py`.
+### Spectral full results:
+
+To see how class labels compare to natural clusters in the data using all 10 digits at once, run `> python mnist_pairwise.py` to generate a figure simlar to the pairwise plot:
+
+
+![datasets](/spectral_clustering/assets/MNIST/spectral_full_accuracy.png)
+
+Cluster/class correspondence "accuracy" plotted (with bars at +/- 1 standard deviation) for the different graph types over different parameter values. 
+
+The curves have a similar shape but, interestingly, the performance gain Spectral Clustering seemed to have over K-Means in the pairwise experiment is smaller when trying to separate images of all 10 digits at once. 
+
+### Spectral single digit results:
+
+The single-digit clustering GUI can be started by running `> python mnist_single.py`.
+
+Choose the clustering algorithm, similarity graph (for the `spectral` algorithm option), its parameter value the number of clusters, and the dataset size. 
+
+The figure below shows the selected algorithm, `spectral` clustering, will use a `soft-nearest-additive` similarity graph with parameter $\alpha=17$ and will find $K=3$ clusters in 1000 samples of each digit.
+
+Clicking the `Run` button will cluster each digit and plot sample images from each of the $K$ clusters in each digit's dataset, with the spectrum of the laplacian matrix.  The number of images per cluster can be controled by the slider below, shown set to 25 
+
+![datasets](/spectral_clustering/assets/MNIST/spectral_single_explorer.png)
+
+Discussion:
+* Many digits seem to cluster by overall angle.
+* The three clusters of 2's include one cluster with the digit always drawn with a loop, and two clusters rarely so.
+* Rarer subtypes (crossed 7's, triangular 4's) might appear as clusters with a higher $K$.

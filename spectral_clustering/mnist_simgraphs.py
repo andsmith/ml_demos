@@ -19,7 +19,8 @@ import matplotlib.pyplot as plt
 from mnist_common import GRAPH_TYPES, GRAPH_PARAM_NAMES
 from multiprocessing import Pool, cpu_count
 from util import load_cached
-from mnist_tuning import MNISTPairwiseTuner, MNISTFullTuner
+from mnist_pairwise import MNISTPairwiseTuner
+from mnist_full import MNISTFullTuner
 from scipy.sparse.csgraph import connected_components
 
 # Common params for full and pairwise experiments
@@ -89,7 +90,8 @@ class SimGraphResultPlotter(object):
                            'full': 'right',
                            'epsilon': 'right'}
 
-        fig, ax = plt.subplots(2, 2, figsize=(10, 8))
+        fig, ax = plt.subplots(1, 2, figsize=(9, 4.5))
+        ax = np.array([[ax[0], ax[1]]]) # make it 2D for easier indexing
         for graph_name, results in self._results.items():  # [['epsilon', self._results['epsilon']]]:#
             if results is None:
                 logging.info("Skipping graph '%s' - no results found." % graph_name)
@@ -108,33 +110,33 @@ class SimGraphResultPlotter(object):
             if axis_assignment[graph_name] == 'left':
                 print("Plotting %s on axis 0" % param_name)
                 comp_axis = ax[0][left]
-                ncut_axis = ax[1][left]
+                #ncut_axis = ax[1][left]
             elif axis_assignment[graph_name] == 'right':
                 print("Plotting %s on axis 1" % param_name)
                 comp_axis = ax[0][right]
-                ncut_axis = ax[1][right]
+                #ncut_axis = ax[1][right]
             else:
                 raise ValueError("Unknown axis assignment for %s" % graph_name)
 
             self._plot_bands(comp_axis, param_values, mean_n_comps, st_n_comps, label=comp_label)
-            self._plot_bands(ncut_axis, param_values, mean_norm_cuts, st_norm_cuts, label=comp_label)
+            #self._plot_bands(ncut_axis, param_values, mean_norm_cuts, st_norm_cuts, label=comp_label)
 
-        for row in range(2):
+        for row in range(1):
             ax[row][right].set_xlabel("sigma/epsilon")
             ax[row][left].set_xlabel("k/alpha")
-            ax[row][left].set_xlim(0, x_lim[left])
+            ax[row][left].set_xlim(1, x_lim[left])
 
             # set left axis to log-y
-        ax[0][left].set_yscale('log')
-        ax[0][right].set_yscale('log')
+        ax[0][left].set_xscale('log')
+        ax[0][right].set_xscale('log')
 
         for col in range(2):
             ax[0][col].set_ylabel("num. connected components")
-            ax[1][col].set_ylabel("normalized cut")
-            ax[0][col].sharex(ax[1][col])
+            #ax[1][col].set_ylabel("normalized cut")
+            #ax[0][col].sharex(ax[1][col])
 
-        [ax[i][j].grid() for i in range(2) for j in range(2)]
-        [ax[i][j].legend() for i in range(2) for j in range(2)]
+        [ax[i][j].grid() for i in range(1) for j in range(2)]
+        [ax[i][j].legend() for i in range(1) for j in range(2)]
 
         plt.suptitle(self._plot_title)
 
