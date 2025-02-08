@@ -1,0 +1,10 @@
+findiff==0.10.2
+keras==3.8.0
+matplotlib
+munkres==1.1.4
+numpy
+opencv_contrib_python
+opencv_python
+scikit_learn==1.6.1
+scipy==1.15.1
+Shapely==2.0.7

@@ -12,3 +12,6 @@ Demos for Machine Learning Reading Group
 * [AdaBoost - Build a strong learner from an ensemble of weak learners](/ada_boost/README.md)
 
 * [Spectral Clustering - Cluster a set of objects using only a function measuring the similarity between two of them.](/spectral_clustering/README.md)
+
+#### Requirements
+install with `> pip install -r ml_demos/requirements.txt`

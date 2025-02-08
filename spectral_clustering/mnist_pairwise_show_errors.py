@@ -111,7 +111,7 @@ class PairwiseTunerErrGallery(MNISTPairwiseTuner):
         """
         Arrange the error image in an 9x8 grid
         """
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(figsize=(8, 9))
         images = {}
         for result in result_list:
             digits = tuple(result['result'].digits)
@@ -134,7 +134,7 @@ class PairwiseTunerErrGallery(MNISTPairwiseTuner):
         mean_acc = self._values[graph_name]['mean_acc'][self._mouseover['param_ind']]
         title = "Errors for %s, %s data\nparam = %.1f, mean accuracy: %.3f %%" % (graph_name, self._which,  param_val, mean_acc)
         ax.set_title(title)
-
+        plt.tight_layout()
         fig.show()  # return from callback
                 
         
