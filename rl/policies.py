@@ -1,7 +1,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 
-from tic_tac_toe import Mark, Result
+from tic_tac_toe import Mark, Result, Game
 
 class Policy(ABC):
     """
@@ -33,18 +33,34 @@ class Policy(ABC):
         Return an action to take given the current state.
 
         :param state: A game state.
-        :return: list of (action, probability) tuples.
+        :return: list of (action, probability) tuples where the sum of all probabilities is 1.0.
         """
         pass
 
     def __str__(self):
         return self.__class__.__name__ + "(%s)" % self.player.name
+    
+    def get_policy(self):
+        """
+        :returns:dict mapping all possible (non-terminal) game states to the recommended action (or action distribution)
+            dict[state] = [(action, probability), ...]
+        """
+        states = Game.enumerate_states(self.player)
+        return {state: self.recommend_action(state) for state in states}
 
 
-class ValuePolicy(Policy):
+
+
+class ValueFuncPolicy(Policy):
     """
-    A policy function that is parameterized by a value function
-        V(s) = value of state s.
+    A policy function that is parameterized by a value function:
+        V(s) = value of state s (expected discounted reward for being in state s if we follow the policy)
+
+        
+    This class can be used as the value function itself by calling DPValueFunc.value(state) and also as a
+      Policy object acting so the next state has highest value according to v(), by calling the inherited
+      method ValueFuncPolicy.recommend_action(state).
+
 
     The action recommended by the policy function is the action that
     maximizes the value function of the resulting state, i.e.
@@ -57,10 +73,12 @@ class ValuePolicy(Policy):
     def __init__(self, deterministic=False):
         """
         :param value_function: A function that takes a state and returns a value.
-        :param deterministic: If True, the policy is deterministic, will alawys return a single action.
+        :param deterministic:  return one or many actions
+           If True, the policy is deterministic, will alawys return the most valuable action with p=1.
+           If False, it will return all n actions having the same highest value with uniform probability p=1/n.
         """
         super().__init__(deterministic)
-        self._v = self._get_value_func()  # hash of game state to value
+        self._v = self._make_value_func()  # hash of game state to value
 
     def recommend_action(self, state):
         """
@@ -76,6 +94,19 @@ class ValuePolicy(Policy):
         else:
             values = {a: self._v(self._transition(state, a)) for a in actions}
             max_value = max(values.values())
-            actions = [(a, 1.0) for a, v in values.items() if v == max_value]
+            actions = [a for a, v in values.items() if v == max_value]
             p = 1.0 / len(actions)
             return [(a, p) for a in actions]
+        
+    def value(self, state):
+        return self._v(state)
+
+    @abstractmethod
+    def _make_value_func(self):
+        """
+        Create the value function to use for this policy
+        :return:  dict(key=game_state, value=value)
+            game_state: Game object
+            value: float
+        """
+        pass

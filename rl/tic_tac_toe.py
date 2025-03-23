@@ -8,6 +8,7 @@ WLOG, let the policy's player be X.
 import numpy as np
 from abc import ABC, abstractmethod
 from enum import IntEnum
+import re
 
 class Result(IntEnum):
     X_WIN = 1
@@ -36,6 +37,9 @@ class Game(object):
         chars = {Mark.EMPTY: " ", Mark.X: "X", Mark.O: "O"}
         s = "\n-----\n".join("|".join(chars[i] for i in row) for row in self.state)
         return s
+    
+    def indent(self, tabs):
+        return re.sub(r'^', '\t'*tabs, str(self), flags=re.MULTILINE)
 
     def __hash__(self):
         return hash(tuple(self.state.flatten()))
@@ -91,41 +95,76 @@ class Game(object):
         return None
 
     @staticmethod
-    def enumerate_states():
-        # Enumerate every state reachable from the empty to a terminal state.
-        # Return a dict of state: terminality, where state is a Game object and terminality is
-        #   one of Mark.X, Mark.O, Mark.EMPTY (draw), or None (not terminal)..
+    def get_game_tree(player):
+        # Enumerate every state player=X or O could be confronted with, i.e. all states reachable from
+        #   the empty to a terminal state. Note this is not all game boards, or even all reachable game states, 
+        #   as the player will not be asked to make moves that skip the opponent's turn, etc.
+        #
+        # Consider both the player going first and second.
+        #
+        # Return three dicts:
+        #  terminality: key = Game object (state), value = one of Mark.X, Mark.O, Mark.EMPTY (draw), or None (not terminal).
+        #  child_states: key = Game object (state), value = list of (Game, action) tuples for all valid moves from the Key state (after 1 round, 1 player move then 1 opponent move).
+        #  parent_states: key = Game object (state), value = list of (Game, action) tuples for all valid moves to the Key state (after 1 round).
 
         def _opponent(player):
             return Mark.X if player == Mark.O else Mark.O
         
-        states = {}
+        player_states = {}
+        opponent_states = {}
 
-        def _enumerate(state, player=Mark.X):
+        next_states = {}  # key = state, value = list of states that can be reached by player
+        prev_states = {}  # key = state, value = list of states that can reach this state
+
+        def _enumerate(state, current_player=Mark.X):
             """
             :param state: Game state
             :param player: who makes the next move, Mark.X or Mark.O?
+            :returns: list of (child_state, action) tuples for all valid moves from state, or [] if terminal.
             """
-            if state in states:
-                return
+            if state in player_states or state in opponent_states:
+                return []
+            print("Enumerating for player %s:" % current_player)
+            print(state.indent(1))
             term = state.check_terminal()
-            states[state] = term
+            print("\tTerminality:", term)
+            if current_player == player:
+                player_states[state] = term
+            else:
+                opponent_states[state] = term
+
             if term is not None:
-                return
+                return []
+            
             actions = state.get_actions()
+            children = []  # next game state (after player move)
+            grand_children = []  # next valid RL state (after player & opponent move)
             for action in actions:
                 new_state = state.copy()
-                new_state.move(player, action)
-                _enumerate(new_state, _opponent(player))
-        #import ipdb; ipdb.set_trace()
+                new_state.move(current_player, action)
+
+                children.append((new_state, action))
+                grand_children.extend(_enumerate(new_state, _opponent(current_player)))
+
+            if current_player == player:
+                print("\trecording %i successor states." % len(grand_children))
+                next_states[state] = grand_children
+                for gchild, action in grand_children:
+                    g_childs_parents = prev_states.get(gchild, [])
+                    g_childs_parents.append((state, action))
+                    prev_states[gchild] = g_childs_parents
+            print("\treturning with %i successor states." % len(children))
+            return children
+        
         _enumerate(Game(), Mark.X)
         _enumerate(Game(), Mark.O)
 
-        return states
+        return player_states, next_states, prev_states
     
 def test_game():
-    states = Game.enumerate_states()
-    print(len(states), "states")
+    import ipdb; ipdb.set_trace()
+    states, successors, predecssors = Game.get_game_tree(player=Mark.X)
+    print(len(states), "states for player X")
 
 
 if __name__ == "__main__":
