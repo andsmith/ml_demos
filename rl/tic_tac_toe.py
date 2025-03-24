@@ -13,8 +13,8 @@ import cv2
 from util import get_annulus_polyline
 import matplotlib.pyplot as plt
 from drawing import MarkerArtist
-from game_base import Mark, Result
-
+from game_base import Mark, Result, WIN_MARKS
+import logging
 
 class Game(object):
     """
@@ -52,6 +52,10 @@ class Game(object):
 
     def __eq__(self, other):
         return np.array_equal(self.state, other.state)
+    
+    def comp_val(self):
+        # Comparison value for sorting
+        return sum(self.state.flatten())
 
     @staticmethod
     def get_all_actions():
@@ -69,6 +73,7 @@ class Game(object):
         if self.state[action] != Mark.EMPTY:
             raise ValueError("Invalid move")
         self.state[action] = mark
+        return self
 
     def check_terminal(self):
         """
@@ -105,17 +110,81 @@ class Game(object):
         #
         # Consider both the player going first and second.
         #
-        # Return three dicts:
+        # Return three dicts and a list:
         #  terminality: key = Game object (state), value = one of Mark.X, Mark.O, Mark.EMPTY (draw), or None (not terminal).
         #  child_states: key = Game object (state), value = list of (Game, action) tuples for all valid moves from the Key state (after 1 round, 1 player move then 1 opponent move).
         #  parent_states: key = Game object (state), value = list of (Game, action) tuples for all valid moves to the Key state (after 1 round).
+        #  initial_states: list of 10 possible initial states (Empty if going first or a grid with one opponent mark made if going second)
+        # should be in get_game_tree(X)[2] (successor states) but isn't...
+        def _opponent(mark):
+            return Mark.X if mark == Mark.O else Mark.O
+        initial_states = [Game()]
+        for i in range(3):
+            for j in range(3):
+                g = Game().move(_opponent(player), (i, j))
+                initial_states.append(g)
+        terminal = {state:None for state in initial_states}
+        parents = {state: [] for state in initial_states}
+        children = {state: [] for state in initial_states}
+        rounds = [initial_states]  # list of lists of states, each list is a round of states
+        new_states = initial_states
+        logging.info("Generating game tree for player %s" % player)
+
+        while len(new_states) > 0:
+            logging.info("\tRound %i: %i states" % (len(rounds), len(new_states)))
+            next_round = []
+            for state in new_states:
+
+                if terminal[state]:
+                    continue
+
+                for action in state.get_actions():
+
+                    new_state = state.copy().move(player, action)
+                    new_is_terminal = new_state.check_terminal()
+                        
+                    # if it's a win, it's a child state, otherwise opponent moves first.
+                    if new_is_terminal is not None:  # is terminal
+                        if new_state not in terminal:  # but not seen before
+                            terminal[new_state] = new_is_terminal
+                            parents[new_state] = []
+                            children[new_state] = []
+                        # connect it to the graph since it's terminal
+                        parents[new_state].append((state, action))
+                        children[state].append((new_state, action))
+                    else: # not terminal, let opponent move
+                        for opp_action in new_state.get_actions():
+                            new_opp_state = new_state.copy().move(_opponent(player), opp_action)
+                            new_opp_is_terminal = new_opp_state.check_terminal()
+                            # connect it to the graph regardless of terminality since it's the end of the round:
+                            if new_opp_state not in terminal:
+                                    terminal[new_opp_state] = new_opp_is_terminal
+                                    parents[new_opp_state] = []
+                                    children[new_opp_state] = []
+                                    next_round.append(new_opp_state)
+                            parents[new_opp_state].append((state, opp_action))
+                            children[state].append((new_opp_state, opp_action))
+                                
+            rounds.append(next_round)
+            new_states = next_round
+
+        return terminal, children, parents, initial_states
+    
+
+                            
+
+        
+
+
+
+    '''
+        test_state = Game.from_strs(["XXX", "O  ", "O  "])
 
         def _opponent(player):
             return Mark.X if player == Mark.O else Mark.O
 
         player_states = {}
         opponent_states = {}
-
         next_states = {}  # key = state, value = list of states that can be reached by player
         prev_states = {}  # key = state, value = list of states that can reach this state
 
@@ -125,18 +194,25 @@ class Game(object):
             :param player: who makes the next move, Mark.X or Mark.O?
             :returns: list of (child_state, action) tuples for all valid moves from state, or [] if terminal.
             """
-            if state in player_states or state in opponent_states:
-                return []
+            if state == test_state:
+                import ipdb; ipdb.set_trace()
             # print("Enumerating for player %s:" % current_player)
             # print(state.indent(1))
             term = state.check_terminal()
+            if term in [Result.X_WIN, Result.O_WIN] and WIN_MARKS[current_player] == term:
+                import ipdb; ipdb.set_trace()
+            if (state in player_states and current_player == player) or (state in opponent_states and current_player == _opponent(player)):
+                return []
             # print("\tTerminality:", term)
             if current_player == player:
+                
                 player_states[state] = term
             else:
                 opponent_states[state] = term
 
             if term is not None:
+                if player == current_player:
+                    next_states[state] = []
                 return []
 
             actions = state.get_actions()
@@ -145,7 +221,6 @@ class Game(object):
             for action in actions:
                 new_state = state.copy()
                 new_state.move(current_player, action)
-
                 children.append((new_state, action))
                 grand_children.extend(_enumerate(new_state, _opponent(current_player)))
 
@@ -160,9 +235,21 @@ class Game(object):
             return children
 
         _enumerate(Game(), Mark.X)  # player=X goes first
+
         _enumerate(Game(), Mark.O)  # player=O goes first
 
-        return player_states, next_states, prev_states
+        initial_states = [Game()]
+        for i in range(3):
+            for j in range(3):
+                state = Game()
+                state.move(_opponent(player), (i, j))
+                initial_states.append(state)
+
+        return player_states, next_states, prev_states, initial_states
+    '''
+
+
+
 
     def get_img(self, space_size=11,
                 bar_w_frac=.1,
@@ -194,8 +281,6 @@ class Game(object):
             start = i * space_size + (i - 1) * line_width
             img[start:start + line_width, :] = color_lines
             img[:, start:start + line_width] = color_lines
-        print("Getting image for game state:")
-        print(self.indent(1))
 
         # Draw marks
         for i in range(3):
@@ -238,12 +323,20 @@ class Game(object):
         return Game(state)
 
 
-def test_game():
+def test_game_tree():
 
-    states, successors, predecssors = Game.get_game_tree(player=Mark.X)
-    print(len(states), "states for player X")
+    states, successors, predecssors, initial_states = Game.get_game_tree(player=Mark.X)
+
+    print("Game graph for player X has:")
+    print("\ttotal states:", len(states))
+    print("\tinitial states", len(initial_states))
+    print("\tTerminal:")
+    print("\t\tX wins:", sum(1 for v in states.values() if v == Result.X_WIN))
+    print("\t\tO wins:", sum(1 for v in states.values() if v == Result.O_WIN))
+    print("\t\tDraws:", sum(1 for v in states.values() if v == Result.DRAW))
 
 
 if __name__ == "__main__":
-    test_game()
+    logging.basicConfig(level=logging.INFO)
+    test_game_tree()
     print("Done.")
