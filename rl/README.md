@@ -9,7 +9,7 @@ The so-called model-based methods take advantage of this beforehand knowledge of
 *  for every non-terminal state $s$:
     * the actions possible from that state: $\text{actions}(s) = \{a_0, ...\}$ (the empty spaces ),
     * the resulting state $s'$ from taking action $a$ in state $s$: $\text{move}(s,a)=s'$ (a new game board with 1 more mark made), and
-*  every state's terminal or non-terminal status:  $\text{term}(s)\in\{\text{win-X},\text{win-O},\text{draw},\empty\}$.
+*  every state's terminal or non-terminal status:  $\text{term}(s)\in\{\text{win-X},\text{win-O},\text{draw},\emptyset \}$.
 
 The **value function** $v_\pi(s)$ is defined as the total (potentially discounted) reward we can expect if we are in state $s$ and following policy $\pi$ from that point forward. [ADD EQN, ADD def of $\pi$, move to DEFs?]
 
