@@ -27,18 +27,23 @@ Model based algorithms for learning $v(s)$ have access to the game mechanics des
 After we're confident our value function $v_\pi$ accurately estimates what total reward we can expect following $\pi$, can we learn a new policy, $\pi_1$ that is expected to perform better under the same value function?   In general, setting the new policy $\pi_1$ to recommend actions leading to higher-valued states than what $\pi$ recommends is called **Policy Improvement**.  
 
 In the simple case that we want our policy to always take the best action, i.e. the action leading to the state with highest value, we have:
+
 $$
 \begin{equation}
 \pi_1(s) = \underset  {a \in \text{actions(s)}} {argmax} \underset  {s' \in \text{move}(s,a)} Ev_{\pi}(s')
 \end{equation}
 $$
+
 The original policy $\pi$ came with no guarantees, so $\pi_1$ might be different. We will always expect higher total reward from following policy $\pi_1$ over $\pi$ if, for every state $s$,  $\pi_1$ recommends an action leading to a state of greater or equal value than what $\pi$ recomends (from the *policy imporovment theorem* [proof?]).
 #### 3) Alternating between 1) and 2)
 
 With a new policy $\pi_1$ to follow, the old value function will no longer calculate our expected reward, so we can learn another value fuction $v_{\pi_1}$ from one of the algorithms in section 1.  Iterating this process by alternating between the Policy Evaluation ($\underset E \to$) and Policy Improvement ($\underset I \to$),
 $$
+\begin{equation}
 \pi_0 \underset E \to v_\pi \underset I \to \pi_1 \underset E \to v_{\pi_1} \underset I \to \pi_2 \underset E \to ...\text{ ,}
+\end{equation}
 $$
+
 until $\pi_i$ converges is **Policy Iteration**.  The Tic-Tac-Toe demo of PI starts with $\pi_0$ as a hard-coded, heuristic algorithm and measures their improvement after each iteration.   
 
 Note:  If we use the simple, optimal policy improvement step of section 2 for $\underset I \to$, this is known as **Value Iteration**.  
