@@ -38,6 +38,7 @@ The original policy $\pi$ came with no guarantees, so $\pi_1$ might be different
 #### 3) Alternating between 1) and 2)
 
 With a new policy $\pi_1$ to follow, the old value function will no longer calculate our expected reward, so we can learn another value fuction $v_{\pi_1}$ from one of the algorithms in section 1.  Iterating this process by alternating between the Policy Evaluation ($\underset E \to$) and Policy Improvement ($\underset I \to$),
+
 $$
 \begin{equation}
 \pi_0 \underset E \to v_\pi \underset I \to \pi_1 \underset E \to v_{\pi_1} \underset I \to \pi_2 \underset E \to ...\text{ ,}
