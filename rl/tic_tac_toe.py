@@ -394,7 +394,7 @@ def test_game_tree():
     cell_size = 20
     bar_w_frac = .2
     cell_dims = Game.get_image_dims(cell_size, bar_w_frac=bar_w_frac)
-    grid_pad = cell_dims['line_t'] * 6
+    grid_pad = cell_dims['line_t'] * 2
     draw_states = [state for state in terminal if terminal[state] == Result.DRAW]
     draw_state_img_size = 4*(cell_dims['img_size'] + 2 * grid_pad)
     pad = 4  # on all sides
