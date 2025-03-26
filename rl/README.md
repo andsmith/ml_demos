@@ -118,7 +118,7 @@ Creating Draw States image...
 ```
 As well as displaying all 32 draw states in the image:
 
-![draw_states.png](draw_states.png)
+![draw_states](draw_states_all.png)
 
 (lines are green, indicating a draw terminal state.)
 

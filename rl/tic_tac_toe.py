@@ -389,7 +389,7 @@ def test_game_tree():
 
     # Show all 32 draw states:
     print("Creating Draw States image...")
-    filename = "draw_states.png"
+    filename = "draw_states_all.png"
 
     cell_size = 20
     bar_w_frac = .2
