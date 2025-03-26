@@ -7,9 +7,9 @@ The game Tic-Tac-Toe is complex enough for many different strategies to be appli
 The so-called model-based methods take advantage of this beforehand knowledge of their environments.   In addition to the (usually trivial) initial states, *before* any learning the following are available to them:
 *  every possible state (for Tic-Tac-Toe, all possible patterns of X, O, or blank spaces reachable from the empty board through valid moves), 
 *  for every non-terminal state $s$:
-    * the actions possible from that state: $\text{actions}(s) = \{a_0, ...\}$ (the empty spaces ),
+    * the actions possible from that state: $\text{actions}(s) \in [a_0, ...]$ (the set of free spaces),
     * the resulting state $s'$ from taking action $a$ in state $s$: $\text{move}(s,a)=s'$ (a new game board with 1 more mark made), and
-*  every state's terminal or non-terminal status:  $\text{term}(s)\in\{\text{win-X},\text{win-O},\text{draw},\emptyset \}$.
+*  every state's terminal or non-terminal status:  $\text{term}(s)\in[\text{win-X},\text{win-O},\text{draw},- ]$.
 
 The **value function** $v_\pi(s)$ is defined as the total (potentially discounted) reward we can expect if we are in state $s$ and following policy $\pi$ from that point forward. [ADD EQN, ADD def of $\pi$, move to DEFs?]
 
@@ -27,12 +27,11 @@ Model based algorithms for learning $v(s)$ have access to the game mechanics des
 After we're confident our value function $v_\pi$ accurately estimates what total reward we can expect following $\pi$, can we learn a new policy, $\pi_1$ that is expected to perform better under the same value function?   In general, setting the new policy $\pi_1$ to recommend actions leading to higher-valued states than what $\pi$ recommends is called **Policy Improvement**.  
 
 In the simple case that we want our policy to always take the best action, i.e. the action leading to the state with highest value, we have:
-
 $$
-\pi_1(s) = \argmax_{a \in \text{actions(s)}} \underset  {s' \in \text{move}(s,a)} Ev_{\pi}(s')
+\begin{equation}
+\pi_1(s) = \underset  {a \in \text{actions(s)}} {argmax} \underset  {s' \in \text{move}(s,a)} Ev_{\pi}(s')
+\end{equation}
 $$
-
-
 The original policy $\pi$ came with no guarantees, so $\pi_1$ might be different. We will always expect higher total reward from following policy $\pi_1$ over $\pi$ if, for every state $s$,  $\pi_1$ recommends an action leading to a state of greater or equal value than what $\pi$ recomends (from the *policy imporovment theorem* [proof?]).
 #### 3) Alternating between 1) and 2)
 
