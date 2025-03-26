@@ -10,18 +10,16 @@ States with N non-empty cells are placed in band N.
 import numpy as np
 import matplotlib.pyplot as plt
 
-MIN_BOX_SIZE = 15
-MAX_BOX_SIZE = 50
+MIN_BOX_SIZE = 3
 
 
 class BoxOrganizer(object):
-    _DIMS = {'layer_space_px': 20,  # padding between layers
-             'min_space_size': 6,  # a "space" is 1/3 of a game board side length.
-             'max_space_size': 12,  # min layer_size = (max_space_size + 2 * layer_space_px)
+    _DIMS = {'layer_padding_px': 20,  # padding on either side of the layer division bar
              'grid_padding_frac': 0.05,   # multiply by grid_size to get padding on either side of a grid.
-             'bar_thickness': 8}
+             'bar_thickness': 8  # thickness of the layer division bar
+             }
 
-    def __init__(self, layers, size_wh=(1900, 880)):
+    def __init__(self, layers, size_wh=(1900, 2080)):
         """
         Calculate layout.
         :param layers: list of lists of boxes, each list is a layer:
@@ -30,10 +28,11 @@ class BoxOrganizer(object):
              }
         :param size_wh:  size of the window in pixels (width, height).
         """
+        self._min_layer_size = 50
         self._layers = layers
         self._size_wh = size_wh
         self._layer_spacing = self._calc_layer_spacing()
-        self._box_spacing = self._calc_box_positions()
+        self._box_positions = self._calc_box_positions()
         self._bkg_color = (127, 127, 127)
         self._line_color = (0, 0, 0)
 
@@ -51,10 +50,8 @@ class BoxOrganizer(object):
         # for now, just evenly space the layers
         spacing = []
         y = 0
-        import ipdb
-        ipdb.set_trace()
-        layer_h = int(self._size_wh[1] / len(self._layers))
         bar_h = self._DIMS['bar_thickness']
+        layer_h = int((self._size_wh[1]-bar_h * (len(self._layers)-1)) / len(self._layers))
         for i, layer in enumerate(self._layers):
             layer_def = {'y': (y, y + layer_h),
                          'n_boxes': len(layer)}
@@ -66,30 +63,68 @@ class BoxOrganizer(object):
         return spacing
 
     def _calc_box_positions(self):
-        box_pos = []
+        """
+        +-------------------------+
+        |                         |    
+        | +-+  +-+  +-+  +-+  +-+ |
+        | | |  | |  | |  | |  | | | V & H spacing divides space between boxes evenly.
+        | +-+  +-+  +-+  +-+  +-+ |
+        |                         |
+        | +-+  +-+  +-+  +-+  +-+ |
+        | | |  | |  | |  | |  | | |
+        | +-+  +-+  +-+  +-+  +-+ |
+        |                         |
+        +-------------------------+
+
+
+        """
+
+        box_pos = {}
         for i, layer in enumerate(self._layers):
-            w, h = self._size_wh[0], self._layer_spacing[i]['y'][1] - self._layer_spacing[i]['y'][0]
+            if i == len(self._layers)-1:
+                import ipdb
+                ipdb.set_trace()
+            top_y = self._layer_spacing[i]['y'][0]
+            bottom_y = self._layer_spacing[i]['y'][1]
+            w, h = self._size_wh[0],  bottom_y - top_y
+
             # Use area of layer / number of boxes as upper bound for box size.
             n_boxes = len(layer)
-            box_s, box_p = self._get_box_size(n_boxes, w=w, h=h)
-            n_rows = h // (box_s + 2 * box_p)
-            n_cols = w // (box_s + 2 * box_p)
-            x, y = 0, self._layer_spacing[i]['y'][0]
+
+            # box_p is padding on all sides of each box
+            # box_s is the size of the box
+            box_s, box_p, n_rows, n_cols = self._get_box_size(n_boxes, w=w, h=h)
+            print("\tLayer %i will have %i states in %i x %i boxes." % (i, n_boxes, n_rows, n_cols))
+            n_rows, n_cols = self._row_col_adjust(n_boxes, box_s, w, h)
+            print("\t\tAdjusted to %i x %i boxes." % (n_rows, n_cols))
+            # calculate extra space, and divide it between rows and columns
+            v_space = h - n_rows * box_s
+            v_pad = v_space / (n_rows + 1)
+
             ind = 0
             for row in range(n_rows):
-                row_len = min(n_cols, len(layer) - row * n_cols)
-                x_lefts = np.linspace(0, w, row_len, endpoint=False) - box_s / 2
+                y = int(top_y + v_pad + row * (box_s + v_pad))
+
+                row_len = min(n_cols, len(layer) - row * n_cols)  # last row may have fewer boxes
+                h_space = w - row_len * box_s
+                h_pad = h_space / (row_len + 1)  # between boxes on this row
+
+                x_lefts = [int(h_pad + col * (box_s + h_pad)) for col in range(row_len)]
                 for col in range(row_len):
-                    box_pos[layer[ind]['id']] = {'x': (x_lefts[col], x_lefts[col]+box_s),
-                                                 'y': (y, y+box_s)}
+                    x = x_lefts[col]
+                    box_pos[layer[ind]['id']] = {'x': (x, x + box_s),
+                                                 'y': (y, y + box_s)}
                     ind += 1
+
+            assert ind == len(layer), "Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (
+                ind, len(layer))
+        return box_pos
 
     def _get_box_size(self, n, w, h):
         """
         Largest box size s so that n boxes of size s x s can fit in a space with dimensions w x h.
 
         Arrange in a grid with as little wasted space as possible.
-        Padding is a fraction of the box size, and applies to all four sides of the box.
 
         :param n: number of boxes to fit in the space
         :param w: width of the space
@@ -98,36 +133,118 @@ class BoxOrganizer(object):
         """
         # Find the largest square that can fit in the space
         s = min(w, h)
-        while s > MIN_BOX_SIZE:
+        while s >= MIN_BOX_SIZE:
             pad = int(s * self._DIMS['grid_padding_frac'])
             n_rows = h // (s + 2 * pad)
             n_cols = w // (s + 2 * pad)
+
+            # print("\tTrying box size %s: %s x %s = %s (<>%s)" % (s, n_rows, n_cols, n_rows*n_cols, n))
             if n_rows * n_cols >= n:
-                return s, pad
+                return s, pad, n_rows, n_cols
             s -= 1
-        return s, pad
+
+        if s == MIN_BOX_SIZE:
+            raise ValueError("Box size too small to fit all boxes: W=%i, H=%i, N=%i" % (w, h, n))
+
+        return s, pad, n_rows, n_cols
 
     def draw(self):
         img = np.zeros((self._size_wh[1], self._size_wh[0], 3), np.uint8)
         img[:, :] = self._bkg_color
         # draw layer bars
         for layer in self._layer_spacing:
-            y0, y1 = layer['y']
             if 'bar_y' in layer:
                 img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
         # draw boxes
+        for l_ind, layer_boxes in enumerate(self._layers):
+            print("Drawing layer", l_ind)
+            for box in layer_boxes:
+                x = self._box_positions[box['id']]['x']
+                y = self._box_positions[box['id']]['y']
+                img[y[0]:y[1], x[0]:x[1]] = box['color']
+
         return img
+
+    @staticmethod
+    def get_h_v_spacing(n_rows, n_cols, box_size, w, h):
+        v_space = h - n_rows * box_size
+        v_pad = v_space / (n_rows + 1)
+
+        h_space = w - n_cols * box_size
+        h_pad = h_space / (n_cols + 1)
+        return h_pad, v_pad
+
+    def _row_col_adjust(self, n_boxes, box_size, w, h):
+        """
+        Adjust the number of rows and columns to minimize wasted space.  If (n_rows, n_cols) is be the output 
+        of _get_box_size, they are the numbe of rows and columns that will fit the largest box size with enough
+        space to fit n_boxes.  This may contain extra rows and/or a mostly empty final row.  
+
+
+
+
+        1. Calculate how many (whole) rows and columns of boxes can fit (should be >= n_boxes).
+        2. Assume columns are spaced as close as possible, count the rows.
+        3. Adjust the number of columns and rows until each box as roughly the same amount of empty space around it
+           (assuming boxes are spread as evenly as possible).
+        4. Reduce the number of columns until the last row is as full as possible.
+        5. Return the adjusted number of rows and columns.
+
+
+
+        :param n_boxes: number of boxes to fit 
+        :param box_size: size of the boxes
+        :param w: width of the space
+        :param h: height of the space
+        :returns: n_rows, n_cols, adjusted to eaven out empty space.
+        """
+        n_rows, n_cols = np.floor(h / box_size).astype(int),  np.floor(w / box_size).astype(int)
+        n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
+        h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
+        last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
+
+        while h_pad < v_pad:
+            # remove a column, add it to the end of the last row, creat a new row if needed.
+            last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
+            n_cols -= 1
+            n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
+            h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
+
+        # Decide if this result is better than the previous one
+        # by which has smaller difference in h/v padding.
+        if abs(h_pad - v_pad) > abs(last['h_pad'] - last['v_pad']):
+            n_rows_used = last['n_rows']
+            n_cols = last['n_cols']
+
+        # reduce the number of columns until the last row is as full as possible (but don't increase the number of rows)
+        if n_rows_used == 1:
+            return 1, n_boxes
+
+        new_n_cols = n_cols
+        new_n_rows = n_rows_used
+        while new_n_rows == n_rows_used:
+            new_n_cols -= 1
+            new_n_rows = np.ceil(n_boxes / new_n_cols).astype(int)
+
+        n_rows, n_cols = new_n_rows-1, new_n_cols+1
+        return n_rows, n_cols
 
 
 def test_BoxOrganizer():
     next_id = [0]
 
     def make_boxes(n):
-        boxes = [{'id': next_id[0] + i} for i in range(n)]
+
+        boxes = [{'id': next_id[0] + i,
+                  'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
+                 for i in range(n)]
+
         next_id[0] += n
+
         return boxes
 
-    layers = [make_boxes(1), make_boxes(9), make_boxes(72), make_boxes(729)]
+    layers = [make_boxes(1), make_boxes(2), make_boxes(20), make_boxes(2200),
+              make_boxes(2), make_boxes(729), make_boxes(72)]
     bo = BoxOrganizer(layers)
     img = bo.draw()
     plt.imshow(img)
