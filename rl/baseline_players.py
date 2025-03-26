@@ -47,15 +47,13 @@ class HeuristicPlayer(Policy):
 
         # Rule 1, any winning moves?
         for action in actions:
-            new_state = game_state.copy()
-            new_state.move(self.player, action)
-            if new_state.check_terminal() == self.winning_result:
+            new_state = game_state.clone_and_move(action,self.player)
+            if new_state.check_endstate() == self.winning_result:
                 return action
         # Rule 2, any blocking moves?
         for action in actions:
-            new_state = game_state.copy()
-            new_state.move(self.opponent, action)
-            term = new_state.check_terminal()
+            new_state = game_state.clone_and_move(action,self.opponent)
+            term = new_state.check_endstate()
             if term in [self.opponent, Result.DRAW]:
                 return action
         # Rule 3, center

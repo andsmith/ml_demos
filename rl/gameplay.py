@@ -8,7 +8,7 @@ from baseline_players import RandomPlayer, HeuristicPlayer
 from multiprocessing import Pool, cpu_count
 import time
 
-VALID_STATES = Game.enumerate_states()[1]
+#VALID_STATES = Game.enumerate_states()[1]
 
 class Match(object):
     """
@@ -37,15 +37,15 @@ class Match(object):
         while True:
             for player in self._players:
                 action = player.recommend_action(self._game)
-                self._game.move(player.player, action)
-                if self._self_check:
-                    if self._game not in VALID_STATES:
-                        raise ValueError("Invalid state: %s" % self._game)
+                self._game=self._game.clone_and_move(action, player.player)
+                #if self._self_check:
+                    #if self._game not in VALID_STATES:
+                    #    raise ValueError("Invalid state: %s" % self._game)
                 if verbose:
                     print("Player %s marks cell (%d, %d):" % (player.player, action[0], action[1]))
                     print(self._game)
                     print("\n")
-                w = self._game.check_terminal()
+                w = self._game.check_endstate()
                 if w is not None:
                     return w
 
@@ -107,8 +107,6 @@ class Tournament(object):
               ['player2'] + self._results['player2_first']['player2']))
         print("\t\tDraws: %d\n\n\n" % (self._results['player1_first']['draw'] + self._results['player2_first']['draw']))
 
-        import pprint
-        pprint.pprint(self._results)
 
     def run(self):
         """

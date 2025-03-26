@@ -1,4 +1,6 @@
 from enum import IntEnum
+
+
 class Result(IntEnum):
     X_WIN = 1
     O_WIN = 2

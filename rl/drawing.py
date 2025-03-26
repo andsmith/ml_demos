@@ -2,7 +2,7 @@ import numpy as np
 from game_base import Mark
 from util import get_annulus_polyline
 import cv2
-
+from colors import MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 
 class MarkerArtist(object):
     """
@@ -10,12 +10,12 @@ class MarkerArtist(object):
     Scale appropriately.
     """
 
-    def __init__(self, color_x, color_o, color_d):
+    def __init__(self, color_x=MPL_BLUE_RGB, color_o=MPL_ORANGE_RGB, color_d=MPL_GREEN_RGB):
         self._font = cv2.FONT_HERSHEY_COMPLEX
         self._small_cutoff_cell_size = 15
-        self._color_o = color_o
-        self._color_x = color_x
-        self._color_d = color_d
+        self.color_o = color_o
+        self.color_x = color_x
+        self.color_d = color_d
         self._SHIFT_BITS = 5
         self._SHIFT = 1 << self._SHIFT_BITS
         self._point_cache = {}  #
@@ -34,14 +34,14 @@ class MarkerArtist(object):
         center_int = (int(x), int(y))
 
         if marker == "X":
-            color = self._color_x
-            dot_shape = 'x' if space_size > 15 else 'square'
+            color = self.color_x
+            dot_shape = 'x' if space_size >= self._small_cutoff_cell_size else 'square'
         elif marker == "O":
-            color = self._color_o
-            dot_shape = 'o' if space_size > 15 else 'circle'
+            color = self.color_o
+            dot_shape = 'o' if space_size >= self._small_cutoff_cell_size else 'circle'
         elif marker == "D":
             dot_shape = 'd'
-            color = self._color_d
+            color = self.color_d
             font_scale = space_size / 50
             font_thickness = max(1, int(space_size / 20))
 
@@ -49,7 +49,7 @@ class MarkerArtist(object):
         circle_rad = np.max([2, marker_size//1.6]).astype(int)
         box_rad = np.max([1, marker_size//2]).astype(int)
         x_rad = np.max([1, marker_size//2]).astype(int)
-        line_width = np.max([1, marker_size//5]).astype(int)
+        line_width = np.max([1, marker_size//4]).astype(int)
 
         if dot_shape == 'square':
             x, y = int(x), int(y)
@@ -84,20 +84,44 @@ class MarkerArtist(object):
 def test_terminals():
     from tic_tac_toe import Game
 
-    def show_strs(strs):
+    def show_strs(strs, bbox):
         game = Game.from_strs(strs)
-        img = game.get_img(space_size=50)
+        img = game.get_img(space_size=50, draw_box=bbox)
         cv2.imshow("Tic Tac Toe", img[:, :, ::-1])
         cv2.waitKey(0)
+
     show_strs(["XOO",
                "OXX",
-               "XOO"])
+               "XOO"], bbox = True)
+    show_strs(["XOO",
+               "OXX",
+               "XOO"], bbox = False)
     show_strs(["XOO",
                "XXX",
-               "XOO"])
+               "XOO"], bbox = True)
+    show_strs(["XOO",
+               "XXX",
+               "XOO"], bbox = False)
     show_strs(["XOO",
                " OX",
-               "XOO"])
+               "XOO"], bbox = True)
+    show_strs(["XOO",
+               " OX",
+               "XOO"], bbox = False)
+    show_strs(["XXO",
+               "XOX",
+               "OOO"], bbox = True)
+    show_strs(["XXO",
+               "XOX",
+               "OOO"], bbox = False)
+    
+    show_strs(["XXO",
+               "X X",
+               "O O"], bbox = True)
+    show_strs(["XXO",
+               "X X",
+               "O O"], bbox = False)
+    
     cv2.destroyAllWindows()
 
 
@@ -133,6 +157,6 @@ def test_img():
 
 
 if __name__ == "__main__":
-    # test_img()
+    #test_img()
     test_terminals()
     # get_draw()

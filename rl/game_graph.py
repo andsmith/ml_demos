@@ -1,162 +1,151 @@
 from game_base import Mark, Result
-from tic_tac_toe import Game
+from tic_tac_toe import get_game_tree_cached, Game
 import numpy as np
 import logging
 
 import cv2
 
-
-class GameGraph(object):
+'''
+class InteractiveGameGraph(object):
     """
-    Arrange game states to show the graph structure.
+    The game graph shows the all possible (reinforcement, not game) states and transition on a single image.
 
-    The top row will show each possible initial state.
-    The second row will show the states that can be reached from the initial states, and so on.
-    Lines will connect states to their successors.
+    As RL algorithms are applied, the value function v(s) of each state can be visualized. 
+    [FUTURE:  Mouseover to show transition probabilities of each action according to the policy.]
+
+    This will be visually incomprehensiblem, so the user can click to select/deselect states.  
+    When a state is selected, all states leading back to an initial state are also selected.  
+    Selected states are shown blown up, superimposed over the full graph.  
+    Edges between selected states are also made more visible.
+
+    Selected states have a "status" area underneath them, which shows the value function, policy, etc.
+
+    LAYOUT:
+        1. The top row will show the 10 possible initial states, the next four rows show the RL agent's possible states after
+           1, 2, 3, 4 rounds of play (1 agent move and one opponent move, unless the first move ends the game).
+        2. The second row will show the 720 states after the first round, in 10 groups below each group's initial state. 
+
     """
 
-    def __init__(self, player=Mark.X):
+    def __init__(self, size=(1900, 880), player=Mark.X):
+        self._grid_size_range = 19, 100  # (smallest, largest)
+        self._size = size
+        self._bkg_color = (255, 255, 255)
+        self._line_color = (0, 0, 0)
         self._player = player
         self._terminal, self._children, self._parents, self._initial = Game.get_game_tree(self._player)
 
-        self._bkg_color = (255, 255, 255)
-        self._line_color = (0, 0, 0)
 
-    def _is_terminal(self, state):
-        if state in self._initial:
-            return False
-        return self._terminal[state] is not None
+def _get_layer_num(game_state):
+    # TODO:  Make every time it's x's turn aligned.
+    return np.sum(game_state.state != Mark.EMPTY)
 
-    def _get_layers(self, depth):
+''''''
+class GameGraph(object):
+    """
+    Arrange game states to show the graph structure of the game.
+
+    States will be in layers, all states in a layer will have the same number of marks made so far.
+    States with a single parent will be approximately under their parent.
+    States with multiple parents will be placed in the middle of their parents.
+
+    Lines will connect states to their successors.
+
+    """
+    _DIMS = {'layer_space_px': 2,
+             'min_space_size': 6,  # a "space" is 1/3 of a grid cell.
+             'max_space_size': 12,  # min layer_size = (max_space_size + 2 * layer_space_px)
+             'grid_padding_frac': 0.05,   # multiply by grid_size to get padding on either side of a grid.
+             'bar_width': 8}
+
+    def __init__(self, size=(1900, 880), player=Mark.X):
+        self._player = player
+        self._tree = get_game_tree_cached(self._player)
+        self._states, self._children, self._parents, self._initial = self._tree.get_game_tree()
+        self._size = size
+        # sort states by layers, determine layer (vertical) spacing.
+        self._layer_numbers = {s: _get_layer_num(s) for s in self._states}
+        self._layers = [[s for s in self._states if self._layer_numbers[s] == i] for i in range(10)]
+        l_sizes = [len(l) for l in self._layers]
+        print("Layer sizes:")
+        print("\n\t".join([f"{i}: {s}" for i, s in enumerate(l_sizes)]))
+
+        self._layer_spacing = self._calc_layer_spacing()
+        import pprint
+        pprint.pprint(self._layer_spacing)
+
+        # within each layer determine grid sizing
+
+        # then which grid cell each state will be placed in, depeding on where it's parents are.
+
+    def _calc_layer_spacing(self):
         """
-        Round 0 at the top, etc.
-        :param depth: number of rounds (1 means only initial states)
-        :return: list of lists, each list contains the states of a round
-           dict(state: round_num/layer)
+        Find vertical spacing of the layer boundaries.
+        1 Determine the most maximum-sized grids that could fit on one row, the vertical space is the minimum row size.
+        2 Determine how many rows have the minimum or fewer, these are the minimum-sized rows.
+        3 Determine the extra space, divide it among the rest of the rows proportionally to the number of states in each row.
         """
-        # Breadth first search, organize by layers
-        # import ipdb; ipdb.set_trace()
-        states_layers = {state: 0 for state in self._initial}
-        layers = [self._initial]
-        for l in range(depth-1):
-            next_layer = []
-            for state in layers[-1]:
-                for (child_state, _) in self._children[state]:
-                    if child_state not in states_layers:
-                        states_layers[child_state] = l+1
-                        next_layer.append(child_state)
-            layers.append(next_layer)
+        grid_padding_fraction = self._DIMS['grid_padding_frac']
+        min_space_size = self._DIMS['min_space_size']
+        max_space_size = self._DIMS['max_space_size']
+        bar_width = self._DIMS['bar_width']
+        layer_sp = self._DIMS['layer_space_px']
 
-        return layers, states_layers
+        max_side_len, _ = Game.get_grid_dims(max_space_size)
+        max_grid_pad = int(max_side_len * grid_padding_fraction)
 
-    def _get_positions(self, graph_layers, all_states, img_size):
-        """
-        Space out the initial states in the top row.
-        Below each state, in the next row, place the successor states in rows then columns.
-        If a successor state is already placed, don't place it again.
-        Attempt to make each layer the right size for the number of states. (so every state/grid can be the same size)
-        :returns: dict(state: (x, y)) (upper-left corner of the state grid's position in the image)
-        """
-        pos = {}
-        layer_padding = 10
-        layer_bar_w = 4
-        w, h = img_size
-        max_grid_size = 100
+        # 1. Find the number of max-sized grids that can fit on one row horizontally,
+        n_grids = np.floor((self._size[0] - 2 * layer_sp) // (max_side_len + 2 * max_grid_pad)).astype(int)
+        # then the height of this row is the minimum (vertical) space:
+        tiny_row_h = max_side_len + 2 * max_grid_pad + 2 * layer_sp
+        if tiny_row_h * len(self._layers) > self._size[1]:
+            raise ValueError(f"Too many layers to fit in the vertical space: {tiny_row_h * len(self._layers)} > {self._size[1]}")
+        print("Tiny row_height:", tiny_row_h)
+        import ipdb
+        ipdb.set_trace()
+        # 2. Find the number of rows that have the minimum or fewer grids:
+        tiny_layers = [i for i, l in enumerate(self._layers) if len(l) <= n_grids]
+        n_big_layers = len(self._layers) - len(tiny_layers)
 
-        def _get_dims(grid_size, grid_padding):
-            # place each row spaced evenly if only one row
-            # else stack into rows/cols with padding]
-            x, y = layer_padding, layer_padding
-            state_positions = {}
-            bar_positions = []  # [{'x_span': (x1, x2), 'y_span': (y1, y2)}, ...]
-            for l, layer in enumerate(graph_layers):
-                max_cols = (w - 2 * layer_padding) // (grid_size+grid_padding)
-                n = len(layer)
-                if n <= max_cols:
-                    extra_space = w - n * grid_size - 2 * layer_padding
-                    extra_padding = extra_space // (n -1)
-                    x_positions = np.arange(n) * (grid_size + extra_padding) + layer_padding
-                    y_positions = y * np.ones(n)
-                    for i, state in enumerate(layer):
-                        state_positions[state] = (x_positions[i], y_positions[i])
-                    y += grid_size+layer_padding
-                else:
-                    n_cols = max_cols
-                    n_rows = np.ceil(n / n_cols).astype(int)
-                    x_positions = np.arange(n_cols) * (grid_size + grid_padding) + layer_padding
-                    y_positions = np.arange(n_rows) * (grid_size + grid_padding) + layer_padding
-                    print(x_positions[-1], y_positions[-1])
-                    for i, state in enumerate(layer):
-                        row = i // n_cols
-                        col = i % n_cols
-                        state_positions[state] = (x_positions[col], y_positions[row])
-                    y += n_rows*(grid_size+layer_padding)
-                # draw a bar to separate the layers
-                if l < len(graph_layers) - 1:
-                    bar_positions.append({'x_span': (layer_padding, w-layer_padding),
-                                          'y_span': (y, y+layer_bar_w)})
-                    y += layer_bar_w + layer_padding
+        # 3. Find the remaining space, divide it among the remaining rows:
+        remaining_states = np.array([len(l) for l in self._layers])
+        remaining_states[tiny_layers] = 0
+        used_v_space = len(tiny_layers) * tiny_row_h + (len(tiny_layers) - 1) * bar_width if len(tiny_layers) > 0 else 0
+        remaining_v_space = self._size[1] - used_v_space
+        rel_heights = remaining_states / np.sum(remaining_states)
+        slack_space = remaining_v_space - n_big_layers * tiny_row_h  # only divide up area in excess of tiny_row_h
+        non_tiny_heights = slack_space * rel_heights + tiny_row_h  # Add divided proportion to tiny_row_h
 
-            return state_positions, y, bar_positions
-
-        # find the right grid size
-        grid_size = max_grid_size
-        while True:
-
-            grid_padding = max_grid_size // 4
-            
-            state_positions, y, bar_positions = _get_dims(grid_size, grid_padding)
-            print("Testing grid size %s:  %i < %i?" % (grid_size, y, h))
-            if y < h:
-                break
-            grid_size -= 1
-
-        return {'positions': state_positions,
-                'grid_size': grid_size,
-                'grid_padding': grid_padding,
-                'bar_positions': bar_positions}
-
-    def build_graph(self, img_size=(3000, 2000), depth=5):
-        img = np.zeros((img_size[1], img_size[0], 3), np.uint8)
-        img[:] = self._bkg_color
-
-        graph_layers, all_states = self._get_layers(depth)
-        positions = self._get_positions(graph_layers, all_states, img_size)
-        self._draw(img, graph_layers, positions)
-        return img
-
-    def _draw(self, img, layers, pos):
-        """
-        :param img: numpy array (height, width, 3)
-        :param layers: list of lists of states
-        :param pos: dict(state: (x, y))
-        """
-        grid_size = pos['grid_size']
-        grid_padding = pos['grid_padding']
-        state_positions = pos['positions']
-        bar_positions = pos['bar_positions']
-
-        def _draw_state(img, state, x, y):
-            state_img = state.get_img(grid_size//3)
-            g_h, g_w = state_img.shape[:2]
-            x, y = int(x), int(y)   
-            print(x, g_h, y, g_w)
-            img[y:y+g_h, x:x+g_w] = state_img
-
-        for l, layer in enumerate(layers):
-            for state in layer:
-                x, y = state_positions[state]
-                _draw_state(img, state,x, y)
-
-            for bar in bar_positions:
-                x1, x2 = bar['x_span']
-                y1, y2 = bar['y_span']
-                img[x1:x2, y1:y2] = self._line_color
+        # 4. Put it all together
+        tiny_row_h = max_side_len + 2 * max_grid_pad + 2 * layer_sp
+        y = 0
+        v_pos = []
+        for l_ind in range(len(self._layers)):
+            row_dims = {}
+            if l_ind in tiny_layers:
+                row_dims['space_size'] = max_space_size
+                row_dims['grid_pad'] = max_grid_pad
+                row_dims['side_len'] = max_side_len
+                row_dims['layer_y'] = y, y + tiny_row_h
+                y += tiny_row_h
+                if l_ind != len(self._layers) - 1:
+                    row_dims['bar_y'] = y, y + bar_width
+                    y += bar_width
+            else:
+                row_dims['layer_y'] = y, y + non_tiny_heights[l_ind]
+                y += non_tiny_heights[l_ind]
+                if l_ind != len(self._layers) - 1:
+                    row_dims['bar_y'] = y, y + bar_width
+                    y += bar_width
+                # other keys filled in later
+            v_pos.append(row_dims)
+        return v_pos
 
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     gg = GameGraph()
-    img = gg.build_graph()
-    cv2.imshow('game graph', img)
-    cv2.waitKey(0)
+    # img = gg.build_graph()
+    # cv2.imshow('game graph', img)
+    # cv2.waitKey(0)
+'''
