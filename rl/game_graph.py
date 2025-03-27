@@ -50,6 +50,10 @@ class GameGraphApp(object):
         self._click_state = None
         self._selected_states = [Game.from_strs(["XO ", "   ", "   "])]
 
+        # key by state, value is {'upper': [(x_left, y_left) , (x_right, y_right)],
+        #                         'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
+        self._appach_pts = self._find_attach_pts()
+
         # TODO: update these as states are selected/deselected/mouseovered/etc. rather than every frame.
         self._s_neighbors = []  # states that are neighbors of the selected states list of lists (detph,then state)
         self._n_edges = []  # binary edge matrix, len(s_neighbors[d]) x len(s_neighbors[d+1])
@@ -58,6 +62,48 @@ class GameGraphApp(object):
         #             'thickness': int,
         #             'coords': [line1, line2, ...]}
         #   where each line is a float numpy array (line strip) of (x1, y1, x2, y2) in pixels.
+
+    def _find_attach_pts(self):
+        """
+        Attachment points are the upper two and lower two endpoints of the two vertical grid lines.
+
+        Those are found by combining these two:
+
+            * relative points:  self._state_dims[level] has the space size and the attachment points for images of 
+              that size: 
+                          { 'img_size': grid image's side length
+                            'line_t': line width for the 4 grid lines and the bounding box
+                            'upper': [(x1, y1), (x2, y2)] attachment points for the upper grid line (floats, fractional pixels)
+                            'lower': [(x1, y1), (x2, y2)] attachment points for the lower grid line (same)
+                            'space_size': space_size
+                            'bar_w': grid line width, int }, and the
+
+            * image offsets:  self._positions[level] is a dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}
+
+        where:
+
+            box_positions, box = BoxOrganizerPlotter.get_layout()
+
+
+        :returns: dict[state] = {'upper': [(x_left, y_left) , (x_right, y_right)],
+                                 'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
+        """
+        attach = {}
+        for layer, state_list in enumerate(self._states_by_layer):
+            print("Getting attachment points for layer %i with %i states" % (layer, len(state_list)))
+            dims = self._state_dims[layer]
+            upper_pts = np.array(dims['upper'])
+            lower_pts = np.array(dims['lower'])
+
+            for state_info in state_list:
+                state = state_info['state']
+                box_info = self._positions[state]
+                x_min = box_info['x'][0]
+                y_min = box_info['y'][0]
+                offset = np.array([x_min, y_min])
+                attach[state] = {'upper': upper_pts + offset,
+                                 'lower': lower_pts + offset}
+        return attach
 
     def _init_graphics(self):
         print("Caching images...")
@@ -124,13 +170,14 @@ class GameGraphApp(object):
         self._box_placer = BoxOrganizerPlotter(self._states_by_layer, spacing=self._layer_spacing, size_wh=self._size)
 
         # 3. get the size of a box in each layer, then make the images
-        self._positions, self._box_dims, _ = self._box_placer.get_layout()
+        self._positions, self._box_sizes, _ = self._box_placer.get_layout()
         self._state_images = {}
+        self._state_dims = []  # from Game.get_space_size(box_size) for each layer
 
         logging.info("Generating images...")
         for l_ind, layer_states in enumerate(self._states_by_layer):
             logging.info(f"\tLayer {l_ind} has {len(layer_states)} states")
-            box_size = self._box_dims[l_ind]['box_side_len']
+            box_size = self._box_sizes[l_ind]['box_side_len']
             logging.info(f"\tBox_size: {box_size}")
             space_size = Game.get_space_size(box_size)
             logging.info(f"\tUsing space_size: {space_size}")
@@ -143,6 +190,7 @@ class GameGraphApp(object):
                 # import pprint
                 # pprint.pprint(box_dims[l_ind]['])
                 self._state_images[state] = state.get_img(box_dims)
+            self._state_dims.append(box_dims)
 
         print("\tmade ", len(self._state_images))
 
@@ -190,7 +238,6 @@ class GameGraphApp(object):
     def _draw_edges(self, frame):
         """
         Add edge-lines to the image.
-        """
         for depth in self._edge_lines:
             for edge_info in self._edge_lines[depth]:
                 color = edge_info['color']
@@ -198,6 +245,24 @@ class GameGraphApp(object):
                 for line in edge_info['coords']:
                     cv2.polylines(frame, [(line).astype(int)], isClosed=False,
                                   color=color, thickness=thickness, lineType=cv2.LINE_AA)
+        """
+
+        # put a red dot on every attachment point
+        print("Drawing attachment points for %i states..." % len(self._appach_pts))
+        #import ipdb; ipdb.set_trace()
+        for state, attach_info in self._appach_pts.items():
+            x, y = attach_info['upper'][0]
+            x,y=int(x),int(y)
+            frame[y:y+3, x:x+3, :] = [255, 0, 0]
+            x, y = attach_info['upper'][1]
+            x,y=int(x),int(y)
+            frame[y:y+3, x:x+3, :] = [0, 255, 0]
+            x, y = attach_info['lower'][0]
+            x,y=int(x),int(y)
+            frame[y:y+3, x:x+3, :] = [0, 0, 255]
+            x, y = attach_info['lower'][1]
+            x,y=int(x),int(y)
+            frame[y:y+3, x:x+3, :] = [255, 128, 0]
 
     def _scan_neighbors(self):
         """
@@ -215,7 +280,7 @@ class GameGraphApp(object):
         if depth == 0:
             return
         states_seen = {s for s_list in self._s_neighbors for s in s_list}
-        edges_seen = {} # {(from_state, to_state): None}
+        edges_seen = {}  # {(from_state, to_state): None}
         print("Scanning neighbors for %i selected states..." % len(states_seen))
         for d in range(1, depth+1):
             # Scan states to get next set of parents/children
@@ -267,9 +332,9 @@ class GameGraphApp(object):
             cv2.rectangle(frame, (x_span[0], y_span[0]), (x_span[1], y_span[1]), COLOR_SELECTED, thickness=1)
 
         # draw edges
-        #self._scan_neighbors()
-        #self._make_edge_list()
-        #self._draw_edges(frame)
+        # self._scan_neighbors()
+        # self._make_edge_list()
+        self._draw_edges(frame)
 
         # draw mouseover state
         # draw lines
@@ -338,7 +403,7 @@ class GameGraphApp(object):
 
 def run_app():
 
-    app = GameGraphApp(no_plot=False, max_levels=5)
+    app = GameGraphApp(no_plot=False, max_levels=3)
     # import ipdb; ipdb.set_trace()
 
     frame = app._make_frame()

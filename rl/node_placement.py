@@ -31,7 +31,7 @@ class BoxOrganizer(object):
         self._layers = layers
         self._size_wh = size_wh
         self._layer_spacing = self._calc_layer_spacing() if spacing is None else spacing
-        self._box_positions, self._box_dims = self._calc_box_positions()
+        self._box_positions, self._box_sizes = self._calc_box_positions()
         self._bkg_color = (127, 127, 127)
         self._line_color = (0, 0, 0)
 
@@ -39,7 +39,7 @@ class BoxOrganizer(object):
         """
         return the computed positions of all the boxes & divison lines.
         """
-        return self._box_positions, self._box_dims, self._layer_spacing
+        return self._box_positions, self._box_sizes, self._layer_spacing
 
     def _calc_layer_spacing(self):
         # for now, just evenly space the layers
@@ -74,9 +74,9 @@ class BoxOrganizer(object):
 
         :returns: 
             box_pos: dict -> box_id -> {'x': (left, right), 'y': (top, bottom)}
-            box_dims: list, for each layer, a dict -> {'box_side_len': int, 'n_rows': int, 'n_cols': int}
+            box_sizes: list, for each layer, a dict -> {'box_side_len': int, 'n_rows': int, 'n_cols': int}
         """
-        box_dims = []
+        box_sizes = []
         box_pos = {}
         for i, layer in enumerate(self._layers):
             top_y = self._layer_spacing[i]['y'][0]+1
@@ -118,8 +118,8 @@ class BoxOrganizer(object):
             if ind != len(layer):
                 raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (ind, len(layer)))
 
-            box_dims.append({'box_side_len': box_s, 'n_rows': n_rows, 'n_cols': n_cols})
-        return box_pos, box_dims
+            box_sizes.append({'box_side_len': box_s, 'n_rows': n_rows, 'n_cols': n_cols})
+        return box_pos, box_sizes
 
     def _get_box_size(self, n, w, h):
         """

@@ -133,10 +133,10 @@ class Game(object):
         """
         grid_line_width = max(1, int(space_size * bar_w_frac))
         img_side_len = space_size * 3 + grid_line_width * 4
-        upper = [(space_size + 3 * grid_line_width / 2, 0),
-                 (space_size * 2 + 5 * grid_line_width / 2, 0)]
-        lower = [(upper[0][0], img_side_len),
-                 (upper[1][0], img_side_len)]
+        upper = [(space_size + 3 * grid_line_width / 2, grid_line_width),
+                 (space_size * 2 + 5 * grid_line_width / 2, grid_line_width)]
+        lower = [(upper[0][0], img_side_len-grid_line_width),
+                 (upper[1][0], img_side_len-grid_line_width)]
 
         cell_x = (grid_line_width, grid_line_width + space_size)  # x range of first cell
         cell_y = (grid_line_width, grid_line_width + space_size)  # y range of first cell
