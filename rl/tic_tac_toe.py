@@ -12,16 +12,14 @@ import re
 import cv2
 from util import get_annulus_polyline
 import matplotlib.pyplot as plt
-from drawing import MarkerArtist
-from game_base import Mark, Result, WIN_MARKS
+from drawing import MarkerArtist, draw_win_line
+from game_base import Mark, Result, WIN_MARKS, get_cell_center
 import logging
 import pickle
 import os
-from colors import OFF_WHITE_RGB, DARK_NAVY_RGB
+from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_X, COLOR_O
 
 # Defaults to get_img
-COLOR_BG = OFF_WHITE_RGB
-COLOR_LINES = DARK_NAVY_RGB
 
 ARTIST = MarkerArtist()  # change default marker colors w/args here
 
@@ -88,8 +86,10 @@ class Game(object):
         return '\n'.join(['\t'*n_tabs + line for line in s.split('\n')])
 
     @staticmethod
-    def get_image_dims(space_size, bar_w_frac=.1):
+    def get_image_dims(space_size, bar_w_frac=.15, marker_padding_frac=.4):
         """
+        Get the dimensions dict for drawing a game state.
+
                 +--u--u--+
                 |  |  |  |
                 +--+--+--+
@@ -103,11 +103,19 @@ class Game(object):
         * The upper and lower attachment points are the 'u' and 'l' points, respectively.
         * The bounding box may or may not be drawn, but is included in the grid's side length.
 
+        Therefore, the smallest possible grid size is 7x7 pixels, space_size=1.
+        (The minimum bar width is 1 pixel, regardless of bar_w_frac.)
+
+        :param space_size: int, width in pixels of a squares in the 3x3 game grid.
+        :param bar_w_frac: float, width of the lines of the grid as a fraction of space_size.
+
         :returns: dict with
           'img_size': grid image's side length
           'line_t': line width for the 4 grid lines and the bounding box
           'upper': [(x1, y1), (x2, y2)] attachment points for the upper grid line (floats, non-integers if line_width is even)
           'lower': [(x1, y1), (x2, y2)] attachment points for the lower grid line
+            'space_size': space_size
+            'bar_w': grid line width
         """
         grid_line_width = max(1, int(space_size * bar_w_frac))
         img_side_len = space_size * 3 + grid_line_width * 4
@@ -115,91 +123,80 @@ class Game(object):
                  (space_size * 2 + 5 * grid_line_width / 2, 0)]
         lower = [(upper[0][0], img_side_len),
                  (upper[1][0], img_side_len)]
+
+        cell_x = (grid_line_width, grid_line_width + space_size)  # x range of first cell
+        cell_y = (grid_line_width, grid_line_width + space_size)  # y range of first cell
+        cell_x_offset = space_size + grid_line_width  # add one or two to cell_X to get the other cells
+        cell_y_offset = space_size + grid_line_width  # add one or two to cell_Y to get the other cells
+
+        # cell_span[row][col] = {'x': (x1, x2), 'y': (y1, y2)}
+        cell_spans = [[{'x': (cell_x[0] + col * cell_x_offset, cell_x[0] + col * cell_x_offset + space_size),
+                        'y': (cell_y[0] + row * cell_y_offset, cell_y[0] + row * cell_y_offset + space_size)}
+                       for col in range(3)]
+                      for row in range(3)]
+
         return {'img_size': img_side_len,
                 'line_t': grid_line_width,
+                'space_size': space_size,
+                'bar_w': grid_line_width,
                 'upper': upper,
-                'lower': lower}
+                'lower': lower,
+                'cells': cell_spans,
+                'marker_padding_frac': marker_padding_frac}
 
-    def get_img(self, space_size=11,
-                bar_w_frac=.1,
-                marker_padding_frac=.25,  # shrink markers within their cells by this much 
-                color_bg=OFF_WHITE_RGB,
-                color_lines=DARK_NAVY_RGB,
-                draw_box=True):
+    def get_img(self,
+                dims,
+                color_bg=COLOR_BG,
+                color_lines=COLOR_LINES,
+                draw_box=None):
         """
         Return an image of the game board & its dimension dictionary.
-        :param space_size: size of each cell in pixels
-        :param bar_w_frac: width of the lines as a fraction of space_size
-        :param marker_padding_frac: padding around the marker as a fraction of space_size
+
+        :param dims: dict, output of get_image_dims
         :param color_bg: color of the background
         :param color_lines: color of the lines
         :param draw_box: draw a bounding box around the grid (with (non)terminal color)
-        """
-        # Param to MarkerArtist.add_marker, what to draw for each Mark / Result
-        artist_arg = {Mark.X: 'X', Mark.O: 'O', Result.X_WIN: 'X', Result.O_WIN: "O", Result.DRAW: "D"}
-        # marker_colors = {Mark.X: self._color_x, Mark.O: self._color_o, Mark.EMPTY: self._color_draw}
-        space_size = space_size + 1 if space_size % 2 == 1 else space_size  # displays better with odd cell sizes
-        dims = self.get_image_dims(space_size, bar_w_frac)
+            if None, only draw the box around terminal states
 
-        img = np.zeros((dims['img_size'], dims['img_size'], 3), dtype=np.uint8)
+        """
+
+        space_size = dims['space_size']
+        line_t = dims['line_t']
+        img_s = dims['img_size']
+
+        # Create the image
+        img = np.zeros((img_s, img_s, 3), dtype=np.uint8)
         img[:, :] = color_bg
 
         # Draw grid, change color if terminal
         term = self.check_endstate()
-        color_lines = {Result.DRAW: self._mark_artist.color_d,
-                       Result.X_WIN: self._mark_artist.color_x,
-                       Result.O_WIN: self._mark_artist.color_o}[term] if term is not None else color_lines
+        color_lines = {Result.DRAW: COLOR_DRAW,
+                       Result.X_WIN: COLOR_X,
+                       Result.O_WIN: COLOR_O}[term] if term is not None else color_lines
+
+        drawing_box = (draw_box is None and term is not None) or draw_box
+
         for i in range(4):
-            if not draw_box and i not in [1, 2]:
+            if not drawing_box and i not in [1, 2]:
                 continue
-            z_0 = i * (space_size + dims['line_t'])
-            z_1 = z_0 + dims['line_t']
+            z_0 = i * (space_size + line_t)
+            z_1 = z_0 + line_t
             img[z_0:z_1, :] = color_lines
             img[:, z_0:z_1] = color_lines
 
         # Draw markers
-        centers = {}  # (i, j) -> (x, y) center of cell(i,j)
         for i in range(3):
             for j in range(3):
                 if self.state[i, j] == Mark.EMPTY:
                     continue
-                x_center = j * (space_size + dims['line_t']) + space_size / 2 + dims['line_t']
-                y_center = i * (space_size + dims['line_t']) + space_size / 2 + dims['line_t']
-                center = (x_center, y_center)
-                centers[(i, j)] = center
-                m_char = artist_arg[self.state[i, j]]
-                self._mark_artist.add_marker(img, center, space_size, m_char, pad_frac=marker_padding_frac)
+                self._mark_artist.add_marker(img, dims, (i, j), self.state[i, j])
 
         # Draw win lines (through the whole grid)
+        # TODO:  Skip for tiny images
         win_lines = self.get_win_lines()
         for line in win_lines:
-            orient = line['orient']
-            # First use the cell centers as the line endpoints
-            p0 = centers[line['c1']]
-            p1 = centers[line['c2']]
-            # Then extend outwards depending on the orientation
-            if orient in ['h', 'd']:
-                p0 = (0, p0[1])
-                p1 = (dims['img_size'], p1[1])
-            if orient in ['v', 'd']:
-                p0 = (p0[0], 0)
-                p1 = (p1[0], dims['img_size'])
-            x0, x1 = int(p0[0]), int(p1[0])
-            y0, y1 = int(p0[1]), int(p1[1])
+            draw_win_line(img, dims, line, color_lines)
 
-            cv2.line(img, (x0, y0), (x1, y1), color_lines, dims['line_t'], cv2.LINE_AA)
-
-        """
-        # Draw win/loss/draw label
-        term = self.check_endstate()
-        if term is not None:
-            # Draw marker over entire board
-            img_side_len = img.shape[0]
-            marker = artist_arg[term]
-            img_center = (img_side_len//2, img_side_len//2)
-            self._mark_artist.add_marker(img, img_center, img_side_len, marker,
-                                         pad_frac=marker_padding_frac * 1.5)  # pad more for full board marker
-        """
         return img
 
     def get_win_lines(self):
@@ -253,9 +250,11 @@ class GameTree(object):
 
     def __init__(self, player, verbose=False):
         self._player = player
-        
-        self._terminal = {} # state (Game): (None or one of the Result values).  Check here to if a state has been seen before.
-        self._children = {} # state: {child_state: (action, player) for each of state's child states}, w/the player & actions that led to them.
+
+        # state (Game): (None or one of the Result values).  Check here to if a state has been seen before.
+        self._terminal = {}
+        # state: {child_state: (action, player) for each of state's child states}, w/the player & actions that led to them.
+        self._children = {}
         self._parents = {}  # state: [state].  List of states that can lead to this state.
         self._initial = []  # List of initial states.
         self._verbose = verbose
@@ -347,7 +346,7 @@ def get_game_tree_cached(player, verbose=False):
         print("Loading game tree from cache file: ", filename)
         with open(filename, "rb") as f:
             data = pickle.load(f)
-        print("\tloaded game tree from cache file: %s"% filename)
+        print("\tloaded game tree from cache file: %s" % filename)
         return data
     else:
         print("Cache file not found: ", filename)
@@ -392,18 +391,18 @@ def test_game_tree():
     filename = "draw_states_all.png"
 
     cell_size = 20
-    bar_w_frac = .2
+    bar_w_frac = .15
     cell_dims = Game.get_image_dims(cell_size, bar_w_frac=bar_w_frac)
-    grid_pad = cell_dims['line_t'] * 2
+    grid_pad = int(cell_dims['line_t'] * 1.5)
     draw_states = [state for state in terminal if terminal[state] == Result.DRAW]
     draw_state_img_size = 4*(cell_dims['img_size'] + 2 * grid_pad)
     pad = 4  # on all sides
 
-    draw_state_imgs = [state.get_img(space_size=cell_size, bar_w_frac=bar_w_frac,
+    draw_state_imgs = [state.get_img(cell_dims,
                                      color_bg=COLOR_BG,
                                      color_lines=COLOR_LINES,
                                      draw_box=False) for state in draw_states]
-    
+
     img_size = draw_state_imgs[0].shape[:2][::-1]
     draw_img = np.zeros((draw_state_img_size, 2*draw_state_img_size, 3), dtype=np.uint8)
     draw_img[:] = COLOR_BG
@@ -424,5 +423,19 @@ def test_game_tree():
     cv2.waitKey(0)
 
 
+def make_image():
+    game = Game.from_strs(["X  ",
+                           "   ",
+                           "   "])
+    print(game)
+
+    dims = game.get_image_dims(17)
+    img = game.get_img(dims)
+    import matplotlib.pyplot as plt
+    plt.imshow(img)
+    plt.show()
+
+
 if __name__ == '__main__':
-    test_game_tree()
+    # test_game_tree()
+    make_image()
