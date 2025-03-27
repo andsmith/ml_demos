@@ -4,10 +4,18 @@ MPL_GREEN_RGB = 44, 160, 44    # Draw
 OFF_WHITE_RGB = 246, 238, 227  # Background
 DARK_NAVY_RGB = 0, 4, 51       # Lines
 
+RED = 255, 0, 0
 
+
+# background and line colors
 COLOR_BG = OFF_WHITE_RGB
 COLOR_LINES = DARK_NAVY_RGB
 
+# Player (and draw) colors
 COLOR_X = MPL_BLUE_RGB
 COLOR_O = MPL_ORANGE_RGB    
 COLOR_DRAW = MPL_GREEN_RGB
+
+# UI Colors
+COLOR_SELECTED = DARK_NAVY_RGB
+COLOR_MOUSEOVERED = RED
