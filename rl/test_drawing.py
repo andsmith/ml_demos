@@ -5,7 +5,7 @@ from game_base import Mark, Result
 import numpy as np
 import cv2
 from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW
-
+from drawing import get_size
 
 def get_test_state():
     chars = ["X", "O", " "]
@@ -14,8 +14,9 @@ def get_test_state():
 
 
 def test_grid_sizes():
-    test_size_px = 150  # box this wide
+    test_size_px = 200  # box this wide
     space_sizes = np.array([[1,2,3,4],[5,6,7,8],[10,13,16,20],[25,30,35,40]])
+    #space_sizes = np.array([[7,8,6],[3,2,4],[6,2,1]])
     img_h_px = test_size_px * space_sizes.shape[1]
     img_w_px = test_size_px * space_sizes.shape[0]
     img = np.zeros((img_h_px, img_w_px, 3), dtype=np.uint8)
@@ -27,7 +28,7 @@ def test_grid_sizes():
             x_left = test_col * test_size_px
 
             space_size = space_sizes[test_row, test_col]
-            dims = Game.get_image_dims(space_size)
+            dims = Game.get_image_dims(space_size, bar_w_frac=.2)
 
 
             g_size = dims['img_size'] 
@@ -35,8 +36,8 @@ def test_grid_sizes():
 
             n_g_rows = test_size_px // (g_size + g_pad)
             n_g_cols = test_size_px // (g_size + g_pad)
-            print(f"Test({test_row}, {test_col}) will have {n_g_rows} x {n_g_cols} games, each of size {g_size} and cell_size {space_sizes[test_row, test_col]}")
-            
+            print(f"Test({test_row}, {test_col}) will have {n_g_rows} x {n_g_cols} games, each of size {g_size} and cell_size {space_size}")
+            print("Category: %s (%s)"%(get_size(space_size), space_size))
             for r in range(n_g_rows):
                 for c in range(n_g_cols):
                     game = get_test_state()

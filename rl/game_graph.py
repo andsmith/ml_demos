@@ -2,46 +2,16 @@ from game_base import Mark, Result
 from tic_tac_toe import get_game_tree_cached, Game
 import numpy as np
 import logging
-
+from tic_tac_toe import Game, GameTree
+import logging
 import cv2
+from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW
 
-'''
-class InteractiveGameGraph(object):
-    """
-    The game graph shows the all possible (reinforcement, not game) states and transition on a single image.
-
-    As RL algorithms are applied, the value function v(s) of each state can be visualized. 
-    [FUTURE:  Mouseover to show transition probabilities of each action according to the policy.]
-
-    This will be visually incomprehensiblem, so the user can click to select/deselect states.  
-    When a state is selected, all states leading back to an initial state are also selected.  
-    Selected states are shown blown up, superimposed over the full graph.  
-    Edges between selected states are also made more visible.
-
-    Selected states have a "status" area underneath them, which shows the value function, policy, etc.
-
-    LAYOUT:
-        1. The top row will show the 10 possible initial states, the next four rows show the RL agent's possible states after
-           1, 2, 3, 4 rounds of play (1 agent move and one opponent move, unless the first move ends the game).
-        2. The second row will show the 720 states after the first round, in 10 groups below each group's initial state. 
-
-    """
-
-    def __init__(self, size=(1900, 880), player=Mark.X):
-        self._grid_size_range = 19, 100  # (smallest, largest)
-        self._size = size
-        self._bkg_color = (255, 255, 255)
-        self._line_color = (0, 0, 0)
-        self._player = player
-        self._terminal, self._children, self._parents, self._initial = Game.get_game_tree(self._player)
+from node_placement import BoxOrganizerPlotter
+LAYOUT = {'win_size': (1900, 950)}
 
 
-def _get_layer_num(game_state):
-    # TODO:  Make every time it's x's turn aligned.
-    return np.sum(game_state.state != Mark.EMPTY)
-
-''''''
-class GameGraph(object):
+class GameGraphApp(object):
     """
     Arrange game states to show the graph structure of the game.
 
@@ -52,100 +22,119 @@ class GameGraph(object):
     Lines will connect states to their successors.
 
     """
-    _DIMS = {'layer_space_px': 2,
-             'min_space_size': 6,  # a "space" is 1/3 of a grid cell.
-             'max_space_size': 12,  # min layer_size = (max_space_size + 2 * layer_space_px)
-             'grid_padding_frac': 0.05,   # multiply by grid_size to get padding on either side of a grid.
-             'bar_width': 8}
 
-    def __init__(self, size=(1900, 880), player=Mark.X):
-        self._player = player
-        self._tree = get_game_tree_cached(self._player)
-        self._states, self._children, self._parents, self._initial = self._tree.get_game_tree()
-        self._size = size
-        # sort states by layers, determine layer (vertical) spacing.
-        self._layer_numbers = {s: _get_layer_num(s) for s in self._states}
-        self._layers = [[s for s in self._states if self._layer_numbers[s] == i] for i in range(10)]
-        l_sizes = [len(l) for l in self._layers]
-        print("Layer sizes:")
-        print("\n\t".join([f"{i}: {s}" for i, s in enumerate(l_sizes)]))
-
-        self._layer_spacing = self._calc_layer_spacing()
-        import pprint
-        pprint.pprint(self._layer_spacing)
-
-        # within each layer determine grid sizing
-
-        # then which grid cell each state will be placed in, depeding on where it's parents are.
-
-    def _calc_layer_spacing(self):
+    def __init__(self,max_levels=10):
         """
-        Find vertical spacing of the layer boundaries.
-        1 Determine the most maximum-sized grids that could fit on one row, the vertical space is the minimum row size.
-        2 Determine how many rows have the minimum or fewer, these are the minimum-sized rows.
-        3 Determine the extra space, divide it among the rest of the rows proportionally to the number of states in each row.
+        :param size: (width, height) of the app window
         """
-        grid_padding_fraction = self._DIMS['grid_padding_frac']
-        min_space_size = self._DIMS['min_space_size']
-        max_space_size = self._DIMS['max_space_size']
-        bar_width = self._DIMS['bar_width']
-        layer_sp = self._DIMS['layer_space_px']
+        self._tree = get_game_tree_cached(player=Mark.X)
+        self._max_levels = max_levels
+        if max_levels >10:
+            raise ValueError("Max levels must be <= 10 for Tic-Tac-Toe.")
+        self._size = LAYOUT['win_size']
+        self._blank_frame = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
+        self._blank_frame[:, :] = COLOR_BG
+        self._init_tree()
+        self._init_graphics()
 
-        max_side_len, _ = Game.get_grid_dims(max_space_size)
-        max_grid_pad = int(max_side_len * grid_padding_fraction)
+    def _init_graphics(self):
+        print("Drawing images...")
+        self._out_frame=self._box_placer.draw(images=self._state_images, dest=self._blank_frame.copy())
+        print("")
 
-        # 1. Find the number of max-sized grids that can fit on one row horizontally,
-        n_grids = np.floor((self._size[0] - 2 * layer_sp) // (max_side_len + 2 * max_grid_pad)).astype(int)
-        # then the height of this row is the minimum (vertical) space:
-        tiny_row_h = max_side_len + 2 * max_grid_pad + 2 * layer_sp
-        if tiny_row_h * len(self._layers) > self._size[1]:
-            raise ValueError(f"Too many layers to fit in the vertical space: {tiny_row_h * len(self._layers)} > {self._size[1]}")
-        print("Tiny row_height:", tiny_row_h)
-        import ipdb
-        ipdb.set_trace()
-        # 2. Find the number of rows that have the minimum or fewer grids:
-        tiny_layers = [i for i, l in enumerate(self._layers) if len(l) <= n_grids]
-        n_big_layers = len(self._layers) - len(tiny_layers)
+    def _init_tree(self):
+        """
+        Calculate sizes & placement of all states.
+            1. Determine number of layers & number of states in each layer
+            2. Determine positions of each state
+            3. For each state, get lines to draw to it's children states.
+        """
+        def _get_layer(state):
+            return np.sum(state.state != Mark.EMPTY)
 
-        # 3. Find the remaining space, divide it among the remaining rows:
-        remaining_states = np.array([len(l) for l in self._layers])
-        remaining_states[tiny_layers] = 0
-        used_v_space = len(tiny_layers) * tiny_row_h + (len(tiny_layers) - 1) * bar_width if len(tiny_layers) > 0 else 0
-        remaining_v_space = self._size[1] - used_v_space
-        rel_heights = remaining_states / np.sum(remaining_states)
-        slack_space = remaining_v_space - n_big_layers * tiny_row_h  # only divide up area in excess of tiny_row_h
-        non_tiny_heights = slack_space * rel_heights + tiny_row_h  # Add divided proportion to tiny_row_h
+        # 1.
+        self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
+        states_by_layer = [[{'id': s,
+                             'state': s,
+                             'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
+                            for s in self._term if _get_layer(s) == l] for l in range(self._max_levels)]
+        layer_counts = np.array([len(states) for states in states_by_layer])
+        logging.info(f"States by layer: {layer_counts}")
 
-        # 4. Put it all together
-        tiny_row_h = max_side_len + 2 * max_grid_pad + 2 * layer_sp
+        # 2. First get the layer spacing.
+        self._layer_spacing = self._calc_layer_spacing(layer_counts)
+        self._box_placer = BoxOrganizerPlotter(states_by_layer, spacing=self._layer_spacing, size_wh=self._size)
+
+        # 3. get the size of a box in each layer, then make the images
+        self._positions, self._box_dims, _ = self._box_placer.get_layout()
+        self._state_images = {}
+
+        logging.info("Generating images...")
+        for l_ind, layer_states in enumerate(states_by_layer):
+            logging.info(f"\tLayer {l_ind} has {len(layer_states)} states")
+            box_size = self._box_dims[l_ind]['box_side_len']
+            logging.info(f"\tBox_size: {box_size}")
+            space_size = Game.get_space_size(box_size)
+            logging.info(f"\tUsing space_size: {space_size}")
+            box_dims = Game.get_image_dims(space_size, bar_w_frac=.2)
+            logging.info(f"\tUsing tiles of size: {box_dims['img_size']}")
+
+
+            for state_info in layer_states:
+                
+                state = state_info['state']
+                #import pprint
+                #pprint.pprint(box_dims[l_ind]['])
+                self._state_images[state] = state.get_img(box_dims)
+
+        
+        print("\tmade ", len(self._state_images))
+
+
+    def run(self):
+        """
+        Run the app
+        """
+        cv2.imshow("Game Graph", self._out_frame[:, :, ::-1])
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
+
+    def _calc_layer_spacing(self, layer_counts):
+        """
+        for each layer , a dict{'y': (ymin, y_max) the y-extent of the layer in pixels,
+                                'n_boxes': number of boxes in the layer,
+                                'bar_y': (ymin, y_max) of the bar that will be drawn under the boxes (if not at the bottom)
+                                }
+        """
+        rel = np.sqrt(100 + layer_counts)
+        rel = rel/np.sum(rel)
+        sizes = (rel * self._size[1]).astype(int)
         y = 0
-        v_pos = []
-        for l_ind in range(len(self._layers)):
-            row_dims = {}
-            if l_ind in tiny_layers:
-                row_dims['space_size'] = max_space_size
-                row_dims['grid_pad'] = max_grid_pad
-                row_dims['side_len'] = max_side_len
-                row_dims['layer_y'] = y, y + tiny_row_h
-                y += tiny_row_h
-                if l_ind != len(self._layers) - 1:
-                    row_dims['bar_y'] = y, y + bar_width
-                    y += bar_width
+        bar_w = 5
+        layer_spacing = []
+        for i, size in enumerate(sizes):
+            top = y
+            if i < len(sizes) - 1:
+                bottom = y + size - bar_w
+                bar = (y + size - bar_w, y + size)
             else:
-                row_dims['layer_y'] = y, y + non_tiny_heights[l_ind]
-                y += non_tiny_heights[l_ind]
-                if l_ind != len(self._layers) - 1:
-                    row_dims['bar_y'] = y, y + bar_width
-                    y += bar_width
-                # other keys filled in later
-            v_pos.append(row_dims)
-        return v_pos
+                bottom = self._size[1]
+                bar = None
+            spacing={'y': (top, bottom),
+                                  'n_boxes': layer_counts[i]}
+            if bar is not None:
+                spacing['bar_y'] = bar
+            layer_spacing.append(spacing)
+            y += size
+        return layer_spacing
 
 
-if __name__ == '__main__':
+def run_app():
+    app = GameGraphApp()
+    app.run()
+
+
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    gg = GameGraph()
-    # img = gg.build_graph()
-    # cv2.imshow('game graph', img)
-    # cv2.waitKey(0)
-'''
+    run_app()
+    logging.info("Exiting.")

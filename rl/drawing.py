@@ -21,8 +21,8 @@ def draw_win_line(img, dims, line, color):
     """
     space_size = dims['space_size']
 
-    cell1= line['c1']
-    cell2= line['c2']
+    cell1 = line['c1']
+    cell2 = line['c2']
     cell_span1 = dims['cells'][cell1[0]][cell1[1]]
     cell_span2 = dims['cells'][cell2[0]][cell2[1]]
 
@@ -38,7 +38,7 @@ def draw_win_line(img, dims, line, color):
         cv2.line(img, (x, y0), (x, y1), color, dims['line_t'], lineType=cv2.LINE_AA, shift=_SHIFT_BITS)
     elif line['orient'] == 'd':
         # Need to take different corners of the cells to get the diagonal
-        if cell1[1]< cell2[1]:
+        if cell1[1] < cell2[1]:
             x0 = int((cell_span1['x'][0]) * _SHIFT)
             x1 = int((cell_span2['x'][1]) * _SHIFT)
             y0 = int((cell_span1['y'][0]) * _SHIFT)
@@ -49,9 +49,19 @@ def draw_win_line(img, dims, line, color):
             y0 = int((cell_span1['y'][0]) * _SHIFT)
             y1 = int((cell_span2['y'][1]) * _SHIFT)
 
-
         cv2.line(img, (x0, y0), (x1, y1), color, dims['line_t'], lineType=cv2.LINE_AA, shift=_SHIFT_BITS)
     return img
+
+
+_CUTOFFS = {'min_normal': 7,
+            'min_small': 8}  # no small if > min_normal
+def get_size(space_size):
+    if space_size >= _CUTOFFS['min_normal']:
+        return 'normal'
+    elif space_size >= _CUTOFFS['min_small']:
+        return 'small'
+    else:
+        return 'tiny'
 
 
 class MarkerArtist(object):
@@ -67,7 +77,6 @@ class MarkerArtist(object):
     Normal sized markers will be padded by empty space, determined by dims['marker_padding_frac'].
 
     """
-    _CUTOFFS = [13, 5]
 
     def __init__(self, color_x=COLOR_X, color_o=COLOR_O):
         self._font = cv2.FONT_HERSHEY_COMPLEX
@@ -88,7 +97,9 @@ class MarkerArtist(object):
         space_size = dims['space_size']
         padding_px = int(space_size * dims['marker_padding_frac'])
 
-        if dims['space_size'] >= self._CUTOFFS[0]:  # draw Normal
+        size = get_size(space_size)
+
+        if size=='normal':  # draw Normal
             if marker == Mark.X:
 
                 x0, x1 = cell_span['x'][0]+padding_px//2, cell_span['x'][1]-padding_px//2-1
@@ -99,17 +110,17 @@ class MarkerArtist(object):
             else:
                 center = get_cell_center(dims, loc)
                 x, y = center
-                rad = (space_size/2)-padding_px/2 +1
-                rad_inner = rad - (dims['line_t']*1.3)
+                rad = (space_size/2)-padding_px/2 + (space_size//9)
+                rad_inner = rad - (dims['line_t']*1)
                 cv2.circle(img, (int(x*self._SHIFT), int(y*self._SHIFT)), int(rad*self._SHIFT),
-                           self.colors[marker],thickness=-1, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
+                           self.colors[marker], thickness=-1, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
                 cv2.circle(img, (int(x*self._SHIFT), int(y*self._SHIFT)), int(rad_inner*self._SHIFT),
-                           COLOR_BG, thickness=-1,lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
+                           COLOR_BG, thickness=-1, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
 
-        elif dims['space_size'] >= self._CUTOFFS[1]:  # draw Small
+        elif size=='small':
             # Draw single-pixel wide lines with 1- or 2-pixel  margin.
 
-            m_pix = 1 if dims['space_size'] < np.mean(self._CUTOFFS) else 2
+            m_pix = 1 if dims['space_size'] < (_CUTOFFS['min_normal']+_CUTOFFS['min_small'])/2 else 2
 
             center = get_cell_center(dims, loc)
             x, y = center
@@ -117,45 +128,21 @@ class MarkerArtist(object):
                 x0, x1 = cell_span['x'][0]+m_pix, cell_span['x'][1]-1-m_pix
                 y0, y1 = cell_span['y'][0]+m_pix, cell_span['y'][1]-1-m_pix
 
-                cv2.line(img, (x0, y0), (x1, y1), self.colors[marker], 1, lineType=cv2.LINE_AA)
-                cv2.line(img, (x1, y0), (x0, y1), self.colors[marker], 1, lineType=cv2.LINE_AA)
+                cv2.line(img, (x0, y0), (x1, y1), self.colors[marker], 2)
+                cv2.line(img, (x1, y0), (x0, y1), self.colors[marker], 2)
 
             else:
                 center = get_cell_center(dims, loc)
                 x, y = center
                 rad = (space_size/2)-m_pix
                 cv2.circle(img, (int(x*self._SHIFT), int(y*self._SHIFT)), int(rad*self._SHIFT),
-                           self.colors[marker], lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
+                           self.colors[marker], shift=self._SHIFT_BITS, lineType=cv2.LINE_AA)
 
-        else:
+        else:  # size == 'tiny'
             # fill the cell with the color
             x_span, y_span = cell_span['x'], cell_span['y']
             img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = self.colors[marker]
         return img
-        pad_size = int(space_size * pad_frac)
-        marker_size = space_size - 2 * pad_size
-        center_int = (int(x), int(y))
-
-        # half the width of the different markers:
-        circle_rad = np.max([2, marker_size//1.6]).astype(int)
-        box_rad = np.max([1, marker_size//2]).astype(int)
-        x_rad = np.max([1, marker_size//2]).astype(int)
-        line_width = np.max([1, marker_size//4]).astype(int)
-
-        if dot_shape == 'square':
-            x, y = int(x), int(y)
-            img[y-box_rad:y+box_rad, x-box_rad:x+box_rad] = color
-
-        elif dot_shape == 'circle':
-            cv2.circle(img, center_int, circle_rad, color, -1)
-
-        elif dot_shape == 'x':
-            pass
-
-        elif dot_shape == 'o':
-            r_inner = circle_rad - line_width
-            points = (self._get_o_points(circle_rad, r_inner) + np.array(center).T) * self._SHIFT
-            cv2.fillPoly(img, [points.astype(np.int32)], color, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
 
     def _get_o_points(self, size, line_width):
 

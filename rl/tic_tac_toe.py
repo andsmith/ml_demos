@@ -12,11 +12,12 @@ import re
 import cv2
 from util import get_annulus_polyline
 import matplotlib.pyplot as plt
-from drawing import MarkerArtist, draw_win_line
+from drawing import MarkerArtist, draw_win_line, get_size
 from game_base import Mark, Result, WIN_MARKS, get_cell_center
 import logging
 import pickle
 import os
+from copy import deepcopy
 from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_X, COLOR_O
 
 # Defaults to get_img
@@ -84,6 +85,19 @@ class Game(object):
     def indent(self, n_tabs=1):
         s = str(self)
         return '\n'.join(['\t'*n_tabs + line for line in s.split('\n')])
+
+    @staticmethod
+    def get_space_size(img_size, bar_w_frac=.15):
+        """
+        Attempt to predict a good cell size for a given image size
+        (i.e. inverse of get_image_dims).
+        """
+        space_size = img_size
+        dims = Game.get_image_dims(space_size, bar_w_frac=bar_w_frac)
+        while dims['img_size'] > img_size:
+            space_size -= 1
+            dims = Game.get_image_dims(space_size, bar_w_frac=bar_w_frac)
+        return space_size
 
     @staticmethod
     def get_image_dims(space_size, bar_w_frac=.15, marker_padding_frac=.4):
@@ -168,21 +182,34 @@ class Game(object):
         img = np.zeros((img_s, img_s, 3), dtype=np.uint8)
         img[:, :] = color_bg
 
-        # Draw grid, change color if terminal
         term = self.check_endstate()
-        color_lines = {Result.DRAW: COLOR_DRAW,
-                       Result.X_WIN: COLOR_X,
-                       Result.O_WIN: COLOR_O}[term] if term is not None else color_lines
+        grid_line_color = color_lines
+        box_color = {Result.DRAW: COLOR_DRAW,
+                     Result.X_WIN: COLOR_X,
+                     Result.O_WIN: COLOR_O}[term] if term is not None else color_lines
 
         drawing_box = (draw_box is None and term is not None) or draw_box
 
-        for i in range(4):
-            if not drawing_box and i not in [1, 2]:
-                continue
+        # Draw grid lines
+        for i in [1, 2]:
+            line_color = grid_line_color if not (term is not None and term==Result.DRAW) else COLOR_DRAW
             z_0 = i * (space_size + line_t)
             z_1 = z_0 + line_t
-            img[z_0:z_1, :] = color_lines
-            img[:, z_0:z_1] = color_lines
+
+            w0 = line_t
+            w1 = img_s - line_t
+
+            img[z_0:z_1, w0:w1] = line_color
+            img[w0:w1, z_0:z_1] = line_color
+
+        # Draw bounding box, if terminal, extra heavy.
+        if drawing_box:
+            line_color = box_color
+            for i in [0, 3]:
+                z_0 = i * (space_size + line_t)
+                z_1 = z_0 + line_t
+                img[z_0:z_1, :] = line_color
+                img[:, z_0:z_1] = line_color
 
         # Draw markers
         for i in range(3):
@@ -191,11 +218,26 @@ class Game(object):
                     continue
                 self._mark_artist.add_marker(img, dims, (i, j), self.state[i, j])
 
-        # Draw win lines (through the whole grid)
-        # TODO:  Skip for tiny images
+        size = get_size(space_size)
+
+        # Draw win lines, connecting a row.
+        if size=='tiny':  # Skip for tiny images
+            return img
         win_lines = self.get_win_lines()
         for line in win_lines:
-            draw_win_line(img, dims, line, color_lines)
+            draw_win_line(img, dims, line, box_color)
+
+        # Finally, if it's in the middle category, draw an extra thick bounding box for clarity
+        if False:#drawing_box and term is not None:
+            line_color = box_color
+            box_w = 6
+            for i in [0, 3]:
+                img[i:i+box_w, :] = line_color
+                img[:, i:i+box_w] = line_color
+                img[img_s-box_w:img_s, :] = line_color
+                img[:, img_s-box_w:img_s] = line_color
+                
+
 
         return img
 
@@ -292,14 +334,21 @@ class GameTree(object):
             self.print_win_losses()
 
         # Opponent makes first move:
+        self._init_child_states = {}
+        # keys: state after each possible first move of the opponent
+        # values: (action, Mark.[opponent])
+        # i.e. the edge labels for the children of the initial state where the opponent goes first.
+
         for i in range(3):
             for j in range(3):
-                state = initial.clone_and_move((i, j), GameTree.opponent(self._player))
+                action = (i, j)
+                state = initial.clone_and_move(action, GameTree.opponent(self._player))
                 self._initial.append(state)
                 self._terminal[state] = state.check_endstate()
                 self._children[state] = {}
                 self._parents[state] = [initial]
                 _initial_printout(state)
+                self._init_child_states[state] = (action, GameTree.opponent(self._player))
                 self._build_tree_recursive(state,
                                            current_player=self._player,
                                            initial_player=GameTree.opponent(self._player))
@@ -327,8 +376,21 @@ class GameTree(object):
             self._parents[child].append(state)
             self._build_tree_recursive(child, 3 - current_player, initial_player)
 
-    def get_game_tree(self):
-        return self._terminal, self._children, self._parents, self._initial
+    def get_game_tree(self, generic=False):
+        """
+        Return the full game tree.
+        If Generic, remove the opponent-moves-first states from self._initial, add the single initial state to their parents, them
+        to its children.
+        """
+        if generic:
+            initial = [self._initial[0]]
+            children = deepcopy(self._children)
+            children[initial[0]].update(self._init_child_states)
+        else:
+            initial = self._initial
+            children = self._children
+
+        return self._terminal, children, self._parents, initial
 
     def print_win_losses(self):
         print("Total unique states: ", len(self._terminal))
@@ -391,8 +453,7 @@ def test_game_tree():
     filename = "draw_states_all.png"
 
     cell_size = 20
-    bar_w_frac = .15
-    cell_dims = Game.get_image_dims(cell_size, bar_w_frac=bar_w_frac)
+    cell_dims = Game.get_image_dims(cell_size)
     grid_pad = int(cell_dims['line_t'] * 1.5)
     draw_states = [state for state in terminal if terminal[state] == Result.DRAW]
     draw_state_img_size = 4*(cell_dims['img_size'] + 2 * grid_pad)
@@ -437,5 +498,4 @@ def make_image():
 
 
 if __name__ == '__main__':
-    # test_game_tree()
-    make_image()
+    test_game_tree()
