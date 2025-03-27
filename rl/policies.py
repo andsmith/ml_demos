@@ -26,6 +26,8 @@ class Policy(ABC):
         self.opponent = Mark.X if player == Mark.O else Mark.O
 
         self.winning_result = Result.X_WIN if player == Mark.X else Result.O_WIN
+        self.losing_result = Result.O_WIN if player == Mark.X else Result.X_WIN
+        self.draw_result = Result.DRAW
 
     @abstractmethod
     def recommend_action(self, state):

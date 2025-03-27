@@ -22,7 +22,6 @@ class RandomPlayer(Policy):
     def __str__(self):
         return "RandomPlayer(%s)" % self.player.name
 
-
 class HeuristicPlayer(Policy):
     """
     Apply rules in this order:
@@ -34,10 +33,12 @@ class HeuristicPlayer(Policy):
     6. Take any open side.
     """
 
-    def __init__(self, mark):
+    def __init__(self, mark, n_rules = 6):
+        self._n_rules = n_rules
         super(HeuristicPlayer, self).__init__(player=mark, deterministic=True)
         
-
+    def __str__(self):
+        return "HeuristicPlayer(%s, n_rules=%d)" % (self.player.name, self._n_rules)
 
     def recommend_action(self, game_state):
         actions = game_state.get_actions()
@@ -45,30 +46,54 @@ class HeuristicPlayer(Policy):
         # Randomize order of actions:
         np.random.shuffle(actions)
 
+        def _give_up():
+            return actions[0]  # Just return a random action if no rules apply.
+        
+        if self._n_rules==0:
+            return _give_up()
+
         # Rule 1, any winning moves?
         for action in actions:
             new_state = game_state.clone_and_move(action,self.player)
             if new_state.check_endstate() == self.winning_result:
                 return action
+            
+        if self._n_rules==1:
+            return _give_up()
+
         # Rule 2, any blocking moves?
         for action in actions:
             new_state = game_state.clone_and_move(action,self.opponent)
             term = new_state.check_endstate()
-            if term in [self.opponent, Result.DRAW]:
+            if term == self.losing_result:
                 return action
+            
+        if self._n_rules==2:
+            return _give_up()
+
         # Rule 3, center
         if (1, 1) in actions:
             return (1, 1)
+        
+        if self._n_rules==3:
+            return _give_up()
+
+
         # Rule 4, opposite corner
         for action in actions:
             if action in [(0, 0), (0, 2), (2, 0), (2, 2)]:
                 opposite = (2 - action[0], 2 - action[1])
                 if game_state.state[opposite] == self.opponent:
                     return action
+        if self._n_rules==4:
+            return _give_up()
+
         # Rule 5, any corner
         for action in actions:
             if action in [(0, 0), (0, 2), (2, 0), (2, 2)]:
                 return action
+        if self._n_rules==5:
+            return _give_up()
         # Rule 6, any side
         for action in actions:
             if action in [(0, 1), (1, 0), (1, 2), (2, 1)]:
