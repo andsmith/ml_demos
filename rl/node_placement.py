@@ -10,7 +10,7 @@ States with N non-empty cells are placed in band N.
 import numpy as np
 import matplotlib.pyplot as plt
 
-MIN_BOX_SIZE = 3
+MIN_BOX_SIZE = 7
 
 
 class BoxOrganizer(object):
@@ -23,28 +23,23 @@ class BoxOrganizer(object):
         """
         Calculate layout.
         :param layers: list of lists of boxes, each list is a layer:
-           layer[i] is a list of boxes that will be placed in band i, and has the value:
-             {'n_boxes': int,
-             }
+           layer[i] is a list of boxes that will be placed in band i.
+              Each box is a dict with an 'id' key.
         :param size_wh:  size of the window in pixels (width, height).
         """
         self._min_layer_size = 50
         self._layers = layers
         self._size_wh = size_wh
         self._layer_spacing = self._calc_layer_spacing()
-        self._box_positions = self._calc_box_positions()
+        self._box_positions, self._box_dims = self._calc_box_positions()
         self._bkg_color = (127, 127, 127)
         self._line_color = (0, 0, 0)
-
-        self._positions = []
-        self._lines = []
 
     def get_layout(self):
         """
         return the computed positions of all the boxes & divison lines.
         """
-        return self._positions,
-        self._lines
+        return self._box_positions, self._box_dims, self._layer_spacing
 
     def _calc_layer_spacing(self):
         # for now, just evenly space the layers
@@ -76,14 +71,13 @@ class BoxOrganizer(object):
         |                         |
         +-------------------------+
 
-
+        :returns: 
+            box_pos: dict -> box_id -> {'x': (left, right), 'y': (top, bottom)}
+            box_dims: list, for each layer, a dict -> {'box_side_len': int, 'n_rows': int, 'n_cols': int}
         """
-
+        box_dims = []
         box_pos = {}
         for i, layer in enumerate(self._layers):
-            if i == len(self._layers)-1:
-                import ipdb
-                ipdb.set_trace()
             top_y = self._layer_spacing[i]['y'][0]
             bottom_y = self._layer_spacing[i]['y'][1]
             w, h = self._size_wh[0],  bottom_y - top_y
@@ -94,9 +88,7 @@ class BoxOrganizer(object):
             # box_p is padding on all sides of each box
             # box_s is the size of the box
             box_s, box_p, n_rows, n_cols = self._get_box_size(n_boxes, w=w, h=h)
-            print("\tLayer %i will have %i states in %i x %i boxes." % (i, n_boxes, n_rows, n_cols))
             n_rows, n_cols = self._row_col_adjust(n_boxes, box_s, w, h)
-            print("\t\tAdjusted to %i x %i boxes." % (n_rows, n_cols))
             # calculate extra space, and divide it between rows and columns
             v_space = h - n_rows * box_s
             v_pad = v_space / (n_rows + 1)
@@ -116,9 +108,11 @@ class BoxOrganizer(object):
                                                  'y': (y, y + box_s)}
                     ind += 1
 
-            assert ind == len(layer), "Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (
-                ind, len(layer))
-        return box_pos
+            if ind != len(layer):
+                raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (ind, len(layer)))
+
+            box_dims.append({'box_side_len': box_s, 'n_rows': n_rows, 'n_cols': n_cols})
+        return box_pos, box_dims
 
     def _get_box_size(self, n, w, h):
         """
@@ -147,23 +141,6 @@ class BoxOrganizer(object):
             raise ValueError("Box size too small to fit all boxes: W=%i, H=%i, N=%i" % (w, h, n))
 
         return s, pad, n_rows, n_cols
-
-    def draw(self):
-        img = np.zeros((self._size_wh[1], self._size_wh[0], 3), np.uint8)
-        img[:, :] = self._bkg_color
-        # draw layer bars
-        for layer in self._layer_spacing:
-            if 'bar_y' in layer:
-                img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
-        # draw boxes
-        for l_ind, layer_boxes in enumerate(self._layers):
-            print("Drawing layer", l_ind)
-            for box in layer_boxes:
-                x = self._box_positions[box['id']]['x']
-                y = self._box_positions[box['id']]['y']
-                img[y[0]:y[1], x[0]:x[1]] = box['color']
-
-        return img
 
     @staticmethod
     def get_h_v_spacing(n_rows, n_cols, box_size, w, h):
@@ -230,6 +207,28 @@ class BoxOrganizer(object):
         return n_rows, n_cols
 
 
+class BoxOrganizerTester(BoxOrganizer):
+    """
+    """
+
+    def draw(self):
+        img = np.zeros((self._size_wh[1], self._size_wh[0], 3), np.uint8)
+        img[:, :] = self._bkg_color
+        # draw layer bars
+        for layer in self._layer_spacing:
+            if 'bar_y' in layer:
+                img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
+        # draw boxes
+        for l_ind, layer_boxes in enumerate(self._layers):
+            print("Drawing layer", l_ind)
+            for box in layer_boxes:
+                x = self._box_positions[box['id']]['x']
+                y = self._box_positions[box['id']]['y']
+                img[y[0]:y[1], x[0]:x[1]] = box['color']
+
+        return img
+
+
 def test_BoxOrganizer():
     next_id = [0]
 
@@ -245,7 +244,7 @@ def test_BoxOrganizer():
 
     layers = [make_boxes(1), make_boxes(2), make_boxes(20), make_boxes(2200),
               make_boxes(2), make_boxes(729), make_boxes(72)]
-    bo = BoxOrganizer(layers)
+    bo = BoxOrganizerTester(layers)
     img = bo.draw()
     plt.imshow(img)
     plt.show()
