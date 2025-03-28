@@ -345,6 +345,7 @@ class GameGraphApp(object):
 
         Thickness should use the lower state's bar_width, color uses the player who made the move.
         """
+        edges_added = {}  # Dict (from, to) -> True, to avoid double-adding edges
         self._edge_lines = {}
 
         for parent_layer, edge_list in enumerate(self._s_edges):
@@ -370,7 +371,11 @@ class GameGraphApp(object):
 
                 edge_list = self._edge_lines.get((color, thickness), [])
                 edge_list.append(line)
-                self._edge_lines[(color, thickness)] = edge_list
+                state_pairs = (from_state, to_state), (to_state, from_state)
+                if state_pairs[0] not in edges_added and state_pairs[1] not in edges_added:
+                    edges_added[state_pairs[0]] = True
+                    edges_added[state_pairs[1]] = True
+                    self._edge_lines[(color, thickness)] = edge_list
 
     def _attach_states(self, from_state, to_state):
         """
@@ -435,6 +440,9 @@ class GameGraphApp(object):
             elif k == ord('\''):
                 self._c_depth += 1
                 print("Highlighting parent states/edges to depth: ", self._c_depth)
+                self._recalc_neighbors()
+            elif k==ord('c'):
+                self._selected_states = []
                 self._recalc_neighbors()
             frame_no += 1
             if frame_no % 10 == 0:
