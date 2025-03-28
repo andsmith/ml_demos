@@ -43,12 +43,13 @@ class GameGraphApp(object):
         self._init_graphics()
 
         # App state
-        self._depth = 1
+        self._p_depth = 1  # how many grand* parents to show for each selected vertex
+        self._c_depth = 1  # how many grand* children to show for each selected vertex
 
         # Things to draw
         self._mouseover_state = None
         self._click_state = None
-        self._selected_states = [Game.from_strs(["XO ", "   ", "   "])]
+        self._selected_states = [Game.from_strs(["X  ", "   ", "   "])]
 
         # key by state, value is {'upper': [(x_left, y_left) , (x_right, y_right)],
         #                         'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
@@ -56,19 +57,18 @@ class GameGraphApp(object):
 
         # TODO: update these as states are selected/deselected/mouseovered/etc. rather than every frame.
         self._s_neighbors = []  # states that are neighbors of the selected states list of lists (detph,then state)
-        self._n_edges = []  # binary edge matrix, len(s_neighbors[d]) x len(s_neighbors[d+1])
+        self._s_edges = []  # binary edge matrix, len(s_neighbors[d]) x len(s_neighbors[d+1])
         self._edge_lines = {}
         # list with  {'color': (r,g,b),
         #             'thickness': int,
         #             'coords': [line1, line2, ...]}
         #   where each line is a float numpy array (line strip) of (x1, y1, x2, y2) in pixels.
+        self._recalc_neighbors()  # if any initial states are selected, find their neighbors.
 
     def _find_attach_pts(self):
         """
         Attachment points are the upper two and lower two endpoints of the two vertical grid lines.
-
         Those are found by combining these two:
-
             * relative points:  self._state_dims[level] has the space size and the attachment points for images of 
               that size: 
                           { 'img_size': grid image's side length
@@ -76,14 +76,10 @@ class GameGraphApp(object):
                             'upper': [(x1, y1), (x2, y2)] attachment points for the upper grid line (floats, fractional pixels)
                             'lower': [(x1, y1), (x2, y2)] attachment points for the lower grid line (same)
                             'space_size': space_size
-                            'bar_w': grid line width, int }, and the
-
+                            'bar_w': grid line width, int }, and 
             * image offsets:  self._positions[level] is a dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}
-
         where:
-
-            box_positions, box = BoxOrganizerPlotter.get_layout()
-
+            box_positions, box = BoxOrganizerPlotter.get_layout().
 
         :returns: dict[state] = {'upper': [(x_left, y_left) , (x_right, y_right)],
                                  'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
@@ -152,15 +148,14 @@ class GameGraphApp(object):
             2. Determine positions of each state
             3. For each state, get lines to draw to it's children states.
         """
-        def _get_layer(state):
-            return np.sum(state.state != Mark.EMPTY)
 
         # 1.
         self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
         self._states_by_layer = [[{'id': s,
                                    'state': s,
                                    'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
-                                  for s in self._term if _get_layer(s) == l] for l in range(self._max_levels)]
+                                  for s in self._term if s.n_marked() == l] for l in range(self._max_levels)]
+        self._layers_of_states = {s['state']: l for l, layer in enumerate(self._states_by_layer) for s in layer}
         self._states_used = {s['state']: True for state_layer in self._states_by_layer for s in state_layer}
         layer_counts = np.array([len(states) for states in self._states_by_layer])
         logging.info(f"States by layer: {layer_counts}")
@@ -187,15 +182,13 @@ class GameGraphApp(object):
             for state_info in layer_states:
 
                 state = state_info['state']
-                # import pprint
-                # pprint.pprint(box_dims[l_ind]['])
                 self._state_images[state] = state.get_img(box_dims)
             self._state_dims.append(box_dims)
 
         print("\tmade ", len(self._state_images))
 
     def _get_state_at(self, pos):
-        # Which layer?
+        # Which layer is the x, y position in?
         l_ind = self._get_layer_at(pos)
         if l_ind is None:
             return None
@@ -233,91 +226,84 @@ class GameGraphApp(object):
                         self._selected_states.remove(self._click_state)
                     else:
                         self._selected_states.append(self._click_state)
+                    self._recalc_neighbors()
                 self._click_state = None
 
     def _draw_edges(self, frame):
         """
         Add edge-lines to the image.
-        for depth in self._edge_lines:
-            for edge_info in self._edge_lines[depth]:
-                color = edge_info['color']
-                thickness = edge_info['thickness']
-                for line in edge_info['coords']:
-                    cv2.polylines(frame, [(line).astype(int)], isClosed=False,
-                                  color=color, thickness=thickness, lineType=cv2.LINE_AA)
+        For now:  Attach each edge to wichever attachment point is closest to the center of the parent state.
+
+        # TODO:  Balance left & right attachment points for each state with edges.
         """
 
-        # put a red dot on every attachment point
-        print("Drawing attachment points for %i states..." % len(self._appach_pts))
-        #import ipdb; ipdb.set_trace()
-        for state, attach_info in self._appach_pts.items():
-            x, y = attach_info['upper'][0]
-            x,y=int(x),int(y)
-            frame[y:y+3, x:x+3, :] = [255, 0, 0]
-            x, y = attach_info['upper'][1]
-            x,y=int(x),int(y)
-            frame[y:y+3, x:x+3, :] = [0, 255, 0]
-            x, y = attach_info['lower'][0]
-            x,y=int(x),int(y)
-            frame[y:y+3, x:x+3, :] = [0, 0, 255]
-            x, y = attach_info['lower'][1]
-            x,y=int(x),int(y)
-            frame[y:y+3, x:x+3, :] = [255, 128, 0]
+        for (color, thickness) in self._edge_lines:
+            line_strips = self._edge_lines[(color, thickness)]
+            cv2.polylines(frame, line_strips, isClosed=False, color=color, thickness=thickness, lineType=cv2.LINE_AA)
 
     def _scan_neighbors(self):
         """
-        Calculate all edges from selected/mouseovered states to their neighbors up to the given depth.
-        self._s_neighbors will be a list of lists, s_neighbors[depth]=[state0, state1, ...], length depth+1
-        self._n_edges will be a list of binary matrices, n_edges[depth] will be a matrix of size 
-            len(s_neighbors[depth]) x len(s_neighbors[depth+1]),  with 1 if there is an edge from state i to state j.
+        Breadth-first search starting from each highlighted state, up at most self._p_depth, down at most
+            self._c_depth.
+
+        Collect all states in those trees, and all edges reaching them.
+
+        By the end,
+          - self._s_neighbors will be a dict, keys are selected states, values are dicts{states in the tree : depth from key state}
+            rooted at that state.
+          - self._s_edges will be a list of l-1 lists (one per layer boundary), each a list of the edges, an
+            edge is a dict with:
+              'from': state_P, 
+              'to': state_C, 
+              'player': Mark.X or Mark.O   ( = self._children[state_P][state_C][1])
+              'action': action that led from state_P to state_C (= self._children[state_P][state_C][0])
         """
-        depth = self._depth
-        self._s_neighbors = [[s for s in self._selected_states]]
-        self._n_edges = []
-        # if self._mouseover_state is not None and self._mouseover_state not in self._s_neighbors[0]:
-        #    self._s_neighbors[0].append(self._mouseover_state)
 
-        if depth == 0:
-            return
-        states_seen = {s for s_list in self._s_neighbors for s in s_list}
-        edges_seen = {}  # {(from_state, to_state): None}
-        print("Scanning neighbors for %i selected states..." % len(states_seen))
-        for d in range(1, depth+1):
-            # Scan states to get next set of parents/children
-            prev_states = self._s_neighbors[d-1]
-            # print("\tScanning depth %i, %i states..."%(d, len(prev_states)))
-            new_neighbors = []
-            for prev_state in prev_states:
-                # print("\t\tState:")
-                # print(prev_state.indent(3))
-                # print("\t\tChildren:", len(self._children[prev_state]))
-                # print("\t\tParents:", len(self._parents[prev_state]))
-                children = [child for child in self._children[prev_state] if child in self._states_used]
-                parents = [parent for parent in self._parents[prev_state] if parent in self._states_used]
-                new_neighbors.extend(children)
-                new_neighbors.extend(parents)
-            new_neighbors = list(set(new_neighbors))
-            new_neighbors = [n for n in new_neighbors if n not in states_seen]
-            states_seen.update({n: None for n in new_neighbors})
-            self._s_neighbors.append(new_neighbors)
-            # print("\t\tUnique new neighbors: ", len(new_neighbors))
-            # print("\t\tS  tates in growing tree: ", len(states_seen))
+        self._s_neighbors = {}  # state: {neighbor: (depth from state) for all neighbors of state}
+        self._s_edges = [[] for _ in range(self._max_levels-1)]  # edges between each layer
 
-            # Make the edge matrix
-            n_prev = len(prev_states)
-            n_new = len(new_neighbors)
-            edge_matrix = np.zeros((n_prev, n_new), dtype=np.uint8)
-            for i, prev_state in enumerate(prev_states):
-                for j, new_state in enumerate(new_neighbors):
-                    if new_state in self._children[prev_state] or new_state in self._parents[prev_state]:
-                        edge_matrix[i, j] = 1
+        for state in self._selected_states:
 
-            self._n_edges.append(edge_matrix)
+            # print("Scanning neighbors for:\n"+state)
+            self._s_neighbors[state] = {}  # this state's extended neighbor list, (p,c)-deep in the game tree
 
-        print("Neighbors: ", [len(n) for n in self._s_neighbors])
-        print("Edges: ", [e.shape for e in self._n_edges])
+            # First, go up:
+            next_group = [state]
+            for d in range(self._p_depth):
+                new_parents = []  # of next_group, to scan next time
+                for s in next_group:
+                    for p in self._parents[s]:
+                        parent_layer_n = self._layers_of_states[p]
+                        new_parents.append(p)
+                        self._s_neighbors[state][p] = d + 1
+                        self._s_edges[parent_layer_n].append({'from': p,  # assign edge to parent layer index
+                                                              'to': s,
+                                                              'player': self._children[p][s][1],
+                                                              'action': self._children[p][s][0]})
+                next_group = new_parents
+            # print("\tFound %i parents looking up %i levels." % (len(self._s_neighbors[state]), self._p_depth))
+
+            # Then, go down:
+            next_group = [state]
+            for d in range(self._c_depth):
+                new_children = []
+                for s in next_group:
+                    current_layer_n = self._layers_of_states[s]
+                    for c in self._children[s]:
+                        if c not in self._states_used:
+                            # too low for us
+                            continue
+                        new_children.append(c)
+                        self._s_neighbors[state][c] = d + 1
+                        self._s_edges[current_layer_n].append({'from': s,
+                                                               'to': c,
+                                                               'player': self._children[s][c][1],
+                                                               'action': self._children[s][c][0]})
+                next_group = new_children
+            # print("\tFound %i children looking down %i levels." % (len(self._s_neighbors[state]), self._c_depth))
 
     def _make_frame(self):
+
         frame = self._states_frame.copy()
 
         # draw mouseover states
@@ -325,58 +311,103 @@ class GameGraphApp(object):
             box_info = self._positions[self._mouseover_state]
             x_span, y_span = box_info['x'], box_info['y']
             cv2.rectangle(frame, (x_span[0], y_span[0]), (x_span[1], y_span[1]), COLOR_MOUSEOVERED, thickness=1)
+
         # draw selected states
         for s_state in self._selected_states:
             box_info = self._positions[s_state]
             x_span, y_span = box_info['x'], box_info['y']
             cv2.rectangle(frame, (x_span[0], y_span[0]), (x_span[1], y_span[1]), COLOR_SELECTED, thickness=1)
 
-        # draw edges
-        # self._scan_neighbors()
-        # self._make_edge_list()
+        # draw edges 
         self._draw_edges(frame)
 
-        # draw mouseover state
-        # draw lines
         return frame
+    
+    def _recalc_neighbors(self):
+        """
+        what states/edges need to be drawn differently?
+        """
+
+        # Update neighbors of selected states
+        self._scan_neighbors()  # Which states are connected?
+        self._make_edge_list()  # What are the endpoints of the lines?
 
     def _make_edge_list(self):
         """
-        Find the endpoints of each edge in the list of neighbors.
-        Draw it the appropriate color.
-        TODO: Connect whichever of the 4 connection points is closer (for now just the center)
+        Find the line coordinates (endpoints, etc) of each edge that needs to be drawn.
+        Collect all lines of the same color/thickness together.
+
+        self._edge_lines will be a dict with args for a call to cv2.polylines:
+            { ((r,g,b), thickness): [line1, line2, ...] }
+        i.e. a dict with (color, thickness) tuple as the key and the list of lines to draw as the value.
+
+        Each line is a int32 numpy array (line strip) of (x1, y1, x2, y2) in pixels.
+
+        Thickness should use the lower state's bar_width, color uses the player who made the move.
         """
         self._edge_lines = {}
-        for d, edge_matrix in enumerate(self._n_edges):
-            depth = d+1
-            self._edge_lines[depth] = {COLOR_X: {'thickness': 3,
-                                                 'coords': []},
-                                       COLOR_O: {'thickness': 3,
-                                                 'coords': []}}
-            for i in range(edge_matrix.shape[0]):
-                from_state = self._s_neighbors[d][i]
-                from_box_pos = self._positions[from_state]
-                from_center = np.mean(from_box_pos['x']), np.mean(from_box_pos['y'])
-                print("from state:\n", from_state)
-                print("From point: ", from_center)
-                for j in range(edge_matrix.shape[1]):
-                    to_state = self._s_neighbors[d+1][j]
-                    to_box_pos = self._positions[to_state]
-                    to_center = np.mean(to_box_pos['x']), np.mean(to_box_pos['y'])
-                    print("to state:\n", to_state)
-                    print("To point: ", to_center)
-                    move_player = self._children[from_state].get(to_state)[1]
-                    if move_player == Mark.X:
-                        color = COLOR_X
-                    else:
-                        color = COLOR_O
 
-                    if edge_matrix[i, j] == 1:
-                        edge_info = self._edge_lines[depth][color].get('coords', [])
-                        edge_info.append(np.array([from_center[0], from_center[1], to_center[0], to_center[1]]))
+        for parent_layer, edge_list in enumerate(self._s_edges):
 
-        import pprint
-        pprint.pprint(self._edge_lines)
+
+            for edge in edge_list:
+                from_state = edge['from']
+                to_state = edge['to']
+                player = edge['player']
+                # action = edge['action']  # not used yet (could be used to color or label edges)
+                child_layer = self._layers_of_states[to_state]
+                thickness = self._state_dims[child_layer]['bar_w']
+
+                from_attach, to_attach = self._attach_states(from_state, to_state)
+
+                # find the line
+                if player == Mark.X:
+                    color = COLOR_X
+                elif player == Mark.O:
+                    color = COLOR_O
+
+                line = np.array([from_attach,to_attach], dtype=np.int32)
+
+                edge_list = self._edge_lines.get((color, thickness), [])
+                edge_list.append(line)
+                self._edge_lines[(color, thickness)] = edge_list
+
+    def _attach_states(self, from_state, to_state):
+        """
+        Find the attachment points for the line from from_state to to_state.
+        """
+        def _box_center(box):
+            return np.array([box['x'][0] + box['x'][1], box['y'][0] + box['y'][1]]) / 2
+
+        from_box, to_box = self._positions[from_state], self._positions[to_state]
+        from_pos, to_pos = _box_center(from_box), _box_center(to_box)
+        # Up or down?  Left or right?
+        #import ipdb; ipdb.set_trace()
+        if self._layers_of_states[from_state] < self._layers_of_states[to_state]:
+            
+            if from_pos[0] <= to_pos[0]:
+                # from above, moving down and right
+                from_attach = self._appach_pts[from_state]['lower'][1]
+                to_attach = self._appach_pts[to_state]['upper'][0]
+
+            else:
+                # from above, moving down and left
+                from_attach = self._appach_pts[from_state]['lower'][0]
+                to_attach = self._appach_pts[to_state]['upper'][1]
+
+        else:
+
+            if from_pos[0] < to_pos[0]:
+                # from below, moving up and right
+                from_attach = self._appach_pts[from_state]['upper'][1]
+                to_attach = self._appach_pts[to_state]['lower'][0]
+
+            else:
+                # from below, moving up and left
+                from_attach = self._appach_pts[from_state]['upper'][0]
+                to_attach = self._appach_pts[to_state]['lower'][1]
+                
+        return from_attach, to_attach 
 
     def run(self):
         """
@@ -389,12 +420,22 @@ class GameGraphApp(object):
             k = cv2.waitKey(1)
             if k == 27 or k == ord('q'):
                 break
-            elif k == ord(','):
-                self._depth = max(0, self._depth - 1)
-                print("Depth: ", self._depth)
-            elif k == ord('.'):
-                self._depth += 1
-                print("Depth: ", self._depth)
+            elif k == ord('['):
+                self._p_depth = max(0, self._p_depth - 1)
+                print("Highlighting parent states/edges to depth: ", self._p_depth)
+                self._recalc_neighbors()
+            elif k == ord(']'):
+                self._p_depth += 1
+                print("Highlighting parent states/edges to depth: ", self._p_depth)
+                self._recalc_neighbors()
+            elif k == ord(';'):
+                self._c_depth = max(0, self._c_depth - 1)
+                print("Highlighting parent states/edges to depth: ", self._c_depth)
+                self._recalc_neighbors()
+            elif k == ord('\''):
+                self._c_depth += 1
+                print("Highlighting parent states/edges to depth: ", self._c_depth)
+                self._recalc_neighbors()
             frame_no += 1
             if frame_no % 10 == 0:
                 logging.info(f"Frame {frame_no}")
@@ -403,8 +444,7 @@ class GameGraphApp(object):
 
 def run_app():
 
-    app = GameGraphApp(no_plot=False, max_levels=3)
-    # import ipdb; ipdb.set_trace()
+    app = GameGraphApp(no_plot=False, max_levels=10)
 
     frame = app._make_frame()
     app.run()

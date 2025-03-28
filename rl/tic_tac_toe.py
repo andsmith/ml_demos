@@ -47,6 +47,12 @@ class Game(object):
     def get_actions(self):
         # return list of all (i,j) tuples where state[i,j] == Mark.EMPTY
         return [p for p in zip(*np.where(self.state == Mark.EMPTY))]
+    
+    def n_free(self):
+        return np.sum(self.state == Mark.EMPTY)
+    
+    def n_marked(self):
+        return np.sum(self.state != Mark.EMPTY)
 
     def clone_and_move(self, action, mark):
         new_board = Game()
