@@ -306,23 +306,30 @@ class GameGraphApp(object):
 
         frame = self._states_frame.copy()
 
+        def _draw_box_at(state, color, thickness=1):
+            box_info = self._positions[state]
+            img_size = self._state_images[state].shape[:2][::-1]
+            x0, y0 = box_info['x'][0]-1, box_info['y'][0]-1
+            x1, y1 = x0+img_size[0]+1, y0+img_size[1]+1
+
+            x0, y0 = int(x0*SHIFT), int(y0*SHIFT)
+            x1, y1 = int(x1*SHIFT), int(y1*SHIFT)
+
+            cv2.rectangle(frame, (x0, y0), (x1, y1), color, thickness=thickness, lineType=cv2.LINE_AA, shift=SHIFT_BITS)
+
         # draw mouseover states
         if self._mouseover_state is not None:
-            box_info = self._positions[self._mouseover_state]
-            x_span, y_span = box_info['x'], box_info['y']
-            cv2.rectangle(frame, (x_span[0], y_span[0]), (x_span[1], y_span[1]), COLOR_MOUSEOVERED, thickness=1)
+            _draw_box_at(self._mouseover_state, COLOR_MOUSEOVERED, thickness=2)
 
         # draw selected states
         for s_state in self._selected_states:
-            box_info = self._positions[s_state]
-            x_span, y_span = box_info['x'], box_info['y']
-            cv2.rectangle(frame, (x_span[0], y_span[0]), (x_span[1], y_span[1]), COLOR_SELECTED, thickness=1)
+            _draw_box_at(s_state, COLOR_SELECTED, thickness=1)
 
-        # draw edges 
+        # draw edges
         self._draw_edges(frame)
 
         return frame
-    
+
     def _recalc_neighbors(self):
         """
         what states/edges need to be drawn differently?
@@ -350,7 +357,6 @@ class GameGraphApp(object):
 
         for parent_layer, edge_list in enumerate(self._s_edges):
 
-
             for edge in edge_list:
                 from_state = edge['from']
                 to_state = edge['to']
@@ -367,7 +373,7 @@ class GameGraphApp(object):
                 elif player == Mark.O:
                     color = COLOR_O
 
-                line = np.array([from_attach,to_attach], dtype=np.int32)
+                line = np.array([from_attach, to_attach], dtype=np.int32)
 
                 edge_list = self._edge_lines.get((color, thickness), [])
                 edge_list.append(line)
@@ -387,9 +393,9 @@ class GameGraphApp(object):
         from_box, to_box = self._positions[from_state], self._positions[to_state]
         from_pos, to_pos = _box_center(from_box), _box_center(to_box)
         # Up or down?  Left or right?
-        #import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         if self._layers_of_states[from_state] < self._layers_of_states[to_state]:
-            
+
             if from_pos[0] <= to_pos[0]:
                 # from above, moving down and right
                 from_attach = self._appach_pts[from_state]['lower'][1]
@@ -411,8 +417,8 @@ class GameGraphApp(object):
                 # from below, moving up and left
                 from_attach = self._appach_pts[from_state]['upper'][0]
                 to_attach = self._appach_pts[to_state]['lower'][1]
-                
-        return from_attach, to_attach 
+
+        return from_attach, to_attach
 
     def run(self):
         """
@@ -441,7 +447,7 @@ class GameGraphApp(object):
                 self._c_depth += 1
                 print("Highlighting parent states/edges to depth: ", self._c_depth)
                 self._recalc_neighbors()
-            elif k==ord('c'):
+            elif k == ord('c'):
                 self._selected_states = []
                 self._recalc_neighbors()
             frame_no += 1
