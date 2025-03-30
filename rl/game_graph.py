@@ -4,12 +4,18 @@ import cv2
 
 from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW, COLOR_SELECTED, COLOR_MOUSEOVERED
 from game_base import Mark, Result
-from tic_tac_toe import get_game_tree_cached, Game
+from tic_tac_toe import get_game_tree_cached, Game, GameTree
 from node_placement import BoxOrganizerPlotter
+from drawing import GameStateArtist
+import time
 
+STATE_COUNTS = [1,  18, 72, 504,  756, 2520, 1668, 2280,  558,  156]
+SPACE_SIZES = [9, 6, 5, 3, 2, 2, 2, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
 
-LAYOUT = {'win_size': (1900, 950)}
-
+##################
+# This dispays the full tree well, change at your own risk.  (Hint, whatever layer count keeps space size at least 2 works well.)
+LAYOUT = {'win_size': (1920, 1050)}
+# number of pixels in 1 cell of the 3x3 grid, per layer
 
 SHIFT_BITS = 6
 SHIFT = 1 << SHIFT_BITS
@@ -31,15 +37,31 @@ class GameGraphApp(object):
         """
         :param size: (width, height) of the app window
         """
-        self._tree = get_game_tree_cached(player=Mark.X)
         self._max_levels = max_levels
+        self._no_plot = no_plot
+
+        self._tree = get_game_tree_cached(player=Mark.X)
+        self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
+        self._states_by_layer = [[{'id': s,
+                                   'state': s,
+                                   'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
+                                  for s in self._term if s.n_marked() == l] for l in range(self._max_levels)]
+        self._layers_of_states = {s['state']: l for l, layer in enumerate(self._states_by_layer) for s in layer}
+        self._states_used = {s['state']: True for state_layer in self._states_by_layer for s in state_layer}
+
         if max_levels > 10:
             raise ValueError("Max levels must be <= 10 for Tic-Tac-Toe.")
         self._size = LAYOUT['win_size']
         self._blank_frame = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
         self._blank_frame[:, :] = COLOR_BG
-        self._no_plot = no_plot
-        self._init_tree()
+        if True:
+            self._init_state_positions()
+        else:
+            if max_levels == 10:
+                self._init_state_positions_from_sizes()
+            else:
+                self._init_state_positions()
+
         self._init_graphics()
 
         # App state
@@ -69,14 +91,14 @@ class GameGraphApp(object):
         """
         Attachment points are the upper two and lower two endpoints of the two vertical grid lines.
         Those are found by combining these two:
-            * relative points:  self._state_dims[level] has the space size and the attachment points for images of 
-              that size: 
+            * relative points:  self._state_dims[level] has the space size and the attachment points for images of
+              that size:
                           { 'img_size': grid image's side length
                             'line_t': line width for the 4 grid lines and the bounding box
                             'upper': [(x1, y1), (x2, y2)] attachment points for the upper grid line (floats, fractional pixels)
                             'lower': [(x1, y1), (x2, y2)] attachment points for the lower grid line (same)
                             'space_size': space_size
-                            'bar_w': grid line width, int }, and 
+                            'bar_w': grid line width, int }, and
             * image offsets:  self._positions[level] is a dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}
         where:
             box_positions, box = BoxOrganizerPlotter.get_layout().
@@ -85,30 +107,35 @@ class GameGraphApp(object):
                                  'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
         """
         attach = {}
+        n_attach = 0
         for layer, state_list in enumerate(self._states_by_layer):
-            print("Getting attachment points for layer %i with %i states" % (layer, len(state_list)))
-            dims = self._state_dims[layer]
+            logging.info("Getting attachment points for layer %i with %i states" % (layer, len(state_list)))
+            dims = self._layer_artists[layer].dims
             upper_pts = np.array(dims['upper'])
             lower_pts = np.array(dims['lower'])
 
             for state_info in state_list:
                 state = state_info['state']
                 box_info = self._positions[state]
-                x_min = box_info['x'][0]
+                x_min = box_info['x'][0] - .5
                 y_min = box_info['y'][0]
-                offset = np.array([x_min, y_min])
-                attach[state] = {'upper': upper_pts + offset,
-                                 'lower': lower_pts + offset}
+                lower_offset = np.array([x_min, y_min])
+                upper_offset = [lower_offset[0], lower_offset[1] - 1]
+                attach[state] = {'upper': upper_pts + upper_offset,
+                                 'lower': lower_pts + lower_offset}
+                n_attach += 1
+
         return attach
 
     def _init_graphics(self):
-        print("Caching images...")
+        logging.info("Caching images...")
+        t0 = time.perf_counter()
         self._states_frame = self._box_placer.draw(images=self._state_images, dest=self._blank_frame.copy())
-        print("\tDone.")
+        logging.info("\tDrew app image in %.3f ms." % ((time.perf_counter()-t0)*1000))
 
         self._win_name = "Tic-Tac-Toe Game Graph"
         if not self._no_plot:
-            cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)
+            cv2.namedWindow(self._win_name)
             # cv2.setWindowProperty(self._win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             cv2.setMouseCallback(self._win_name, self.mouse_callback)
 
@@ -141,51 +168,87 @@ class GameGraphApp(object):
             y += size
         return layer_spacing
 
-    def _init_tree(self):
+    def _fit_rows_and_cols(self, n_boxes, side_len, pad, w):
+        n_cols = (w-pad) // (side_len + pad)
+        n_rows = (n_boxes) // n_cols
+        if n_rows * n_cols < n_boxes:
+            n_rows += 1
+        return n_rows, n_cols
+
+    def _init_state_positions_from_sizes(self):
+        """
+        1. Determine grid space/cell size, padding.
+        2. Determine layer spacing.
+        3. Determine n_cols, n_rows for each layer (cell_size + padding for each + 1 pad for the borders).
+        3. Distribute grid cells into final positions.
+        """
+        box_dims = [GameStateArtist(space_size=s).dims for s in SPACE_SIZES]
+        padding = [np.ceil(box_dims[l]['img_size']/5.)+1 for l in range(len(box_dims))]  # between boxes on each layer
+        padded_box_sizes = [box_dims[l]['img_size'] + padding[l] for l in range(len(box_dims))]
+
+        grid_row_cols = [self._fit_rows_and_cols(layer['n_boxes'],
+                                                  padded_box_sizes[l],
+                                                    padding[l],
+                                                    self._size[0]) for l, layer in enumerate(self._layer_spacing)]
+        layer_heights = [self._layer_spacing[l]['y'][1] - self._layer_spacing[l]['y'][0] for l in range(len(self._layer_spacing))]
+
+
+
+    def _init_state_positions(self):
         """
         Calculate sizes & placement of all states.
             1. Determine number of layers & number of states in each layer
             2. Determine positions of each state
             3. For each state, get lines to draw to it's children states.
-        """
 
+        sets:
+            self._term: list of all terminal states in the game tree
+            self._children: dict[state] = {state: (action, player) for state in children of state}
+            self._parents: dict[state] = [state, ...]  list of parents of state
+            self._initial: initial state of the game
+            self._states_by_layer: list of lists of states, each list is a layer of states
+            self._layers_of_states: dict[state] = layer number of state
+            self._positions: dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}  where the state is drawn
+            self._layer_spacing: list of dicts, each dict is a layer, with keys:
+                'y': (y_min, y_max) the y-extent of the layer in pixels,
+                'n_boxes': number of boxes in the layer,
+                'bar_y': (y_min, y_max) of the bar that will be drawn under the boxes (if not at the bottom)
+            self._layer_artists: list of GameStateArtist objects, one for each layer
+            self._state_images: dict[state] = image of the state
+            self._box_placer: BoxOrganizerPlotter object, used to place the boxes in the window
+            self._states_used : dict[state] = True if the state is used in the game tree (useful if depth<10), False otherwise
+
+        """
         # 1.
-        self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
-        self._states_by_layer = [[{'id': s,
-                                   'state': s,
-                                   'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
-                                  for s in self._term if s.n_marked() == l] for l in range(self._max_levels)]
-        self._layers_of_states = {s['state']: l for l, layer in enumerate(self._states_by_layer) for s in layer}
-        self._states_used = {s['state']: True for state_layer in self._states_by_layer for s in state_layer}
         layer_counts = np.array([len(states) for states in self._states_by_layer])
         logging.info(f"States by layer: {layer_counts}")
 
         # 2. First get the layer spacing.
         self._layer_spacing = self._calc_layer_spacing(layer_counts)
-        self._box_placer = BoxOrganizerPlotter(self._states_by_layer, spacing=self._layer_spacing, size_wh=self._size)
+        self._box_placer = BoxOrganizerPlotter(self._states_by_layer, v_spacing=self._layer_spacing, size_wh=self._size)
 
         # 3. get the size of a box in each layer, then make the images
         self._positions, self._box_sizes, _ = self._box_placer.get_layout()
         self._state_images = {}
-        self._state_dims = []  # from Game.get_space_size(box_size) for each layer
+        self._layer_artists = []  # from Game.get_space_size(box_size) for each layer
 
         logging.info("Generating images...")
         for l_ind, layer_states in enumerate(self._states_by_layer):
-            logging.info(f"\tLayer {l_ind} has {len(layer_states)} states")
             box_size = self._box_sizes[l_ind]['box_side_len']
+            space_size = GameStateArtist.get_space_size(box_size)
+            artist = GameStateArtist(space_size=space_size)
+            img_size = artist.dims['img_size']
+            logging.info(f"\tLayer {l_ind} has {len(layer_states)} states")
             logging.info(f"\tBox_size: {box_size}")
-            space_size = Game.get_space_size(box_size)
             logging.info(f"\tUsing space_size: {space_size}")
-            box_dims = Game.get_image_dims(space_size, bar_w_frac=.2)
-            logging.info(f"\tUsing tiles of size: {box_dims['img_size']}")
+            logging.info(f"\tUsing tiles of size: {img_size}")
 
             for state_info in layer_states:
-
                 state = state_info['state']
-                self._state_images[state] = state.get_img(box_dims)
-            self._state_dims.append(box_dims)
+                self._state_images[state] = artist.get_image(state)
+            self._layer_artists.append(artist)
 
-        print("\tmade ", len(self._state_images))
+        logging.info("\tmade %i images." % len(self._state_images))
 
     def _get_state_at(self, pos):
         # Which layer is the x, y position in?
@@ -239,7 +302,8 @@ class GameGraphApp(object):
 
         for (color, thickness) in self._edge_lines:
             line_strips = self._edge_lines[(color, thickness)]
-            cv2.polylines(frame, line_strips, isClosed=False, color=color, thickness=thickness, lineType=cv2.LINE_AA)
+            cv2.polylines(frame, line_strips, isClosed=False, color=color,
+                          thickness=thickness, lineType=cv2.LINE_AA, shift=SHIFT_BITS)
 
     def _scan_neighbors(self):
         """
@@ -253,8 +317,8 @@ class GameGraphApp(object):
             rooted at that state.
           - self._s_edges will be a list of l-1 lists (one per layer boundary), each a list of the edges, an
             edge is a dict with:
-              'from': state_P, 
-              'to': state_C, 
+              'from': state_P,
+              'to': state_C,
               'player': Mark.X or Mark.O   ( = self._children[state_P][state_C][1])
               'action': action that led from state_P to state_C (= self._children[state_P][state_C][0])
         """
@@ -315,11 +379,11 @@ class GameGraphApp(object):
             x0, y0 = int(x0*SHIFT), int(y0*SHIFT)
             x1, y1 = int(x1*SHIFT), int(y1*SHIFT)
 
-            cv2.rectangle(frame, (x0, y0), (x1, y1), color, thickness=thickness, lineType=cv2.LINE_AA, shift=SHIFT_BITS)
+            cv2.rectangle(frame, (x0, y0), (x1, y1), color, thickness=thickness, lineType=cv2.LINE_4, shift=SHIFT_BITS)
 
         # draw mouseover states
         if self._mouseover_state is not None:
-            _draw_box_at(self._mouseover_state, COLOR_MOUSEOVERED, thickness=2)
+            _draw_box_at(self._mouseover_state, COLOR_MOUSEOVERED, thickness=1)
 
         # draw selected states
         for s_state in self._selected_states:
@@ -363,7 +427,7 @@ class GameGraphApp(object):
                 player = edge['player']
                 # action = edge['action']  # not used yet (could be used to color or label edges)
                 child_layer = self._layers_of_states[to_state]
-                thickness = self._state_dims[child_layer]['bar_w']
+                thickness = self._layer_artists[child_layer].dims['bar_w']
 
                 from_attach, to_attach = self._attach_states(from_state, to_state)
 
@@ -373,7 +437,7 @@ class GameGraphApp(object):
                 elif player == Mark.O:
                     color = COLOR_O
 
-                line = np.array([from_attach, to_attach], dtype=np.int32)
+                line = np.array([from_attach*SHIFT, to_attach*SHIFT], dtype=np.int32)
 
                 edge_list = self._edge_lines.get((color, thickness), [])
                 edge_list.append(line)
@@ -393,7 +457,6 @@ class GameGraphApp(object):
         from_box, to_box = self._positions[from_state], self._positions[to_state]
         from_pos, to_pos = _box_center(from_box), _box_center(to_box)
         # Up or down?  Left or right?
-        # import ipdb; ipdb.set_trace()
         if self._layers_of_states[from_state] < self._layers_of_states[to_state]:
 
             if from_pos[0] <= to_pos[0]:
@@ -433,25 +496,25 @@ class GameGraphApp(object):
                 break
             elif k == ord('['):
                 self._p_depth = max(0, self._p_depth - 1)
-                print("Highlighting parent states/edges to depth: ", self._p_depth)
+                logging.info("Highlighting parent states/edges to depth: %i" % self._p_depth)
                 self._recalc_neighbors()
             elif k == ord(']'):
                 self._p_depth += 1
-                print("Highlighting parent states/edges to depth: ", self._p_depth)
+                logging.info("Highlighting parent states/edges to depth: %i" % self._p_depth)
                 self._recalc_neighbors()
             elif k == ord(';'):
                 self._c_depth = max(0, self._c_depth - 1)
-                print("Highlighting parent states/edges to depth: ", self._c_depth)
+                logging.info("Highlighting parent states/edges to depth: %i" % self._c_depth)
                 self._recalc_neighbors()
             elif k == ord('\''):
                 self._c_depth += 1
-                print("Highlighting parent states/edges to depth: ", self._c_depth)
+                logging.info("Highlighting parent states/edges to depth: %i" % self._c_depth)
                 self._recalc_neighbors()
             elif k == ord('c'):
                 self._selected_states = []
                 self._recalc_neighbors()
             frame_no += 1
-            if frame_no % 10 == 0:
+            if False:  # frame_no % 10 == 0:
                 logging.info(f"Frame {frame_no}")
         cv2.destroyAllWindows()
 

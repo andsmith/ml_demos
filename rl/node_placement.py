@@ -15,22 +15,23 @@ MIN_BOX_SIZE = 7
 
 class BoxOrganizer(object):
     _DIMS = {'layer_padding_px': 20,  # padding on either side of the layer division bar
-             'grid_padding_frac': 0.05,   # multiply by grid_size to get padding on either side of a grid.
+             'min_separation_frac': 0.1,   # fit boxes separated by this fraction of the box size
              'bar_thickness': 8  # thickness of the layer division bar
              }
 
-    def __init__(self, layers, spacing=None, size_wh=(1900, 2080)):
+    def __init__(self, layers, v_spacing=None, size_wh=(1900, 2080)):
         """
         Calculate layout.
         :param layers: list of lists of boxes, each list is a layer:
            layer[i] is a list of boxes that will be placed in band i.
               Each box is a dict with an 'id' key.
+        :param v_spacing: list of dicts, each dict is a layer definition with keys:
         :param size_wh:  size of the window in pixels (width, height).
         """
         self._min_layer_size = 50
         self._layers = layers
         self._size_wh = size_wh
-        self._layer_spacing = self._calc_layer_spacing() if spacing is None else spacing
+        self._layer_spacing = self._calc_layer_spacing() if v_spacing is None else v_spacing
         self._box_positions, self._box_sizes = self._calc_box_positions()
         self._bkg_color = (127, 127, 127)
         self._line_color = (0, 0, 0)
@@ -79,8 +80,11 @@ class BoxOrganizer(object):
         box_sizes = []
         box_pos = {}
         for i, layer in enumerate(self._layers):
+            #if i == 5:
+            #    import ipdb
+            #    ipdb.set_trace()
             top_y = self._layer_spacing[i]['y'][0]+1
-            #print("Layer", i, "top_y", top_y)
+            # print("Layer", i, "top_y", top_y)
             bottom_y = self._layer_spacing[i]['y'][1]
             w, h = self._size_wh[0],  bottom_y - top_y
 
@@ -90,17 +94,17 @@ class BoxOrganizer(object):
             # box_p is padding on all sides of each box
             # box_s is the size of the box
             box_s, box_p, n_rows, n_cols = self._get_box_size(n_boxes, w=w, h=h)
-            #print(n_rows, n_cols)
+            # print(n_rows, n_cols)
             n_rows, n_cols = self._row_col_adjust(n_boxes, box_s, w, h)
             # calculate extra space, and divide it between rows and columns
-            #print(n_rows, n_cols, "after")
+            # print(n_rows, n_cols, "after")
             v_space = h - n_rows * box_s
             v_pad = v_space / (n_rows + 1)
 
             ind = 0
             for row in range(n_rows):
                 y = int(top_y + v_pad + row * (box_s + v_pad))
-                #print(y, v_pad)
+                # print(y, v_pad)
 
                 row_len = min(n_cols, len(layer) - row * n_cols)  # last row may have fewer boxes
                 h_space = w - row_len * box_s
@@ -112,7 +116,7 @@ class BoxOrganizer(object):
                     box_pos[layer[ind]['id']] = {'x': (x, x + box_s),
                                                  'y': (y, y + box_s)}
                     ind += 1
-                if ind==len(layer):
+                if ind == len(layer):
                     break
 
             if ind != len(layer):
@@ -131,21 +135,35 @@ class BoxOrganizer(object):
         :param w: width of the space
         :param h: height of the space
         :returns: s, the size of the largest box that can fit in the space, and the padding on all sides of the box.
+
+        Ensure minimum separation (in pixels):
+
+            Height = n_rows * box_size + (n_rows -1) * pad
+            Width = n_cols * box_size + (n_cols -1) * pad
+
+
+        Rearranging gives number of rows and columns for a given box size, padding, height and width:
+
+                n_rows = (height - pad) / (box_size + pad)
+                n_cols = (width - pad) / (box_size + pad) 
+
         """
         # Find the largest square that can fit in the space
         s = min(w, h)
         while s >= MIN_BOX_SIZE:
-            pad = int(s * self._DIMS['grid_padding_frac'])
-            n_rows = h // (s + 2 * pad)
-            n_cols = w // (s + 2 * pad)
+            pad = 1 if s < 10 else int(s*self._DIMS['min_separation_frac'])
+            n_rows = (h - pad) // (s + 2 * pad)
+            n_cols = (w - pad) // (s + 2 * pad)
 
-            # print("\tTrying box size %s: %s x %s = %s (<>%s)" % (s, n_rows, n_cols, n_rows*n_cols, n))
+            print("\t\ttrying box size %s + %s: %s x %s = %s must be at least %s" %
+                  (s, pad, n_rows, n_cols, n_rows*n_cols, n))
             if n_rows * n_cols >= n:
-                return s, pad, n_rows, n_cols
+                break
             s -= 1
 
-        if s == MIN_BOX_SIZE:
+        if s < MIN_BOX_SIZE:
             raise ValueError("Box size too small to fit all boxes: W=%i, H=%i, N=%i" % (w, h, n))
+        print("\tbox size %s + %s: %s x %s = %s is at least %s" % (s, pad, n_rows, n_cols, n_rows*n_cols, n))
 
         return s, pad, n_rows, n_cols
 
@@ -182,7 +200,7 @@ class BoxOrganizer(object):
         h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
         last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
 
-        while h_pad < v_pad and (n_rows_used * box_size <=h):
+        while h_pad < v_pad and (n_rows_used * box_size <= h):
             # remove a column, add it to the end of the last row, creat a new row if needed.
             last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
             n_cols -= 1
@@ -207,18 +225,19 @@ class BoxOrganizer(object):
 
         n_rows, n_cols = new_n_rows-1, new_n_cols+1
         return n_rows, n_cols
-    
+
 
 class BoxOrganizerPlotter(BoxOrganizer):
     """
     Like a BoxOrganizer, but draw can fill in the boxes with colors or images
     """
-    def draw(self, images = None,dest=None, show_bars=False):
+
+    def draw(self, images=None, dest=None, show_bars=False):
         """
         :param images: dict(box_id = image).  If None, will use the argument in ['colors'] key of each box.
         """
         if dest is None:
-            img = np.zeros((self._size_wh[1], self._size_wh[0], 3), np.uint8) 
+            img = np.zeros((self._size_wh[1], self._size_wh[0], 3), np.uint8)
             img[:, :] = self._bkg_color
         else:
             img = dest
@@ -229,18 +248,17 @@ class BoxOrganizerPlotter(BoxOrganizer):
                     img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
         # draw boxes
         for l_ind, layer_boxes in enumerate(self._layers):
-            #if l_ind==6:
+            # if l_ind==6:
             #    import ipdb; ipdb.set_trace()
-            #print("Drawing layer", l_ind)
+            # print("Drawing layer", l_ind)
             for i, box in enumerate(layer_boxes):
                 bos_pos = self._box_positions[box['id']]
-                x,y= bos_pos['x'], bos_pos['y']
+                x, y = bos_pos['x'], bos_pos['y']
                 if images is None:
                     img[y[0]:y[1], x[0]:x[1]] = box['color']
                 else:
                     tile = images[box['id']]
-                    img[y[0]:y[0]+ tile.shape[1], x[0]:x[0]+ tile.shape[0]] = tile
-                
+                    img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile
 
         return img
 
@@ -257,9 +275,8 @@ def test_BoxOrganizer():
         next_id[0] += n
 
         return boxes
-
-    layers = [make_boxes(1), make_boxes(2), make_boxes(20), make_boxes(2200),
-              make_boxes(2), make_boxes(729), make_boxes(72)]
+    ttt_layers = [1,  18,  72, 504,  756, 2520, 1668, 2280, 558]
+    layers = [make_boxes(ttt) for ttt in ttt_layers]
     bo = BoxOrganizerPlotter(layers)
     img = bo.draw()
     plt.imshow(img)

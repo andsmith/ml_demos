@@ -3,7 +3,7 @@ MPL_ORANGE_RGB = 255, 127, 14  # O
 MPL_GREEN_RGB = 44, 160, 44    # Draw
 OFF_WHITE_RGB = 246, 238, 227  # Background
 DARK_NAVY_RGB = 0, 4, 51       # Lines
-
+GREEN = 0, 255, 0
 RED = 255, 0, 0
 
 
@@ -14,7 +14,9 @@ COLOR_LINES = DARK_NAVY_RGB
 # Player (and draw) colors
 COLOR_X = MPL_BLUE_RGB
 COLOR_O = MPL_ORANGE_RGB    
-COLOR_DRAW = MPL_GREEN_RGB
+COLOR_DRAW = MPL_GREEN_RGB  # lines
+COLOR_DRAW_SHADE = GREEN  # shading
+COLOR_SHADE = [0, 0, 0]  # shading
 
 # UI Colors
 COLOR_SELECTED = DARK_NAVY_RGB
