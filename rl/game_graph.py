@@ -5,17 +5,16 @@ import cv2
 from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW, COLOR_SELECTED, COLOR_MOUSEOVERED
 from game_base import Mark, Result
 from tic_tac_toe import get_game_tree_cached, Game, GameTree
-from node_placement import BoxOrganizerPlotter
+from node_placement import AutoBoxOrganizer, LayerwiseBoxOrganizer, FixedCellBoxOrganizer
 from drawing import GameStateArtist
 import time
 
-STATE_COUNTS = [1,  18, 72, 504,  756, 2520, 1668, 2280,  558,  156]
+# STATE_COUNTS = [1,  18, 72, 504,  756, 2520, 1668, 2280,  558,  156]
+
+# These dispays the full tree well, change at your own risk.  (Hint, whatever layer count keeps space size at least 2 works well.)
+LAYOUT = {'win_size': (1920, 1050)}
 SPACE_SIZES = [9, 6, 5, 3, 2, 2, 2, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
 
-##################
-# This dispays the full tree well, change at your own risk.  (Hint, whatever layer count keeps space size at least 2 works well.)
-LAYOUT = {'win_size': (1920, 1050)}
-# number of pixels in 1 cell of the 3x3 grid, per layer
 
 SHIFT_BITS = 6
 SHIFT = 1 << SHIFT_BITS
@@ -168,12 +167,6 @@ class GameGraphApp(object):
             y += size
         return layer_spacing
 
-    def _fit_rows_and_cols(self, n_boxes, side_len, pad, w):
-        n_cols = (w-pad) // (side_len + pad)
-        n_rows = (n_boxes) // n_cols
-        if n_rows * n_cols < n_boxes:
-            n_rows += 1
-        return n_rows, n_cols
 
     def _init_state_positions_from_sizes(self):
         """
@@ -186,13 +179,12 @@ class GameGraphApp(object):
         padding = [np.ceil(box_dims[l]['img_size']/5.)+1 for l in range(len(box_dims))]  # between boxes on each layer
         padded_box_sizes = [box_dims[l]['img_size'] + padding[l] for l in range(len(box_dims))]
 
-        grid_row_cols = [self._fit_rows_and_cols(layer['n_boxes'],
-                                                  padded_box_sizes[l],
-                                                    padding[l],
-                                                    self._size[0]) for l, layer in enumerate(self._layer_spacing)]
-        layer_heights = [self._layer_spacing[l]['y'][1] - self._layer_spacing[l]['y'][0] for l in range(len(self._layer_spacing))]
+        self._box_placer = FixedCellBoxOrganizer(size_wh=self._size,
+                                                        layers=self._states_by_layer,
+                                                        cell_sizes=box_dims,
+                                                        padding=padding)
 
-
+    
 
     def _init_state_positions(self):
         """
@@ -202,12 +194,6 @@ class GameGraphApp(object):
             3. For each state, get lines to draw to it's children states.
 
         sets:
-            self._term: list of all terminal states in the game tree
-            self._children: dict[state] = {state: (action, player) for state in children of state}
-            self._parents: dict[state] = [state, ...]  list of parents of state
-            self._initial: initial state of the game
-            self._states_by_layer: list of lists of states, each list is a layer of states
-            self._layers_of_states: dict[state] = layer number of state
             self._positions: dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}  where the state is drawn
             self._layer_spacing: list of dicts, each dict is a layer, with keys:
                 'y': (y_min, y_max) the y-extent of the layer in pixels,
@@ -216,7 +202,6 @@ class GameGraphApp(object):
             self._layer_artists: list of GameStateArtist objects, one for each layer
             self._state_images: dict[state] = image of the state
             self._box_placer: BoxOrganizerPlotter object, used to place the boxes in the window
-            self._states_used : dict[state] = True if the state is used in the game tree (useful if depth<10), False otherwise
 
         """
         # 1.
@@ -225,10 +210,12 @@ class GameGraphApp(object):
 
         # 2. First get the layer spacing.
         self._layer_spacing = self._calc_layer_spacing(layer_counts)
-        self._box_placer = BoxOrganizerPlotter(self._states_by_layer, v_spacing=self._layer_spacing, size_wh=self._size)
+        self._box_placer = LayerwiseBoxOrganizer(size_wh=self._size,
+                                                 layers=self._states_by_layer,
+                                                 v_spacing=self._layer_spacing)
 
         # 3. get the size of a box in each layer, then make the images
-        self._positions, self._box_sizes, _ = self._box_placer.get_layout()
+        self._positions, self._box_sizes = self._box_placer.box_positions, self._box_placer.box_sizes
         self._state_images = {}
         self._layer_artists = []  # from Game.get_space_size(box_size) for each layer
 
