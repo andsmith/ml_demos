@@ -102,6 +102,43 @@ class BoxOrganizer(ABC):
         h_pad = h_space / (n_cols + 1)
         return h_pad, v_pad
 
+    def _row_col_adjust(self, r_max, c_max, n, y, x, s):
+
+        n_cols = min(c_max, n)
+        n_rows = np.ceil(n / n_cols).astype(int)
+        h_pad, v_pad = self.get_h_v_spacing(n_rows, n_cols, s,
+                                            self.size_wh[0], y)
+        ratio = np.abs(h_pad / v_pad - 1)  # want to     minimize this
+
+        best = {'n_rows': n_rows, 'n_cols': n_cols, 'ratio': ratio}
+
+        n_rows_used = n_rows
+        while n_cols > 1:
+
+            # Shift a column.
+            n_cols -= 1
+            new_n_rows_used = np.ceil(n / n_cols).astype(int)
+
+            # out of space?
+            if new_n_rows_used > r_max:
+                break
+
+            # Need an extra row, does it have a better ratio?
+            h_pad, v_pad = self.get_h_v_spacing(new_n_rows_used, n_cols,
+                                                s,
+                                                self.size_wh[0], y)
+
+            ratio = np.abs(h_pad / v_pad - 1)  # want to minimize this
+
+            if ratio > best['ratio'] and (new_n_rows_used > n_rows_used):
+
+                break
+
+            best = {'n_rows': new_n_rows_used, 'n_cols': n_cols, 'ratio': ratio}
+            n_rows_used = new_n_rows_used
+
+        return best['n_rows'], best['n_cols']
+
 
 class FixedCellBoxOrganizer(BoxOrganizer):
     """
@@ -151,7 +188,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         used_height = total_padding + total_bar_height
 
         usable_height = self.size_wh[1] - used_height
-        
+
         # 2. distribute extra space to layers equally until doing so would require too much, then
         # stop distributing to the layer w/the most rows and continue until there is no more space.
         layer_heights = np.array([layer_row_counts[l] * self._box_side_lengths[l] for l in range(n_layers)])
@@ -186,7 +223,8 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                 layer_def['bar_y'] = (y, y + self._layer_bar_w)
                 y += self._layer_bar_w + self._layer_vpad_px
             layer_spacing.append(layer_def)
-
+        import pprint
+        pprint.pprint(layer_spacing)
 
         return layer_spacing
 
@@ -225,45 +263,14 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         for l, n_boxes in enumerate(self._layer_counts):
             n_cols_max = self.size_wh[0] // self._box_side_lengths[l]
             n_rows_max = layer_heights[l] // self._box_side_lengths[l]
-            n_cols = min(n_cols_max, n_boxes)
-            n_rows = np.ceil(n_boxes / n_cols).astype(int)
-            h_pad, v_pad = self.get_h_v_spacing(n_rows, n_cols, self._box_side_lengths[l],
-                                      self.size_wh[0], layer_heights[l])
-            ratio = np.abs(h_pad / v_pad - 1)  # want to     minimize this
+            y_space = self.layer_spacing[l]['y'][1] - self.layer_spacing[l]['y'][0]
+            x_space = self.size_wh[0]
+            box_size = self._box_side_lengths[l]
+            n_rows, n_cols = self._row_col_adjust(n_rows_max, n_cols_max, n_boxes, y_space, x_space, box_size)
 
-            best = {'n_rows': n_rows, 'n_cols': n_cols, 'ratio': ratio}
-
-            n_rows_used = n_rows
-            while n_cols>1 :
-
-                # Shift a column.
-                n_cols -= 1
-                new_n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
-
-                # out of space?
-                if new_n_rows_used > n_rows_max:
-                    break
-            
-                # Need an extra row, does it have a better ratio?
-                h_pad, v_pad = self.get_h_v_spacing(new_n_rows_used, n_cols,
-                                            self._box_side_lengths[l],
-                                            self.size_wh[0], layer_heights[l])
-                
-                ratio = np.abs(h_pad / v_pad - 1)  # want to minimize this
-
-                if ratio > best['ratio'] and (new_n_rows_used> n_rows_used):
-
-                    break
-
-                best = {'n_rows': new_n_rows_used, 'n_cols': n_cols, 'ratio': ratio}
-                n_rows_used = new_n_rows_used
-
-
-            n_rows = best['n_rows'] 
-            n_cols_used = best['n_cols'] if best['n_rows'] > 1 else n_boxes
             grid_shapes.append({'box_side_len': self._box_side_lengths[l],
-                                'n_rows': best['n_rows'],
-                                'n_cols': n_cols_used})
+                                'n_rows': n_rows,
+                                'n_cols': n_cols})
 
         # Now we can calculate the box positions in each layer.
         box_positions = {}
@@ -307,7 +314,11 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
         :param layers: list of lists of boxes, each list is a layer:
            layer[i] is a list of boxes that will be placed in band i.
               Each box is a dict with an 'id' key.
-        :param v_spacing: list of dicts, each dict is a layer definition with keys:
+        :param v_spacing: list of dicts, each dict is a layer definition:
+            { 'y': (top, bottom),
+              'n_boxes': number of boxes in this layer,
+              'bar_y': (top, bottom) # optional 
+              }
         :param size_wh:  size of the window in pixels (width, height).
         :param min_separation_frac: minimum separation between boxes as a fraction of the box size.
         """
@@ -340,7 +351,6 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
         box_sizes = []
         box_pos = {}
         for i, layer in enumerate(self.layers):
-
             top_y = self.layer_spacing[i]['y'][0]+1
             # print("Layer", i, "top_y", top_y)
             bottom_y = self.layer_spacing[i]['y'][1]
@@ -353,7 +363,7 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
             # box_s is the size of the box
             box_s, box_p, n_rows, n_cols = self._get_box_size(n_boxes, w=w, h=h)
             # print(n_rows, n_cols)
-            n_rows, n_cols = self._row_col_adjust(n_boxes, box_s, w, h)
+            n_rows, n_cols = self._row_col_adjust(n_rows, n_cols, n_boxes, h, w, box_s+box_p)
             # calculate extra space, and divide it between rows and columns
             # print(n_rows, n_cols, "after")
             v_space = h - n_rows * box_s
@@ -413,19 +423,18 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
             n_rows = (h - pad) // (s + 2 * pad)
             n_cols = (w - pad) // (s + 2 * pad)
 
-            print("\t\ttrying box size %s + %s: %s x %s = %s must be at least %s" %
-                  (s, pad, n_rows, n_cols, n_rows*n_cols, n))
             if n_rows * n_cols >= n:
                 break
             s -= 1
 
         if s < MIN_BOX_SIZE:
             raise ValueError("Box size too small to fit all boxes: W=%i, H=%i, N=%i" % (w, h, n))
-        print("\tbox size %s + %s: %s x %s = %s is at least %s" % (s, pad, n_rows, n_cols, n_rows*n_cols, n))
+        print("\tbox size %s (pad %s): (rows: %s) x (cols: %s) = %s is at least %s" %
+              (s, pad, n_rows, n_cols, n_rows*n_cols, n))
 
         return s, pad, n_rows, n_cols
 
-    def _row_col_adjust(self, n_boxes, box_size, w, h):
+    def _row_col_adjustX(self, n_boxes, box_size, w, h):
         """
         Adjust the number of rows and columns to minimize wasted space.  If (n_rows, n_cols) is be the output 
         of _get_box_size, they are the numbe of rows and columns that will fit the largest box size with enough
@@ -447,6 +456,7 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
         n_rows, n_cols = np.floor(h / box_size).astype(int),  np.floor(w / box_size).astype(int)
         n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
         h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
+
         last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
 
         while h_pad < v_pad and (n_rows_used * box_size <= h):

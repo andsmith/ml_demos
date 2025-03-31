@@ -141,8 +141,7 @@ class GameStateArtist(object):
             dims = GameStateArtist(space_size, bar_w_frac=bar_w_frac).dims
         return space_size
 
-    def get_image(self, game,
-                  draw_box=None):
+    def get_image(self, game):
         """
         Return an image of the game board & its dimension dictionary.
 
@@ -162,8 +161,6 @@ class GameStateArtist(object):
 
         term = game.check_endstate()
         grid_line_color = COLOR_LINES
-
-        drawing_box = (draw_box is None and term is not None) or draw_box
 
         size = GameStateArtist.get_size(self._space_size)
 
@@ -188,17 +185,6 @@ class GameStateArtist(object):
                     continue
                 self._add_marker(img, row=i, col=j, marker=game.state[i, j])
 
-        '''
-        # Draw bounding box, if terminal, extra heavy.
-        if drawing_box:
-            if size in ['normal','small']:
-                thickness = int(line_t)
-                line_color = box_color
-                img[:,-thickness:] = line_color
-                img[:,0:thickness] = line_color
-                img[-thickness:,:] = line_color
-                img[:thickness:,:] = line_color
-        '''
         # shade the whole image (including the bbox area) is averaged with the winner/draw color.
         shade_color = COLOR_SHADE if term is None else {Result.DRAW: COLOR_DRAW_SHADE,
                                                         Result.X_WIN: COLOR_X,
@@ -363,43 +349,29 @@ class GameStateArtist(object):
 def test_terminals():
     from tic_tac_toe import Game
 
-    def show_strs(strs, bbox):
+    def show_strs(strs):
         game = Game.from_strs(strs)
-        img = game.get_img(space_size=50, draw_box=bbox)
+        artist = GameStateArtist(50)
+        img = artist.get_image(game)
+
         cv2.imshow("Tic Tac Toe", img[:, :, ::-1])
         cv2.waitKey(0)
 
     show_strs(["XOO",
                "OXX",
-               "XOO"], bbox=True)
-    show_strs(["XOO",
-               "OXX",
-               "XOO"], bbox=False)
+               "XOO"])
     show_strs(["XOO",
                "XXX",
-               "XOO"], bbox=True)
-    show_strs(["XOO",
-               "XXX",
-               "XOO"], bbox=False)
+               "XOO"])
     show_strs(["XOO",
                " OX",
-               "XOO"], bbox=True)
-    show_strs(["XOO",
-               " OX",
-               "XOO"], bbox=False)
+               "XOO"])
     show_strs(["XXO",
                "XOX",
-               "OOO"], bbox=True)
-    show_strs(["XXO",
-               "XOX",
-               "OOO"], bbox=False)
-
+               "OOO"])
     show_strs(["XXO",
                "X X",
-               "O O"], bbox=True)
-    show_strs(["XXO",
-               "X X",
-               "O O"], bbox=False)
+               "O O"])
 
     cv2.destroyAllWindows()
 
@@ -436,7 +408,7 @@ def make_image():
     from tic_tac_toe import Game
     game = Game()
     game = Game.from_strs(["XOX",
-                           "OXX",
+                           "O X",
                            "OXO"])
     print(game)
 
@@ -447,10 +419,10 @@ def make_image():
 
     [print_dim_test(i) for i in [7, 25, 30, 35, 40, 45, 50, 100, 200, 500]]
 
-    artist = GameStateArtist(2)
+    artist = GameStateArtist(20)
     print("Artist category:", artist.get_size(artist._space_size))
     print("Artist space size:", artist._space_size)
-    img = artist.get_image(game)
+    img = artist.get_image(game,draw_box=True)
     import matplotlib.pyplot as plt
     plt.imshow(img)
     plt.show()

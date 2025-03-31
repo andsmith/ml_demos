@@ -5,15 +5,15 @@ import cv2
 from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW, COLOR_SELECTED, COLOR_MOUSEOVERED
 from game_base import Mark, Result
 from tic_tac_toe import get_game_tree_cached, Game, GameTree
-from node_placement import AutoBoxOrganizer, LayerwiseBoxOrganizer, FixedCellBoxOrganizer
+from node_placement import FixedCellBoxOrganizer, LayerwiseBoxOrganizer
 from drawing import GameStateArtist
 import time
 
 # STATE_COUNTS = [1,  18, 72, 504,  756, 2520, 1668, 2280,  558,  156]
 
 # These dispays the full tree well, change at your own risk.  (Hint, whatever layer count keeps space size at least 2 works well.)
-LAYOUT = {'win_size': (1920, 1050)}
-SPACE_SIZES = [9, 6, 5, 3, 2, 2, 2, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
+LAYOUT = {'win_size': (1920, 1060)}
+SPACE_SIZES = [9, 6, 5, 3, 3, 3, 3, 3, 3, 4]  # only used if displaying the full tree, else attempted autosize
 
 
 SHIFT_BITS = 6
@@ -53,14 +53,9 @@ class GameGraphApp(object):
         self._size = LAYOUT['win_size']
         self._blank_frame = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
         self._blank_frame[:, :] = COLOR_BG
-        if True:
-            self._init_state_positions()
-        else:
-            if max_levels == 10:
-                self._init_state_positions_from_sizes()
-            else:
-                self._init_state_positions()
 
+        self._init_state_grids()
+        self._make_images()
         self._init_graphics()
 
         # App state
@@ -86,7 +81,10 @@ class GameGraphApp(object):
         #   where each line is a float numpy array (line strip) of (x1, y1, x2, y2) in pixels.
         self._recalc_neighbors()  # if any initial states are selected, find their neighbors.
 
-    def _find_attach_pts(self):
+        thicknesses = [artist.dims['line_t'] for artist in self._layer_artists]
+        print("Thicknesses: ", thicknesses)
+
+    def _find_attach_pts(self, use_corners=True):
         """
         Attachment points are the upper two and lower two endpoints of the two vertical grid lines.
         Those are found by combining these two:
@@ -107,21 +105,35 @@ class GameGraphApp(object):
         """
         attach = {}
         n_attach = 0
+
+        def get_vline_attach_points(artist, state):
+            upper_pts = np.array(artist.dims['upper'])
+            lower_pts = np.array(artist.dims['lower'])
+            box_info = self._positions[state]
+            x_min = box_info['x'][0] - .5
+            y_min = box_info['y'][0] - 1
+            lower_offset = np.array([x_min, y_min])
+            upper_offset = [lower_offset[0], lower_offset[1]]
+            return {'upper': upper_pts + upper_offset,
+                    'lower': lower_pts + lower_offset}
+
+        def _get_corner_attach_points(artist, state):
+            s = artist.dims['img_size']
+            upper_pts = np.array([[0, 0], [s, 0]])
+            lower_pts = np.array([[0, s], [s, s]])
+            offset = np.array((self._positions[state]['x'][0], self._positions[state]['y'][0]))
+            return {'upper': upper_pts + offset,
+                    'lower': lower_pts + offset}
+
         for layer, state_list in enumerate(self._states_by_layer):
             logging.info("Getting attachment points for layer %i with %i states" % (layer, len(state_list)))
-            dims = self._layer_artists[layer].dims
-            upper_pts = np.array(dims['upper'])
-            lower_pts = np.array(dims['lower'])
 
             for state_info in state_list:
                 state = state_info['state']
-                box_info = self._positions[state]
-                x_min = box_info['x'][0] - .5
-                y_min = box_info['y'][0]
-                lower_offset = np.array([x_min, y_min])
-                upper_offset = [lower_offset[0], lower_offset[1] - 1]
-                attach[state] = {'upper': upper_pts + upper_offset,
-                                 'lower': lower_pts + lower_offset}
+
+                attach[state] = get_vline_attach_points(self._layer_artists[layer], state) if not use_corners else \
+                    _get_corner_attach_points(self._layer_artists[layer], state)
+
                 n_attach += 1
 
         return attach
@@ -167,55 +179,37 @@ class GameGraphApp(object):
             y += size
         return layer_spacing
 
-
-    def _init_state_positions_from_sizes(self):
+    def _init_state_grids(self):
         """
-        1. Determine grid space/cell size, padding.
-        2. Determine layer spacing.
-        3. Determine n_cols, n_rows for each layer (cell_size + padding for each + 1 pad for the borders).
-        3. Distribute grid cells into final positions.
+        If showing > 8 Layers, use the FixedCellBoxOrganizer to place the boxes in a grid.
+            else use the LayerwiseBoxOrganizer.
         """
-        box_dims = [GameStateArtist(space_size=s).dims for s in SPACE_SIZES]
-        padding = [np.ceil(box_dims[l]['img_size']/5.)+1 for l in range(len(box_dims))]  # between boxes on each layer
-        padded_box_sizes = [box_dims[l]['img_size'] + padding[l] for l in range(len(box_dims))]
+        if self._max_levels > 8:
+            box_dims = [GameStateArtist(space_size=s).dims for s in SPACE_SIZES]
+            box_sizes = [dims['img_size'] for dims in box_dims]
 
-        self._box_placer = FixedCellBoxOrganizer(size_wh=self._size,
-                                                        layers=self._states_by_layer,
-                                                        cell_sizes=box_dims,
-                                                        padding=padding)
+            self._box_placer = FixedCellBoxOrganizer(size_wh=self._size,
+                                                     layers=self._states_by_layer,
+                                                     box_sizes=box_sizes)
+        else:
 
-    
+            # 1.
+            layer_counts = np.array([len(states) for states in self._states_by_layer])
+            logging.info(f"States by layer: {layer_counts}")
 
-    def _init_state_positions(self):
-        """
-        Calculate sizes & placement of all states.
-            1. Determine number of layers & number of states in each layer
-            2. Determine positions of each state
-            3. For each state, get lines to draw to it's children states.
+            # 2. First get the layer spacing.
+            self._layer_spacing = self._calc_layer_spacing(layer_counts)
+            self._box_placer = LayerwiseBoxOrganizer(size_wh=self._size,
+                                                     layers=self._states_by_layer,
+                                                     v_spacing=self._layer_spacing)
 
-        sets:
-            self._positions: dict[state] = {'x': (x_min, x_max), 'y': (y_min, y_max)}  where the state is drawn
-            self._layer_spacing: list of dicts, each dict is a layer, with keys:
-                'y': (y_min, y_max) the y-extent of the layer in pixels,
-                'n_boxes': number of boxes in the layer,
-                'bar_y': (y_min, y_max) of the bar that will be drawn under the boxes (if not at the bottom)
-            self._layer_artists: list of GameStateArtist objects, one for each layer
-            self._state_images: dict[state] = image of the state
-            self._box_placer: BoxOrganizerPlotter object, used to place the boxes in the window
+        self._layer_spacing = self._box_placer.layer_spacing
+        self._positions = self._box_placer.box_positions
+        self._box_sizes = self._box_placer.grid_shapes
 
-        """
-        # 1.
-        layer_counts = np.array([len(states) for states in self._states_by_layer])
-        logging.info(f"States by layer: {layer_counts}")
+    def _make_images(self):
+        # Get the size of a box in each layer, then make the images.
 
-        # 2. First get the layer spacing.
-        self._layer_spacing = self._calc_layer_spacing(layer_counts)
-        self._box_placer = LayerwiseBoxOrganizer(size_wh=self._size,
-                                                 layers=self._states_by_layer,
-                                                 v_spacing=self._layer_spacing)
-
-        # 3. get the size of a box in each layer, then make the images
-        self._positions, self._box_sizes = self._box_placer.box_positions, self._box_placer.box_sizes
         self._state_images = {}
         self._layer_artists = []  # from Game.get_space_size(box_size) for each layer
 
@@ -360,13 +354,16 @@ class GameGraphApp(object):
         def _draw_box_at(state, color, thickness=1):
             box_info = self._positions[state]
             img_size = self._state_images[state].shape[:2][::-1]
-            x0, y0 = box_info['x'][0]-1, box_info['y'][0]-1
-            x1, y1 = x0+img_size[0]+1, y0+img_size[1]+1
-
-            x0, y0 = int(x0*SHIFT), int(y0*SHIFT)
-            x1, y1 = int(x1*SHIFT), int(y1*SHIFT)
-
-            cv2.rectangle(frame, (x0, y0), (x1, y1), color, thickness=thickness, lineType=cv2.LINE_4, shift=SHIFT_BITS)
+            x0, y0 = box_info['x'][0]-2, box_info['y'][0]-2
+            x1, y1 = x0+img_size[0]+4, y0+img_size[1]+4
+            # top
+            frame[y0:y0+thickness, x0:x1] = color
+            # bottom
+            frame[y1-thickness:y1, x0:x1] = color
+            # left
+            frame[y0:y1, x0:x0+thickness] = color
+            # right
+            frame[y0:y1, x1-thickness:x1] = color
 
         # draw mouseover states
         if self._mouseover_state is not None:
@@ -374,7 +371,10 @@ class GameGraphApp(object):
 
         # draw selected states
         for s_state in self._selected_states:
-            _draw_box_at(s_state, COLOR_SELECTED, thickness=1)
+            layer = self._layers_of_states[s_state]
+            thickness = max(1, self._layer_artists[layer].dims['line_t'])
+
+            _draw_box_at(s_state, COLOR_SELECTED, thickness=thickness)
 
         # draw edges
         self._draw_edges(frame)
