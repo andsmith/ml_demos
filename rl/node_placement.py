@@ -148,7 +148,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
     (Assume box sizes already include padding.)
     """
 
-    def __init__(self, size_wh, layers, box_sizes):
+    def __init__(self, size_wh, layers, box_sizes,**argv):
         """
         :param size_wh: size of the window in pixels (width, height).
         :param layers: list of lists of boxes, each list is a layer:
@@ -158,7 +158,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         """
         self._box_side_lengths = box_sizes
 
-        super().__init__(size_wh, layers)
+        super().__init__(size_wh, layers,**argv)
 
     def _calc_layer_spacing(self):
         """

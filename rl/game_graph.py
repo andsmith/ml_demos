@@ -12,8 +12,8 @@ import time
 # STATE_COUNTS = [1,  18, 72, 504,  756, 2520, 1668, 2280,  558,  156]
 
 # These dispays the full tree well, change at your own risk.  (Hint, whatever layer count keeps space size at least 2 works well.)
-LAYOUT = {'win_size': (1920, 1060)}
-SPACE_SIZES = [9, 6, 5, 3, 3, 3, 3, 3, 3, 4]  # only used if displaying the full tree, else attempted autosize
+LAYOUT = {'win_size': (1920, 1080)}
+SPACE_SIZES = [9, 6, 5, 3, 3, 2, 3, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
 
 
 SHIFT_BITS = 6
@@ -119,8 +119,8 @@ class GameGraphApp(object):
 
         def _get_corner_attach_points(artist, state):
             s = artist.dims['img_size']
-            upper_pts = np.array([[0, 0], [s, 0]])
-            lower_pts = np.array([[0, s], [s, s]])
+            upper_pts = np.array([[-1, -1], [s, -1]])
+            lower_pts = np.array([[-1, s+1], [s, s+1]])
             offset = np.array((self._positions[state]['x'][0], self._positions[state]['y'][0]))
             return {'upper': upper_pts + offset,
                     'lower': lower_pts + offset}
@@ -146,8 +146,9 @@ class GameGraphApp(object):
 
         self._win_name = "Tic-Tac-Toe Game Graph"
         if not self._no_plot:
-            cv2.namedWindow(self._win_name)
-            # cv2.setWindowProperty(self._win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)
+            print("Going FULLSCREEN!")
+            cv2.setWindowProperty(self._win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             cv2.setMouseCallback(self._win_name, self.mouse_callback)
 
     def _calc_layer_spacing(self, layer_counts):
@@ -190,7 +191,8 @@ class GameGraphApp(object):
 
             self._box_placer = FixedCellBoxOrganizer(size_wh=self._size,
                                                      layers=self._states_by_layer,
-                                                     box_sizes=box_sizes)
+                                                     box_sizes=box_sizes,
+                                                     layer_vpad_px=2, layer_bar_w=2)
         else:
 
             # 1.
