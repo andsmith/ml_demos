@@ -38,11 +38,8 @@ class BoxOrganizer(ABC):
         self._bkg_color = (127, 127, 127)
         self._line_color = (0, 0, 0)
 
-        self._init_data()
-
-    def _init_data(self):
         self.layer_spacing = self._calc_layer_spacing()
-        self.box_positions, self.box_sizes = self._calc_box_positions()
+        self.box_positions, self.grid_shapes = self._calc_box_positions()
 
     @abstractmethod
     def _calc_layer_spacing(self):
@@ -60,7 +57,7 @@ class BoxOrganizer(ABC):
         """
         Calculate the positions of the boxes in each layer.
         :return: box_pos: dict -> box_id -> {'x': (left, right), 'y': (top, bottom)}
-                box_sizes: list, for each layer:  {'box_side_len': int, 'n_rows': int, 'n_cols': int}
+                grid_shapes: list, for each layer:  {'box_side_len': int, 'n_rows': int, 'n_cols': int}
         """
         pass
 
@@ -126,32 +123,19 @@ class FixedCellBoxOrganizer(BoxOrganizer):
 
         super().__init__(size_wh, layers)
 
-    def _init_data(self):
+    def _calc_layer_spacing(self):
         """
-        Calculate both layer spacing and box positions at the same time, since they will depend on each other.
+        Calculate layer spacing:
             1. Calculate each layer height assuming boxes are completely packed.  
             2. Distribute extra vertical space to each row, irrespective of layer, i.e. layers with r rows will get r+1 extra pixels of vertical space.
-            3. Then adjust rows/columns within each layer to get the most equal vertical & horizontal spacing between boxes.
-            (i.e. reduce the number of columns until the last row is as full as possible, since they start out packed by column).    
 
-
-        Return them in the abstract implementations by setting self._data to a dict with:
-
-            layer_spacing: list of dicts, each dict is a layer definition with keys:
+        Return:  layer_spacing: list of dicts, each dict is a layer definition with keys:
                     'y': (top, bottom) pixel coordinates of the layer
                     'bar_y': (top, bottom) pixel coordinates of the layer division bar (i.e between each 'y' region)
                     'n_boxes': number of boxes in this layer
-            box_positions: dict mapping each box_id to a bounding box in pixels {'x': (left, right), 'y': (top, bottom)}
-            grid_sizes: list, for each layer:  {'box_side_len': int, 'n_rows': int, 'n_cols': int}
-
-
         """
-        self._data = {'grid_sizes': [],
-                      'layer_spacing': [],
-                      'box_positions': {}}
-
         n_layers = len(self._layer_counts)
-
+        layer_spacing = []
         # 1. packed layers
         layer_row_counts = []
 
@@ -162,24 +146,16 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         layer_row_counts = np.array(layer_row_counts)
 
         # h = window height - layer bars - layer padding
-        total_padding = n_layers * 2 * self._layer_vpad_px # on each side
+        total_padding = n_layers * 2 * self._layer_vpad_px  # on each side
         total_bar_height = (n_layers - 1) * self._layer_bar_w
-        used_height =  total_padding + total_bar_height
+        used_height = total_padding + total_bar_height
 
         usable_height = self.size_wh[1] - used_height
-        print("Fitting everything into %i layer-pixels (not padding & bars)." % usable_height)
-
+        
         # 2. distribute extra space to layers equally until doing so would require too much, then
         # stop distributing to the layer w/the most rows and continue until there is no more space.
         layer_heights = np.array([layer_row_counts[l] * self._box_side_lengths[l] for l in range(n_layers)])
-        extra_height= usable_height - np.sum(layer_heights)
-        print("Layer row counts before adjusting: ", layer_row_counts)
-        print("Layer heights before distributing extra space: ", layer_heights)
-        print("Image height is %i = total layer height %i +  spacing %i + extra height %i." % (self.size_wh[1],
-                                                                         np.sum(layer_heights),
-                                                                         used_height,
-                                                                         extra_height))
-        print("Extra v space:", extra_height)
+        extra_height = usable_height - np.sum(layer_heights)
         adding_to = np.ones(n_layers, dtype=bool)  # which layers are still getting extra space
         while extra_height > 0:
             n_req = np.sum(layer_row_counts[adding_to])
@@ -198,11 +174,6 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             layer_heights[adding_to] += layer_row_counts[adding_to]
             extra_height -= n_req
 
-        print("Layer heights after distributing extra space: ", layer_heights)
-        print("\tSum:  %i  (Should be image height - padding:  %i)" %
-              (np.sum(layer_heights), self.size_wh[1] - total_padding - total_bar_height))
-        
-
         # Now we can set layer spacing.
         y = self._layer_vpad_px
         for l, layer_h in enumerate(layer_heights):
@@ -214,24 +185,115 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             if l < n_layers - 1:
                 layer_def['bar_y'] = (y, y + self._layer_bar_w)
                 y += self._layer_bar_w + self._layer_vpad_px
-            self._data['layer_spacing'].append(layer_def)
-        import pprint
-        pprint.pprint(self._data['layer_spacing'])
+            layer_spacing.append(layer_def)
 
-        # 3. Now we can calculate the box positions, and adjust the number of rows and columns to minimize wasted space.
-        # (i.e. reduce the number of columns until the last row is as full as possible, since they start out packed by column).
 
-        super()._init_data()
-
-    def _calc_layer_spacing(self):
-        """
-        Calculate the spacing between layers.
-        :return: 
-        """
-        return self._data['layer_spacing']
+        return layer_spacing
 
     def _calc_box_positions(self):
-        return self._data['box_positions'], self._data['grid_sizes']
+        """
+
+        1. Adjust rows/columns within each layer to get the most equal vertical & horizontal spacing between boxes.
+           (i.e. reduce the number of columns until the last row is as full as possible, since they start out packed by column).    
+        2. Distribute boxes evenly in each layer.
+
+        returns:
+            box_positions: dict mapping each box_id to a bounding box in pixels {'x': (left, right), 'y': (top, bottom)}
+            grid_sizes: list, for each layer:  {'box_side_len': int, 'n_rows': int, 'n_cols': int}
+        """
+
+        # 3. Now we can calculate each layer's row/col count, and adjust the number of rows and columns to minimize wasted space.
+        #      - Start assuming rows are packed, then
+        #      - shift columns to the bottom row until its full, then
+        #      - Add another row if it will improve the ratio of horizontal to vertical padding (between boxes)
+        #      - Repeat until out of vertical space
+        #  (assume no minimum box padding)
+
+        grid_shapes = []
+        layer_heights = [spacing['y'][1] - spacing['y'][0] for spacing in self.layer_spacing]
+
+        def get_spacing(n_rows, n_cols, box_size, w, h):
+            # with pad on left and right but not top and bottom (handled by layer padding)
+
+            v_space = h - n_rows * box_size
+            v_pad = v_space / (n_rows - 1) if n_rows > 1 else 0
+
+            h_space = w - n_cols * box_size
+            h_pad = h_space / (n_cols + 1)
+            return h_pad, v_pad
+
+        for l, n_boxes in enumerate(self._layer_counts):
+            n_cols_max = self.size_wh[0] // self._box_side_lengths[l]
+            n_rows_max = layer_heights[l] // self._box_side_lengths[l]
+            n_cols = min(n_cols_max, n_boxes)
+            n_rows = np.ceil(n_boxes / n_cols).astype(int)
+            h_pad, v_pad = self.get_h_v_spacing(n_rows, n_cols, self._box_side_lengths[l],
+                                      self.size_wh[0], layer_heights[l])
+            ratio = np.abs(h_pad / v_pad - 1)  # want to     minimize this
+
+            best = {'n_rows': n_rows, 'n_cols': n_cols, 'ratio': ratio}
+
+            n_rows_used = n_rows
+            while n_cols>1 :
+
+                # Shift a column.
+                n_cols -= 1
+                new_n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
+
+                # out of space?
+                if new_n_rows_used > n_rows_max:
+                    break
+            
+                # Need an extra row, does it have a better ratio?
+                h_pad, v_pad = self.get_h_v_spacing(new_n_rows_used, n_cols,
+                                            self._box_side_lengths[l],
+                                            self.size_wh[0], layer_heights[l])
+                
+                ratio = np.abs(h_pad / v_pad - 1)  # want to minimize this
+
+                if ratio > best['ratio'] and (new_n_rows_used> n_rows_used):
+
+                    break
+
+                best = {'n_rows': new_n_rows_used, 'n_cols': n_cols, 'ratio': ratio}
+                n_rows_used = new_n_rows_used
+
+
+            n_rows = best['n_rows'] 
+            n_cols_used = best['n_cols'] if best['n_rows'] > 1 else n_boxes
+            grid_shapes.append({'box_side_len': self._box_side_lengths[l],
+                                'n_rows': best['n_rows'],
+                                'n_cols': n_cols_used})
+
+        # Now we can calculate the box positions in each layer.
+        box_positions = {}
+        for l, boxes in enumerate(self.layers):
+            layer_top, layer_bottom = self.layer_spacing[l]['y']
+            layer_h = layer_bottom - layer_top
+            layer_w = self.size_wh[0]
+            box_s = grid_shapes[l]['box_side_len']
+            n_rows = grid_shapes[l]['n_rows']
+            n_cols = grid_shapes[l]['n_cols']
+
+            # Keep padding floats to distribute evenly.
+            x_pad, y_pad = self.get_h_v_spacing(
+                n_rows, n_cols, box_s, self.size_wh[0], layer_h)  # use v-padding for placement
+            n = 0
+            for row in range(n_rows):
+                y = int(layer_top + row * (box_s + y_pad) + y_pad)
+                row_len = min(n_cols, len(boxes) - row * n_cols)
+                x_pad = (layer_w - row_len * box_s) / (row_len + 1)  # between boxes on this row
+                for col in range(row_len):
+                    x = int(col * (box_s + x_pad) + x_pad)
+                    box_id = boxes[n]['id']
+                    box_positions[box_id] = {'x': (x, x + box_s),
+                                             'y': (y, y + box_s)}
+                    n += 1
+                if n == len(boxes):
+                    break
+            if n != len(boxes):
+                raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (n, len(boxes)))
+        return box_positions, grid_shapes
 
 
 class LayerwiseBoxOrganizer(BoxOrganizer):
@@ -463,32 +525,23 @@ def test_BoxOrganizer():
         next_id[0] += n
 
         return boxes
-    game_layers = [1,  18,  72, 504,  756, 2520, 1668, 2280, 558, 156][:3]
-    space_sizes = [9,   6,   5,   3,    2,    2,    2,    2,   3,   4][:3]
+    game_layers = [1,  18,  72, 504,  756, 2520, 1668, 2280, 558, 156]
+    space_sizes = [9,   6,   5,   3,    2,    2,    2,    2,   3,   4]
     from drawing import GameStateArtist
     box_sizes = [GameStateArtist(s).dims['img_size'] for s in space_sizes]
     print("Space sizes: ", space_sizes)
     print("Box sizes: ", box_sizes)
-    size_wh = 1920,300
+    size_wh = 1920, 1055
     layers = [make_boxes(ttt) for ttt in game_layers]
 
     bo = FixedCellBoxOrganizer(size_wh, layers, box_sizes=box_sizes)
-    img = bo.draw()
-    fix, ax = plt.subplots(1, 1, figsize=(15, 10))
-    plt.imshow(img)
-
-    fig_manager = plt.get_current_fig_manager()
-    if hasattr(fig_manager, "window"):
-        fig_manager.window.showMaximized()  # For Qt backends
-    elif hasattr(mng, "frame"):
-        fig_manager.frame.Maximize(True)    # For wxAgg backend
-    else:
-        print("Warning: Maximizing not supported for this backend.")
+    img = bo.draw(show_bars=True)
+    _, ax = plt.subplots(1, 1, figsize=(15, 10))
+    ax.imshow(img)
 
     plt.show()
 
 
 if __name__ == "__main__":
-    import ipdb
-    ipdb.set_trace()
+
     test_BoxOrganizer()
