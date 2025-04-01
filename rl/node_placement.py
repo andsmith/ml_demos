@@ -20,7 +20,7 @@ class BoxOrganizer(ABC):
     Images are arranged in layers.
     """
 
-    def __init__(self, size_wh, layers, layer_vpad_px=7, layer_bar_w=4):
+    def __init__(self, size_wh, layers, layer_vpad_px=7, layer_bar_w=4, brickwork=True):
         """
         :param size_wh: size of the window in pixels (width, height).
         :param layers: list of lists of boxes, each list is a layer:
@@ -28,7 +28,9 @@ class BoxOrganizer(ABC):
                Each box is a dict with an 'id' key.
         :param layer_spacing_px: space above and below each layer of boxes.
         :param layer_bar_w: width of the layer division bar in pixels.
+        :param brickwork: if True, boxes are arranged in a brickwork pattern (i.e. staggered rows).
         """
+        self._brick = brickwork
         self.size_wh = size_wh
         self.layers = layers
         self._layer_vpad_px = layer_vpad_px
@@ -77,8 +79,11 @@ class BoxOrganizer(ABC):
                     img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
         # draw boxes
         for l_ind, layer_boxes in enumerate(self.layers):
-
+            bad_boxes = set()
             for i, box in enumerate(layer_boxes):
+                if box['id'] not in self.box_positions:
+                    bad_boxes.add(box['id'])
+                    continue
                 bos_pos = self.box_positions[box['id']]
                 x, y = bos_pos['x'], bos_pos['y']
                 if images is None:
@@ -86,7 +91,8 @@ class BoxOrganizer(ABC):
                 else:
                     tile = images[box['id']]
                     img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile
-
+            if len(bad_boxes) > 0:
+                raise Exception("Layer %d: Missing boxes %s" % (l_ind, str(bad_boxes)))
         return img
 
     @staticmethod
@@ -102,10 +108,40 @@ class BoxOrganizer(ABC):
         h_pad = h_space / (n_cols + 1)
         return h_pad, v_pad
 
-    def _row_col_adjust(self, r_max, c_max, n, y, x, s):
+    def _n_cols_n_rows(self, c_max, n):
+        """
+        Filling a grid with c_max columns, top to bottom, left to right, calculate the number of rows and columns 
+        that n items will actually occupy.
 
+        If the brickwork option is used, every other row will be shortened by 1, so it may require more rows.
+
+        :param c_max: maximum number of columns
+        :param r_max: maximum number of rows
+        :param n: number of boxes to fit in the rectangle
+        :return: n_rows, n_cols, the number of rows and columns that will fit in the rectangle.
+        """
         n_cols = min(c_max, n)
-        n_rows = np.ceil(n / n_cols).astype(int)
+        n_rows = np.ceil(n / n_cols).astype(int)  # without bricks.
+        if self._brick and n_rows > 1:
+            # fill up, brick_wise,
+            r = 0
+            n_filled=0
+            while n > 0:
+                row_len = n_cols if r % 2 == 0 else n_cols-1
+                n_filled += row_len
+                n -= row_len
+                r += 1
+            n_rows = r
+
+
+        return n_cols, n_rows
+
+    def _row_col_adjust(self, r_max, c_max, n, y, x, s):
+        """
+        Reduce the number of columns until spacing around each box is as even as possible.
+        """
+
+        n_cols, n_rows = self._n_cols_n_rows(c_max, n)
         h_pad, v_pad = self.get_h_v_spacing(n_rows, n_cols, s,
                                             self.size_wh[0], y)
         ratio = np.abs(h_pad / v_pad - 1)  # want to     minimize this
@@ -113,17 +149,19 @@ class BoxOrganizer(ABC):
         best = {'n_rows': n_rows, 'n_cols': n_cols, 'ratio': ratio}
 
         n_rows_used = n_rows
+
         while n_cols > 1:
 
             # Shift a column.
             n_cols -= 1
-            new_n_rows_used = np.ceil(n / n_cols).astype(int)
-
+            
+            new_n_rows_used = self._n_cols_n_rows(n_cols, n)[1]
+            # print("\t\tTesting %i cols: requires %i rows to fit %i things." % (n_cols, new_n_rows_used, n))
             # out of space?
             if new_n_rows_used > r_max:
                 break
 
-            # Need an extra row, does it have a better ratio?
+            # Does this row/col size have a better spacing ratio?
             h_pad, v_pad = self.get_h_v_spacing(new_n_rows_used, n_cols,
                                                 s,
                                                 self.size_wh[0], y)
@@ -131,7 +169,7 @@ class BoxOrganizer(ABC):
             ratio = np.abs(h_pad / v_pad - 1)  # want to minimize this
 
             if ratio > best['ratio'] and (new_n_rows_used > n_rows_used):
-
+                # we're getting worse, so stop here.
                 break
 
             best = {'n_rows': new_n_rows_used, 'n_cols': n_cols, 'ratio': ratio}
@@ -148,7 +186,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
     (Assume box sizes already include padding.)
     """
 
-    def __init__(self, size_wh, layers, box_sizes,**argv):
+    def __init__(self, size_wh, layers, box_sizes, **argv):
         """
         :param size_wh: size of the window in pixels (width, height).
         :param layers: list of lists of boxes, each list is a layer:
@@ -158,7 +196,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         """
         self._box_side_lengths = box_sizes
 
-        super().__init__(size_wh, layers,**argv)
+        super().__init__(size_wh, layers, **argv)
 
     def _calc_layer_spacing(self):
         """
@@ -230,6 +268,9 @@ class FixedCellBoxOrganizer(BoxOrganizer):
 
     def _calc_box_positions(self):
         """
+        We know how big each layer is, how many boxes are in each, and what size each layer's boxes are.
+
+        Find the final placement for each box in the image.
 
         1. Adjust rows/columns within each layer to get the most equal vertical & horizontal spacing between boxes.
            (i.e. reduce the number of columns until the last row is as full as possible, since they start out packed by column).    
@@ -250,24 +291,16 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         grid_shapes = []
         layer_heights = [spacing['y'][1] - spacing['y'][0] for spacing in self.layer_spacing]
 
-        def get_spacing(n_rows, n_cols, box_size, w, h):
-            # with pad on left and right but not top and bottom (handled by layer padding)
-
-            v_space = h - n_rows * box_size
-            v_pad = v_space / (n_rows - 1) if n_rows > 1 else 0
-
-            h_space = w - n_cols * box_size
-            h_pad = h_space / (n_cols + 1)
-            return h_pad, v_pad
-
         for l, n_boxes in enumerate(self._layer_counts):
             n_cols_max = self.size_wh[0] // self._box_side_lengths[l]
             n_rows_max = layer_heights[l] // self._box_side_lengths[l]
             y_space = self.layer_spacing[l]['y'][1] - self.layer_spacing[l]['y'][0]
             x_space = self.size_wh[0]
             box_size = self._box_side_lengths[l]
+            
             n_rows, n_cols = self._row_col_adjust(n_rows_max, n_cols_max, n_boxes, y_space, x_space, box_size)
-
+            #print("Fit %i items into a %i x %i grid, using a %i x %i sub-grid." %
+            #      (n_boxes, n_cols_max, n_rows_max, n_cols, n_rows))
             grid_shapes.append({'box_side_len': self._box_side_lengths[l],
                                 'n_rows': n_rows,
                                 'n_cols': n_cols})
@@ -275,6 +308,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         # Now we can calculate the box positions in each layer.
         box_positions = {}
         for l, boxes in enumerate(self.layers):
+            #print("Layer %i: %i boxes" % (l, len(boxes)))
             layer_top, layer_bottom = self.layer_spacing[l]['y']
             layer_h = layer_bottom - layer_top
             layer_w = self.size_wh[0]
@@ -288,16 +322,28 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             n = 0
             for row in range(n_rows):
                 y = int(layer_top + row * (box_s + y_pad) + y_pad)
-                row_len = min(n_cols, len(boxes) - row * n_cols)
+
+                row_len = min(n_cols, len(boxes) - n)
                 x_pad = (layer_w - row_len * box_s) / (row_len + 1)  # between boxes on this row
+
+                # if this is a odd-brick row (and not the last row)
+                if self._brick and (row % 2 == 1) and (row != n_rows - 1) and (n_rows > 2):
+                    row_len = min(n_cols-1, len(boxes) - n)  # shorten row, don't change padding, add offset
+                    # print("BRICK ON LAYER %i, row %i (n_rows=%i)" % (l, row, n_rows))
+                    x_offset = (box_s + x_pad)/2
+                else:
+                    x_offset = 0.0
+                #print("\tRow %i of %i has %i items." % (row, n_rows, row_len))
+
                 for col in range(row_len):
-                    x = int(col * (box_s + x_pad) + x_pad)
+                    x = int(col * (box_s + x_pad) + x_pad + x_offset)
                     box_id = boxes[n]['id']
                     box_positions[box_id] = {'x': (x, x + box_s),
                                              'y': (y, y + box_s)}
                     n += 1
                 if n == len(boxes):
                     break
+            #print("\n")
             if n != len(boxes):
                 raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (n, len(boxes)))
         return box_positions, grid_shapes

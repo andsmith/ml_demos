@@ -81,8 +81,8 @@ class GameGraphApp(object):
         #   where each line is a float numpy array (line strip) of (x1, y1, x2, y2) in pixels.
         self._recalc_neighbors()  # if any initial states are selected, find their neighbors.
 
-        thicknesses = [artist.dims['line_t'] for artist in self._layer_artists]
-        print("Thicknesses: ", thicknesses)
+        #thicknesses = [artist.dims['line_t'] for artist in self._layer_artists]
+        #print("Thicknesses: ", thicknesses)
 
     def _find_attach_pts(self, use_corners=True):
         """
