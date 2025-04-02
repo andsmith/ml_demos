@@ -6,6 +6,7 @@ from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW, COLOR_SE
 from game_base import Mark, Result
 from tic_tac_toe import get_game_tree_cached, Game, GameTree
 from node_placement import FixedCellBoxOrganizer, LayerwiseBoxOrganizer
+from layer_optimizer import SimpleTreeOptimizer
 from drawing import GameStateArtist
 import time
 
@@ -39,7 +40,7 @@ class GameGraphApp(object):
         self._max_levels = max_levels
         self._no_plot = no_plot
 
-        self._tree = get_game_tree_cached(player=Mark.X)
+        self._tree = get_game_tree_cached(player=Mark.X, verbose=True)
         self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
         self._states_by_layer = [[{'id': s,
                                    'state': s,
@@ -55,8 +56,15 @@ class GameGraphApp(object):
         self._blank_frame[:, :] = COLOR_BG
 
         self._init_state_grids()
+        tree_opt = SimpleTreeOptimizer(image_size=self._size,
+                                 states_by_layer=self._states_by_layer,
+                                 state_positions=self._positions,
+                                 terminal=self._term)
+        self._box_placer.box_positions = tree_opt.get_new_positions()
+        self._positions = self._box_placer.box_positions
         self._make_images()
-        self._init_graphics()
+
+        self._init_display()
 
         # App state
         self._p_depth = 1  # how many grand* parents to show for each selected vertex
@@ -65,7 +73,7 @@ class GameGraphApp(object):
         # Things to draw
         self._mouseover_state = None
         self._click_state = None
-        self._selected_states = [Game.from_strs(["X  ", "   ", "   "])]
+        self._selected_states = []#Game.from_strs(["X  ", "   ", "   "])]
 
         # key by state, value is {'upper': [(x_left, y_left) , (x_right, y_right)],
         #                         'lower': [(x_left, y_left) , (x_right, y_right)]}  (floats, in fractional pixels)
@@ -81,8 +89,8 @@ class GameGraphApp(object):
         #   where each line is a float numpy array (line strip) of (x1, y1, x2, y2) in pixels.
         self._recalc_neighbors()  # if any initial states are selected, find their neighbors.
 
-        #thicknesses = [artist.dims['line_t'] for artist in self._layer_artists]
-        #print("Thicknesses: ", thicknesses)
+        # thicknesses = [artist.dims['line_t'] for artist in self._layer_artists]
+        # print("Thicknesses: ", thicknesses)
 
     def _find_attach_pts(self, use_corners=True):
         """
@@ -138,7 +146,8 @@ class GameGraphApp(object):
 
         return attach
 
-    def _init_graphics(self):
+    def _init_display(self):
+        # images and display setup
         logging.info("Caching images...")
         t0 = time.perf_counter()
         self._states_frame = self._box_placer.draw(images=self._state_images, dest=self._blank_frame.copy())
@@ -147,7 +156,7 @@ class GameGraphApp(object):
         self._win_name = "Tic-Tac-Toe Game Graph"
         if not self._no_plot:
             cv2.namedWindow(self._win_name, cv2.WINDOW_NORMAL)
-            print("Going FULLSCREEN!")
+            logging.info("Going fullscreen.")
             cv2.setWindowProperty(self._win_name, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             cv2.setMouseCallback(self._win_name, self.mouse_callback)
 
