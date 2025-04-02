@@ -123,23 +123,21 @@ As well as displaying all 32 draw states in the image:
 (lines are green, indicating a draw terminal state.)
 
 
----FUTURE WORK PAST HERE---
-
 ### The Game Tree App:
 
-This app shows all 8,533 game states in the same window and all edges between them.  Click states to show their parents/children up to a given depth.  Contrl with the following **hotkeys**:
+This app shows all 8,533 game states in the same window and all edges between them.  Click states to show their parents/children up to a given depth.  Control with the following **hotkeys**:
   
 * `[` - decrease  parent depth (Number of generates above selected state)
 * `]` - increase parent depth
 * `;` - decrease child depth
 * `'` - incrase child depth
-*`q` or `ESC` - quit
+* `q` or `ESC` - quit
 
 Start the app by runing: 
 ```
 ml_demos\rl> python game_graph.py
 ```
-[Note, this runs fullscreen at 1920x1080.  Changing the variable `'win_size'` will change the resolution but making it smaller may cause some states to overlap.]  This will show all reachable game board configurations aranged in 10 rows according to the number of moves made so far.   
+[Note, this runs fullscreen at 1920x1080.  Changing the variable `'win_size'` at the top of the script will change the resolution but making it too much smaller may cause some states to overlap.]  This will show all reachable game board configurations aranged in 10 rows according to the number of moves made so far.   
 
 ![Game graph image.](game_graph_img.png)
 
@@ -147,18 +145,18 @@ ml_demos\rl> python game_graph.py
 
 This shows a portion of the window near the bottom, with states after 7, 8, or 9 moves have been made.  Terminal states ares shaded according to the winner's color or green for draws.  The selected state shows four orange (x) and three blue (o) moves have been made, so the only children states have blue edges and there are two open spaces so there are two edges.   The only terminal states that are children of the selected state are draws and orange wins, so if blue is in that state, the best result they can expect will be a draw and they can force either endgame with their next move.   (Blue lines are drawn from the middle row (8 moves) because those are valid move for other games in which blue went first and can make the 9th move.  This graph shows all moves from all states irrespective of which player goes first, so not all edges will be valid for a given game.)
 
-## The RL Demo apps
+---COMPLETED WORK ABOVE HERE, FUTURE WORK PAST HERE---
 
-#### Outline for each demo:
-1. **Main window**:  Like the Game-Tree app, but with visualization of $v(s)$ of every state, plotted over/near it.  (Possibly only highlighted states if things get crowded).
-2. **Function evolution window**:  Like main window, with $v(s)$ being reprsented by a few pixels, in approximately the same locations as the state icons in the main window. Layers with terminal states should put them at opposite horizontal ends, etc.  (not sure if edges will be interesting)
-3. **Competition window**:  Have games running continually w/the best RL agent so far vs the starting agent, a heuristic player with varying numbers of rules, a random player, etc.  Plot a history of their win/loss ratios as they learn.
+## The RL Demo apps:
 
-Controls like start/stop/step implemented with hotkeys, press "H" to see.
+Each of the reinforcement learning demos shows the progress of an agent learning as the demo's particular algorithm is applied.  They all have the same general steps:
+1. Pick a baseline policy.  For the policy improvement demos (value function estimation), they will be improving on this.  For the "model free" demos, this will be competing against the RL agent as it learns.
+2. Run the RL algorithm (step through at various speeds), watch the value function change and the consequences to the agent's strategy.
 
-#### Baseline policies:
-1. `Random` player
-2. `Heuristic(n)` player, using rules 0 through n and/or defaulting to random:
+
+    #### Baseline policies:
+    1. `Random` player
+    2. `Heuristic(n)` player, using rules 0 through n and/or defaulting to random (i.e. `Heuristic(0)` is equivalent to `Random`):
 
         1. If there is a winning move, take it.
         2. If the opponent has a winning move, block it.
@@ -168,15 +166,29 @@ Controls like start/stop/step implemented with hotkeys, press "H" to see.
 
         If no rules apply, take any open space at random.
 
-Note that `Random` is equivalent to `Heuristic(0)`.
+    3. `Perfect` player.  (???)
 
-Baseline policies are used to "seed" policy improvement algorithms and compete against RL policies to evaluate their progress.        
 
-#### 1) Dynamic Programming
 
-Directly compute the value function of a given policy using DP.  Run the script:
 
-```
-ml_demos\rl> python dynamic_prog --seed n [--compare c1 c2 ...] 
-```
-where the seed policy $\pi_0$ is`Heuristic(n)`, and as training progresses, show its win/loss ratio against the policies `Heuristic(c1)` and `Heuristic(c2)` in the competition window.
+#### Main window:
+1. **Value function**:  shows $V_t(s)$, the current value function for all states $s$.  States are arranged with an embedding like the game tree, represented by a small box in a color indicating the relative value.
+2.  **Value updates**: shows  $\Delta V_t(s)$, the current (most recent, etc.) updates to the value function,   These are the changes made to each value for the next iteration, $V_{t+1}(s) = V_{t}(s) + \Delta V_t(s)$.
+3. **Competition window**:  In a separate process, Tic-Tac-Toe games are running continually w/the best RL agent so far vs the baseline agent (and possibly others).  This window shows the win/loss rate(s) changing as the agent learns.
+
+4. **Control area**: Run the algorithm at various speeds:
+    * Step through each individual $v(s)$ update.
+    * Step through each pass through the set of states $S$.
+    * Step through each iteration of PI (pause after $V_{t+1}(s)$ converges after many passes through the set of states).
+    * Run continually.
+
+#### Strategy window shows:
+A reinforcement learning agent that uses a value function and equation (1) to define its policy will "change its mind" about what to do in a certain state when the relative values of that state's children change such that there is a new highest-value child state.   After every PI iteration or N steps (etc), the number of "strategy changes" is counted and random examples are plotted showing the old and new preferred child state, and the number/kind of distinct terminal states under both child states.
+
+### Demos:       
+
+#### Dynamic Programming + Policy Improvement
+
+#### Policy Evaluation  + Policy Improvement
+
+#### Monte Carlo
