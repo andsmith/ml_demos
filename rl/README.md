@@ -127,17 +127,25 @@ As well as displaying all 32 draw states in the image:
 
 ### The Game Tree App:
 
-This app shows all 8,533 game states in the same window and all edges between them.  To make sense of this:
-* mouse-over states to magnify them, their edges, their parents/children up to depth D.  
-* Change D with hotkeys.  
-* Click to select states, keeping them permanently magnified when the mouse is no longer over them.  Click again to de-select.
+This app shows all 8,533 game states in the same window and all edges between them.  Click states to show their parents/children up to a given depth.  Contrl with the following **hotkeys**:
+  
+* `[` - decrease  parent depth (Number of generates above selected state)
+* `]` - increase parent depth
+* `;` - decrease child depth
+* `'` - incrase child depth
+*`q` or `ESC` - quit
 
 Start the app by runing: 
 ```
 ml_demos\rl> python game_graph.py
 ```
+[Note, this runs fullscreen at 1920x1080.  Changing the variable `'win_size'` will change the resolution but making it smaller may cause some states to overlap.]  This will show all reachable game board configurations aranged in 10 rows according to the number of moves made so far.   
 
-[ADD SCREENSHOT]
+![Game graph image.](game_graph_img.png)
+
+(Smaller states show just colored dots, orange for X and blue for O.)
+
+This shows a portion of the window near the bottom, with states after 7, 8, or 9 moves have been made.  Terminal states ares shaded according to the winner's color or green for draws.  The selected state shows four orange (x) and three blue (o) moves have been made, so the only children states have blue edges and there are two open spaces so there are two edges.   The only terminal states that are children of the selected state are draws and orange wins, so if blue is in that state, the best result they can expect will be a draw, but only one will force it. 
 
 ## The RL Demo apps
 
