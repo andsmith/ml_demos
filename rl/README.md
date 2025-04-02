@@ -145,7 +145,7 @@ ml_demos\rl> python game_graph.py
 
 (Smaller states show just colored dots, orange for X and blue for O.)
 
-This shows a portion of the window near the bottom, with states after 7, 8, or 9 moves have been made.  Terminal states ares shaded according to the winner's color or green for draws.  The selected state shows four orange (x) and three blue (o) moves have been made, so the only children states have blue edges and there are two open spaces so there are two edges.   The only terminal states that are children of the selected state are draws and orange wins, so if blue is in that state, the best result they can expect will be a draw, but only one will force it. 
+This shows a portion of the window near the bottom, with states after 7, 8, or 9 moves have been made.  Terminal states ares shaded according to the winner's color or green for draws.  The selected state shows four orange (x) and three blue (o) moves have been made, so the only children states have blue edges and there are two open spaces so there are two edges.   The only terminal states that are children of the selected state are draws and orange wins, so if blue is in that state, the best result they can expect will be a draw and they can force either endgame with their next move.   (Blue lines are drawn from the middle row (8 moves) because those are valid move for other games in which blue went first and can make the 9th move.  This graph shows all moves from all states irrespective of which player goes first, so not all edges will be valid for a given game.)
 
 ## The RL Demo apps
 
