@@ -37,7 +37,7 @@ class Match(object):
 
         while True:
             for player in self._players:
-                action = player.recommend_action(self._game)
+                action = player.take_action(self._game)
                 self._game = self._game.clone_and_move(action, player.player)
                 # if self._self_check:
                 # if self._game not in VALID_STATES:
@@ -77,7 +77,7 @@ def _test():
                           [Mark.EMPTY, Mark.X, Mark.EMPTY],
                           [Mark.O, Mark.EMPTY, Mark.X]]))
     print(game)
-    print("%s recommends marking %s" % (hp.__class__, hp.recommend_action(game)))
+    print("%s recommends marking %s" % (player1.__class__, player1.take_action(game)))
 
 
 class Tournament(object):
@@ -173,7 +173,7 @@ def demo_tournament():
 
 
 if __name__ == "__main__":
-    # demo_match()
+    #demo_match()
     #demo_fixed_match()
     demo_tournament()
     # _test()
