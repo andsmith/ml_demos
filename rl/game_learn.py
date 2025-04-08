@@ -18,6 +18,7 @@ from reinforcement_base import Environment
 from abc import ABC, abstractmethod
 from policies import ValueFuncPolicy
 import logging
+from baseline_players import HeuristicPlayer
 
 
 # r is known only for these states in adavnce:
@@ -56,8 +57,9 @@ class PolicyImprovementDemo(ABC):
 
         # P.I. initialization:
         self._env = Environment(opponent_policy, player)
+
         self._pi = seed_policy
-        self._updatable_states = self._env.get_non_terminal_states()
+        self._updatable_states = self._env.get_nonterminal_states()
         self._terminal_states = self._env.get_terminal_states()
 
         # initial value function
@@ -76,6 +78,8 @@ class PolicyImprovementDemo(ABC):
         self._fig = plt.figure(figsize=(12, 8))
         self._fig.canvas.set_window_title("Policy Evaluation")
         self._state_images = self._make_state_images()  # dict: state- > image
+
+        self._init_visualizations()
 
 
     @abstractmethod
@@ -147,6 +151,9 @@ class PolicyImprovementDemo(ABC):
                 plt.pause(0.01)
 
         return self._v_new
+    @abstractmethod
+    def _init_visualizations(self):
+        pass
 
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
@@ -179,11 +186,38 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                     exp_val_new += prob_action * discount_reward
                 self._v_new[state] = exp_val_new
 
+    def _init_visualizations(self):
+        # create layout of value function visualization using hot-cold heatmap and
+        # positions from the FixedCellBoxOrganizer.
+        LAYOUT = {'win_size': (1920, 1080)}
+        SPACE_SIZES = [9, 6, 5, 3, 3, 2, 3, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
+
+        # START HERE
+        space_size= 2
+        artists = GameStateArtist(space_size = space_size)
+        heat_colors = plt.colormaps['hot']
+        # create a color map for the values:
+        all_values = [self._v.values()]
+        value_range = max(all_values), min(all_values)
+        norm = plt.Normalize(vmin=value_range[1], vmax=value_range[0])
+        cmap = plt.get_cmap(heat_colors, 256)
+        # create a color map for the values:
+        layers = []
+        colors = {}
+        for state in self._v:
+            color = cmap(norm(self._v[state]))
+            colors[state] = color
+            layers.append(state)
+        # create a color map for the values:
+
+        
+
+
 
 def run_app():
     # Example usage:
-    seed_policy = None  # Replace with your seed policy
-    opponent_policy = None  # Replace with your opponent policy
+    seed_policy = HeuristicPlayer(n_rules=6, mark=Mark.X)  # Replace with your seed policy
+    opponent_policy = HeuristicPlayer(n_rules=6, mark=Mark.X)  # Replace with your opponent policy
     player = Mark.X  # Replace with your player mark
 
     demo = PolicyEvaluationPIDemo(seed_policy, opponent_policy, player)
@@ -191,5 +225,4 @@ def run_app():
 
 if __name__=='__main__':
     logging.basicConfig(level=logging.INFO)
-    import ipdb; ipdb.set_trace()
     run_app()
