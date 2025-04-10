@@ -49,6 +49,8 @@ from value_panel import StateFunction
 from game_base import Result, Mark
 from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 import tkinter as tk
+from PIL import Image, ImageTk
+
 
 
 def tk_color_from_rgb(rgb):
@@ -116,9 +118,9 @@ class RLDemoWindow(object):
         self._player = player_mark
         self._color_bg = tk_color_from_rgb(COLOR_BG)
         self._color_lines = tk_color_from_rgb(COLOR_LINES)
-        # Create the game tree and the artist for drawing it.
-        self._values_img = None
-        self._updates_img = None
+        
+        self._views = ['states','values']  # tic tac toe games or V(s) color box ?
+        self._view = 0
 
         self._init_tk()
         self._init_frames()
@@ -175,10 +177,11 @@ class RLDemoWindow(object):
         print("Canvas sizes: ", self._values_size, self._updates_size)
         all_states = self._app.updatable_states + self._app.terminal_states
 
-        self._values = StateFunction(img_sizes={'values': self._values_size,
+        self._images = StateFunction(img_sizes={'values': self._values_size,
                                             'updates': self._updates_size},
                                      state_list=all_states,
                                      player_mark=self._player)
+        self.refresh_images()
 
     def _init_status(self):
         """
@@ -294,6 +297,17 @@ class RLDemoWindow(object):
                                        command=lambda: self._reset(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
         self._reset_button.pack(side=tk.TOP, padx=5, pady=10)
 
+        # Create view toggle button:
+        self._view_toggle_button = tk.Button(self._frames['tools_right'], text="View:  %s" % self._views[self._view],
+                                            command=lambda: self._toggle_view(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
+        
+        self._view_toggle_button.pack(side=tk.TOP, padx=5, pady=10)
+        
+    def _toggle_view(self):
+        self._view = (self._view + 1) % len(self._views)
+        logging.info("Toggling view to %s" % self._views[self._view])
+        self.refresh_images()
+
     def _toggle_tournament(self):
         """
         Callback for tournament button.
@@ -362,9 +376,28 @@ class RLDemoWindow(object):
         # Update the tournament button text to the current tournament status.
         self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
+    def refresh_images(self):
+        """
+        Get appropriate images from the ValueFunction and put them on the canvases
+        """     
+        view = self._views[self._view]
+        val_img = ImageTk.PhotoImage(Image.fromarray(self._images.get_image(which=view, name='values')))
+        upd_img = ImageTk.PhotoImage(Image.fromarray(self._images.get_image(which=view, name='updates')))
+        # clear the canvases
+        self._canvas_values.delete("all")
+        self._canvas_updates.delete("all")
+        # draw the images on the canvases
+        self._canvas_values.create_image(0, 0, anchor=tk.NW, image=val_img)
+        self._canvas_updates.create_image(0, 0, anchor=tk.NW, image=upd_img)
+
+        # keep a reference to the images to prevent garbage collection
+        self._canvas_values.image = val_img
+        self._canvas_updates.image = upd_img
+
     def _reset(self):
         self._app.reset()
         self.cur_speed_state = 0
+
     def start(self):
         """
         Start the demo window.

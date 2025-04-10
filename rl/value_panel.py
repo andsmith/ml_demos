@@ -110,7 +110,7 @@ class StateFunction(object):
         :return:  The image for the given name.
         """
         if name not in self._sizes:
-            raise ValueError(f"Image {name} not found in sizes.")
+            raise ValueError(f"Image {name} not found in sizes: {[n for n in self._sizes]}")
         if which == 'values':
             return self._info[name]['value_image']
         elif which == 'states':
