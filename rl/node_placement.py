@@ -20,7 +20,7 @@ class BoxOrganizer(ABC):
     Images are arranged in layers.
     """
 
-    def __init__(self, size_wh, layers, layer_vpad_px=7, layer_bar_w=4, brickwork=True):
+    def __init__(self, size_wh, layers, layer_vpad_px=7, layer_bar_w=4, brickwork=True, color_bg=(127, 127, 127), color_lines=(0, 0, 0)):
         """
         :param size_wh: size of the window in pixels (width, height).
         :param layers: list of lists of boxes, each list is a layer:
@@ -37,8 +37,8 @@ class BoxOrganizer(ABC):
         self._layer_bar_w = layer_bar_w
         self._layer_counts = [len(layer) for layer in layers]
         # for drawing debug images
-        self._bkg_color = (127, 127, 127)
-        self._line_color = (0, 0, 0)
+        self._bkg_color = color_bg
+        self._line_color = color_lines
 
         self.layer_spacing = self._calc_layer_spacing()
         self.box_positions, self.grid_shapes = self._calc_box_positions()
@@ -261,8 +261,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                 layer_def['bar_y'] = (y, y + self._layer_bar_w)
                 y += self._layer_bar_w + self._layer_vpad_px
             layer_spacing.append(layer_def)
-        import pprint
-        pprint.pprint(layer_spacing)
+            
 
         return layer_spacing
 

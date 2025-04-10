@@ -62,15 +62,6 @@ class HeuristicPlayer(Policy):
     def __str__(self):
         return "HeuristicPlayer(%s, n_rules=%d)" % (self.player.name, self._n_rules)
 
-    def take_action(self, game_state, p_bad_move=0):
-        recommendations = self.recommend_action(game_state)
-        probs = np.array([prob for _, prob in recommendations])
-        actions = np.array([action for action, _ in recommendations])
-        action_inds = np.arange(len(actions))
-        # sample from the distribution
-        action_ind = np.random.choice(action_inds, p=probs)
-        return tuple(actions[action_ind])
-
     def recommend_action(self, game_state):
         """
 

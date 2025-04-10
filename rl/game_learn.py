@@ -19,7 +19,9 @@ from abc import ABC, abstractmethod
 from policies import ValueFuncPolicy
 import logging
 from baseline_players import HeuristicPlayer
-
+from collections import OrderedDict
+from gui_components import RLDemoWindow
+from threading import Thread, Lock, Event
 
 # r is known only for these states in adavnce:
 TERMINAL_REWARDS = {
@@ -27,6 +29,8 @@ TERMINAL_REWARDS = {
     Result.O_WIN: -1.0,
     Result.DRAW: -1.0,
 }
+
+WIN_SIZE = (1920, 970)
 
 
 class PolicyImprovementDemo(ABC):
@@ -37,50 +41,44 @@ class PolicyImprovementDemo(ABC):
 
     """
 
-    PAUSE_POINTS = ['state',  # Pause while every v(s) is updated for a state s.
-                    'pi_round',  # pause after v(s) converges, before each policy optimization step.
-                    None  # run continuously.
-                    ]
-
-    def __init__(self, seed_policy, opponent_policy, player=Mark.X, in_place=False):
+    def __init__(self, seed_policy, opponent_policy, player=Mark.X, gamma=0.9):
         """
         :param seed_policy:  The first value function will be for this policy.
         :param opponent_policy:  The policy of the opponent.  Will be used to define the "environment" for the agent.
         :param player:  The player for the agent.  The opponent is the other player.
-        :param in_place:  If True, the agent will update the value function in place.  Otherwise, it will create a new value function, update every epoch.
         """
-        self._in_place = in_place
-        if in_place:
-            raise NotImplementedError("In-place updates not implemented yet.")
+
         self._player = player
         self._max_iter = 1000
+        self._seed_p = seed_policy
+        self._opponent_p = opponent_policy
+        self._gamma = gamma  # discount factor for future rewards.
 
         # P.I. initialization:
         self._env = Environment(opponent_policy, player)
+        self.children = self._env.get_children()
 
         self._pi = seed_policy
-        self._updatable_states = self._env.get_nonterminal_states()
-        self._terminal_states = self._env.get_terminal_states()
+        self.updatable_states = self._env.get_nonterminal_states()
+        self.terminal_states = self._env.get_terminal_states()
+        self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        self.running_tournament = False
+        self.reset()  # Start learning from the beginning.
+        self._shutdown=False
+        # App  & graphics:
+        self._action_signal = Event()  # learner will wait for this, action button will set it.
+        self._init_gui()
 
+    def reset(self):
         # initial value function
-        self._v_terminal = [TERMINAL_REWARDS[state.check_endstate()] for state in self._terminal_states]
-        self._v = {state: 0.0 for state in self._updatable_states}
+        self._v = {state: 0.0 for state in self.updatable_states}
         self._v.update(self._v_terminal)
-        self._delta_v = {state: 0.0 for state in self._updatable_states}
+        self._delta_v = {state: 0.0 for state in self.updatable_states}
+        self._delta_v.update(self._v_terminal)
         self._v_prev = self._v.copy()
         self._iter = 0
-
-        # App  & graphics:
-        self._pause_points = PolicyImprovementDemo.PAUSE_POINTS
-        self._pause_point = 'state'  # initially pause after every state update.
-        space_size = 5  # for all images?
-        self._game_artist = GameStateArtist(self._env.get_game(), space_size=space_size)
-        self._fig = plt.figure(figsize=(12, 8))
-        self._fig.canvas.set_window_title("Policy Evaluation")
-        self._state_images = self._make_state_images()  # dict: state- > image
-
-        self._init_visualizations()
-
+        self._pending_pause = False
+        # TODO: reset StateFunction images
 
     @abstractmethod
     def optimize_value_function(self):
@@ -89,6 +87,60 @@ class PolicyImprovementDemo(ABC):
         :return:  None
         """
         pass
+
+    def _resume(self):
+        print("RESUMING")
+        self._action_signal.set()
+
+    def _pause(self):
+        self._gui.refresh_text_labels()
+        self._action_signal.wait()
+        self._action_signal.clear()
+
+    def _maybe_pause(self, stage, info=None):
+        """
+        Caller has just finished something.  Do we need to wait for user to click the action buttion?
+        If so, wait for the event.
+        NOTE:  If more speed options are added in subclasses, they will neeed to handle them by overriding this method.
+        TODO:  Fix this.
+        """
+        if self._pending_pause:
+            self._pause()
+            self._pending_pause = False
+            return
+
+        elif stage == 'state-update':
+            if self._gui.cur_speed_option == 'state-update':
+                logging.info("Pausing for state update...")
+                self._pause()
+
+            # TODO:  "Breakpoints" for specifc state updates in here
+
+        elif stage == 'pi-round':
+            if self._gui.cur_speed_option == 'pi-round':
+                logging.info("Pausing for policy update...")
+                self._pause()
+
+    def _learn_loop(self):
+        """
+        Run "policy iteration," iterative policy evaluation. 
+
+        """
+        self._iter = 0
+        while not self._shutdown:
+            # 1. Update the value function for the current policy.
+            self.optimize_value_function()
+            self._maybe_pause('pi-round')
+            if self._shutdown: break
+
+            # 2. Update policy & check for convergence:
+            if self.optimize_policy():
+                #TODO: What do do when converged?
+                logging.info("Policy converged.")
+
+            self._maybe_pause('pi-round')
+
+            self._iter += 1
 
     def optimize_policy(self, v_tol=1e-6):
         """
@@ -100,12 +152,9 @@ class PolicyImprovementDemo(ABC):
                 TODO: if the same action(s) have highest probability in all states.
         returns: True if converged
         """
-        # 1. Update the policy based on the current value function.
-        if  self._in_place:
-            raise NotImplementedError("In-place updates not implemented yet.")
-        # if not self._in_place:
+
         pi_new = ValueFuncPolicy(self._v)
-        
+
         # Check for policy stability (recommended action list has same distribution)
 
         def action_dist_eq(actions_1, actions_2, tolerance=1e-6):
@@ -118,14 +167,15 @@ class PolicyImprovementDemo(ABC):
             if len(actions_1) != len(actions_2):
                 return False
             for a1, a2 in zip(actions_1, actions_2):
-                if (a1[0]!=a2[0]):
+                if (a1[0] != a2[0]):
                     raise Exception("distribution lists should be in same order...")
                 if np.abs(a1[1] - a2[1]) > tolerance:
                     return False
             return True
 
         n_diff = 0
-        for state in self._updatable_states:
+        for state in self.updatable_states:
+            import ipdb; ipdb.set_trace()
             actions_old = self._pi.recommend_action(state)
             actions_new = pi_new.recommend_action(state)
             if not action_dist_eq(actions_old, actions_new):
@@ -134,26 +184,46 @@ class PolicyImprovementDemo(ABC):
         logging.info(f"Policy Estimation, iteration {self._iter} updated {n_diff} states .")
         return n_diff == 0  # True if no updates were made.
 
-    def iterate(self):
+    def _init_gui(self):
+        speed_options = self._get_speed_options()
+        self._gui = RLDemoWindow(WIN_SIZE, self, speed_options, player_mark=self._player)
+
+    def _get_speed_options(self):
         """
-        Run "policy iteration," iterative policy evaluation. 
+        Return an ordered dict of speed setting options for the radio buttons.
+        keys are the names of the speed settings.
+        values are a list of {'text', 'callback'} dicts for every state the app can be in for that setting where:
+            text is the label on the action button,
+            callback is the function to call when the button is pressed
+        Each time the button is pressed, it will cycle through the list for that setting.  
         """
-        for self._iter in range(self._max_iter):
-            # 1. Update the value function for the current policy.
-            self.optimize_value_function()
+        options = OrderedDict()
+        options['state-update'] = [{'text': 'Step state', 'callback': self._resume}]
+        options['pi-round'] = [{'text': 'Step PI: V(s)', 'callback':  self._resume},
+                               {'text': 'Step PI: pi(s)', 'callback':  self._resume},]
+        options['continuous'] = [{'text': 'Start continuous', 'callback':  self._resume},
+                                 {'text': 'Pause continuous', 'callback': lambda: self._pause},]
+        return options
 
-            # 2. Check for convergence:
-            if self.optimize_policy():
-                break
+    def toggle_tournament(self):
+        self.running_tournament = not self.running_tournament
+        print("STUB:  Changed tournament run-status:  ", self.running_tournament)
+        # TODO: start/stop tournament with current policy
 
-            # 3. Pause if needed:
-            if self._pause_point is not None:
-                plt.pause(0.01)
-
-        return self._v_new
-    @abstractmethod
-    def _init_visualizations(self):
-        pass
+    def start_app(self):
+        """
+        Start the learning loop in its own thread.
+        Start the GUI (doesn't return until the GUI is closed).
+        """
+        self._learning_thread = Thread(target=self._learn_loop)
+        self._learning_thread.start()
+        self._gui.start()
+        logging.info("GUI closed, waiting for learning thread to finish...")
+        self._shutdown = True  # set shutdown flag to stop the learning loop.
+        # set event signal in case gui is waiting for user to click a button:
+        self._action_signal.set()
+        self._learning_thread.join()  # wait for the learning thread to finish before exiting.
+        logging.info("Learning thread finished.")
 
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
@@ -162,18 +232,76 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     _EXTRA_PAUSE_POINTS = ['epoch']  # Pause after every epoch of Policy Evaluation updates (all states updated once).
 
     def __init__(self, seed_policy, opponent_policy, player=Mark.X, in_place=False):
+        self._delta_v_tol = 1e-6  # tolerance for delta v(s) convergence.
+        self._v_converged = False
         super().__init__(seed_policy, opponent_policy, player, in_place)
-        self._pause_points.insert(1, 'epoch')  # add extra pause point for epoch.
+
+    def reset(self):
+        super().reset()
+        self._epoch = 0
+        self._n_updated = 0
+        self._delta_v_max = 0.0  # max delta v(s) for this epoch
+
+    def _get_speed_options(self):
+        old_options = super()._get_speed_options()
+        epoch_button_seq = [{'text': 'Step Epoch', 'callback':  self._resume}]
+        options = OrderedDict()
+        for i, (k, v) in enumerate(old_options.items()):
+            if i == 1:
+                options['epoch-update'] = epoch_button_seq
+            options[k] = v
+        return options
+    
+    def _maybe_pause(self, stage, info=None):
+        super()._maybe_pause(stage, info)
+        if stage == 'epoch-update':
+            if self._gui.cur_speed_option == 'epoch-update':
+                logging.info("Pausing for epoch update...")
+                self._pause()
+    
+    def get_status(self):
+        status = OrderedDict()
+
+        status['title'] = "Policy Evaluation / Improvement"
+        status['phase'] = "Policy Evaluation"
+        status['iteration'] = self._iter
+        status['epoch'] = self._epoch
+        status['states processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))
+        status['delta-v(s)'] = "nmax delta %.3e (<> %.3e)." % (self._delta_v_max, self._delta_v_tol)
+        status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self._v_converged else ""
+        return status
 
     def optimize_value_function(self):
+        self._epoch = 0
+        self._v_converged = False
+        while not self._v_converged:
+            self._v_new = self._v_terminal.copy()
+            for iter, state in enumerate(self.updatable_states):
+                self._n_updated = iter + 1
+                self._v_new[state] = np.random.rand()
+
+                self._maybe_pause('state-update', info=state)
+                if self._shutdown:
+                    return
+            self._epoch +=1
+            # check for convergence:
+            if np.random.rand() < 0.1:
+                self._v_converged = True
+
+            self._maybe_pause('epoch-update')
+            if self._shutdown:
+                return
+
+    def _stub_optimize_value_function(self):
         """
         "Iterative policy evalutation, for estimating V ~ v_pi(s) for all states s and policy pi(s)."
         Barto & Sutton, 2020, p. 75.
         """
+
         while True:
             delta = 0
             self._v_new = self._v_terminal.copy()
-            for state in self._updatable_states:
+            for state in self.updatable_states:
                 # Calculate the value of the state using the current policy.
                 # get action distribution for current policy:
                 actions = self._pi.recommend_action(state)
@@ -189,12 +317,10 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def _init_visualizations(self):
         # create layout of value function visualization using hot-cold heatmap and
         # positions from the FixedCellBoxOrganizer.
-        LAYOUT = {'win_size': (1920, 1080)}
-        SPACE_SIZES = [9, 6, 5, 3, 3, 2, 3, 2, 3, 4]  # only used if displaying the full tree, else attempted autosize
 
         # START HERE
-        space_size= 2
-        artists = GameStateArtist(space_size = space_size)
+        space_size = 2
+        artists = GameStateArtist(space_size=space_size)
         heat_colors = plt.colormaps['hot']
         # create a color map for the values:
         all_values = [self._v.values()]
@@ -210,9 +336,6 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             layers.append(state)
         # create a color map for the values:
 
-        
-
-
 
 def run_app():
     # Example usage:
@@ -221,8 +344,9 @@ def run_app():
     player = Mark.X  # Replace with your player mark
 
     demo = PolicyEvaluationPIDemo(seed_policy, opponent_policy, player)
-    demo.iterate()
+    demo.start_app()
 
-if __name__=='__main__':
+
+if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
     run_app()

@@ -31,8 +31,11 @@ class Environment(object):
         self._opponent = GameTree.opponent(player_mark)
         self._opp = opponent_policy
         self._tree = get_game_tree_cached(player=player_mark)
-        self._terminal, _, _, _ = self._tree.get_game_tree()
+        self._terminal, self._children, self._parents, self._initial = self._tree.get_game_tree()
         self._p_next_state = self._calc_state_transitions()
+
+    def get_children(self):
+        return self._children
 
     def _calc_state_transitions(self):
         """
@@ -48,8 +51,8 @@ class Environment(object):
 
         nonterm = self.get_nonterminal_states()
         for s_i, state in enumerate(nonterm):
-            if s_i % 100 ==0:
-                print("\tprocessing state %d of %d" % (s_i, len(nonterm)))
+            if s_i % 100 == 0:
+                logging.info("\tprocessing state %d of %d nonterminals." % (s_i, len(nonterm)))
             agent_actions = state.get_actions()
             for agent_action in agent_actions:
                 # get the next state after the agent makes a move

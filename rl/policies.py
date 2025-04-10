@@ -37,15 +37,15 @@ class Policy(ABC):
         """
         pass
 
-    @abstractmethod
-    def take_action(self, state):
-        """
-        Select an action from the recommendation distribution.
-        Potentially with some exploration.
-        :param state: A game state.
-        :returns:  one action, an  (i,j) cell coordinate
-        """
-        pass
+
+    def take_action(self, game_state, epsilon=0):
+        recommendations = self.recommend_action(game_state)
+        probs = np.array([prob for _, prob in recommendations])
+        actions = np.array([action for action, _ in recommendations])
+        action_inds = np.arange(len(actions))
+        # sample from the distribution
+        action_ind = np.random.choice(action_inds, p=probs)
+        return tuple(actions[action_ind])
 
     def __str__(self):
         return self.__class__.__name__ + "(%s)" % self.player.name
@@ -89,6 +89,8 @@ class ValueFuncPolicy(Policy):
         action_values = []
         for action in actions:
             next_state = state.clone_and_move(action, self.player)
+            if next_state not in self._v:
+                print("Warning:  state %s not in value function for player %s." % (next_state, self.player.name))
             value = self._v[next_state]
             action_values.append((action, value))
 
