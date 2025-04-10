@@ -63,9 +63,10 @@ class BoxOrganizer(ABC):
         """
         pass
 
-    def draw(self, images=None, dest=None, show_bars=False):
+    def draw(self, images=None, colors=None, dest=None, show_bars=False):
         """
         :param images: dict(box_id = image).  If None, will use the argument in ['colors'] key of each box.
+        :Param colors: dict(box_id = color).  If None, will use the argument in ['colors'] key of each box
         """
         if dest is None:
             img = np.zeros((self.size_wh[1], self.size_wh[0], 3), np.uint8)
@@ -87,7 +88,7 @@ class BoxOrganizer(ABC):
                 bos_pos = self.box_positions[box['id']]
                 x, y = bos_pos['x'], bos_pos['y']
                 if images is None:
-                    img[y[0]:y[1], x[0]:x[1]] = box['color']
+                    img[y[0]:y[1], x[0]:x[1]] = box['color'] if colors is None else colors[box['id']]
                 else:
                     tile = images[box['id']]
                     img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile
@@ -125,14 +126,13 @@ class BoxOrganizer(ABC):
         if self._brick and n_rows > 1:
             # fill up, brick_wise,
             r = 0
-            n_filled=0
+            n_filled = 0
             while n > 0:
                 row_len = n_cols if r % 2 == 0 else n_cols-1
                 n_filled += row_len
                 n -= row_len
                 r += 1
             n_rows = r
-
 
         return n_cols, n_rows
 
@@ -154,7 +154,7 @@ class BoxOrganizer(ABC):
 
             # Shift a column.
             n_cols -= 1
-            
+
             new_n_rows_used = self._n_cols_n_rows(n_cols, n)[1]
             # print("\t\tTesting %i cols: requires %i rows to fit %i things." % (n_cols, new_n_rows_used, n))
             # out of space?
@@ -261,7 +261,6 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                 layer_def['bar_y'] = (y, y + self._layer_bar_w)
                 y += self._layer_bar_w + self._layer_vpad_px
             layer_spacing.append(layer_def)
-            
 
         return layer_spacing
 
@@ -296,9 +295,9 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             y_space = self.layer_spacing[l]['y'][1] - self.layer_spacing[l]['y'][0]
             x_space = self.size_wh[0]
             box_size = self._box_side_lengths[l]
-            
+
             n_rows, n_cols = self._row_col_adjust(n_rows_max, n_cols_max, n_boxes, y_space, x_space, box_size)
-            #print("Fit %i items into a %i x %i grid, using a %i x %i sub-grid." %
+            # print("Fit %i items into a %i x %i grid, using a %i x %i sub-grid." %
             #      (n_boxes, n_cols_max, n_rows_max, n_cols, n_rows))
             grid_shapes.append({'box_side_len': self._box_side_lengths[l],
                                 'n_rows': n_rows,
@@ -307,7 +306,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         # Now we can calculate the box positions in each layer.
         box_positions = {}
         for l, boxes in enumerate(self.layers):
-            #print("Layer %i: %i boxes" % (l, len(boxes)))
+            # print("Layer %i: %i boxes" % (l, len(boxes)))
             layer_top, layer_bottom = self.layer_spacing[l]['y']
             layer_h = layer_bottom - layer_top
             layer_w = self.size_wh[0]
@@ -332,7 +331,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                     x_offset = (box_s + x_pad)/2
                 else:
                     x_offset = 0.0
-                #print("\tRow %i of %i has %i items." % (row, n_rows, row_len))
+                # print("\tRow %i of %i has %i items." % (row, n_rows, row_len))
 
                 for col in range(row_len):
                     x = int(col * (box_s + x_pad) + x_pad + x_offset)
@@ -342,7 +341,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                     n += 1
                 if n == len(boxes):
                     break
-            #print("\n")
+            # print("\n")
             if n != len(boxes):
                 raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (n, len(boxes)))
         return box_positions, grid_shapes

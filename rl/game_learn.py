@@ -94,6 +94,7 @@ class PolicyImprovementDemo(ABC):
 
     def _pause(self):
         self._gui.refresh_text_labels()
+        self
         self._action_signal.wait()
         self._action_signal.clear()
 
@@ -232,6 +233,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     _EXTRA_PAUSE_POINTS = ['epoch']  # Pause after every epoch of Policy Evaluation updates (all states updated once).
 
     def __init__(self, seed_policy, opponent_policy, player=Mark.X, in_place=False):
+        self._gui =None
         self._delta_v_tol = 1e-6  # tolerance for delta v(s) convergence.
         self._v_converged = False
         super().__init__(seed_policy, opponent_policy, player, in_place)
@@ -239,8 +241,11 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def reset(self):
         super().reset()
         self._epoch = 0
+        self._v_converged = False
         self._n_updated = 0
         self._delta_v_max = 0.0  # max delta v(s) for this epoch
+        if self._gui is not None:
+            self._gui.refresh_text_labels()
 
     def _get_speed_options(self):
         old_options = super()._get_speed_options()
@@ -258,6 +263,9 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             if self._gui.cur_speed_option == 'epoch-update':
                 logging.info("Pausing for epoch update...")
                 self._pause()
+
+    def get_values(self):
+        return self._v, self._delta_v
     
     def get_status(self):
         status = OrderedDict()
@@ -276,8 +284,9 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         self._v_converged = False
         while not self._v_converged:
             self._v_new = self._v_terminal.copy()
+            self._n_updated = 0
             for iter, state in enumerate(self.updatable_states):
-                self._n_updated = iter + 1
+                self._n_updated  +=1
                 self._v_new[state] = np.random.rand()
 
                 self._maybe_pause('state-update', info=state)
