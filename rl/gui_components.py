@@ -233,6 +233,8 @@ class RLDemoWindow(object):
         new_vals, (new_min, new_range) = scale(np.array([new_v[s] for s in new_v]))
 
         def floats_to_int_color(c_float):
+            c_float=np.array(c_float).reshape(-1)[:3]
+            print(c_float)
             return int(255*c_float[0]), int(255*c_float[1]), int(255*c_float[2])
         # map to colors:
         values_colors = {s: floats_to_int_color(self._cmap(old_vals[i])) for i, s in enumerate(old_v)}
@@ -556,7 +558,30 @@ class DemoWindowTester(object):
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
         speed_options = self.get_speed_options()
+
+        def _get_val(term_state):
+            term = term_state.check_endstate()
+            if term == Result.X_WIN: # check self._player here
+                return 1.0
+            elif term == Result.O_WIN:
+                return -1.0
+            elif term == Result.DRAW:
+                return -.9
+            else:
+                raise ValueError("Unknown terminal state: %s" % str(term_state))
+
+        # Fake values:
+        self._v = {state: _get_val(state) for state in self.terminal_states}
+        self._v.update({state: 0.0 for state in self.updatable_states})
+        self._delta_v = {state:self._v[state]+np.random.randn(1)*.1 for state in self._v}
+
+
         self._gui = RLDemoWindow(size, self, speed_options=speed_options, player_mark=Mark.X)
+
+
+    def get_values(self):
+        # return random function.    
+        return self._v, self._delta_v
 
     def reset(self):
         self._iter = 0
