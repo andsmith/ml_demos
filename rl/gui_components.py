@@ -113,10 +113,8 @@ class RLDemoWindow(object):
                                    'y_rel': (0.25, .5)},
                          'tournament': {'x_rel': (0, STATUS_W),
                                         'y_rel': (0.5, 1.)},
-                         'values': {'x_rel': (STATUS_W, STATUS_W + FUNC_W),
+                         'values': {'x_rel': (STATUS_W,  STATUS_W + 2 * FUNC_W),
                                     'y_rel': (0, BOTTOM_ROW)},
-                         'updates': {'x_rel': (STATUS_W + FUNC_W, STATUS_W + 2 * FUNC_W),
-                                     'y_rel': (0, BOTTOM_ROW)},
                          'step_viz': {'x_rel': (STATUS_W, 1),
                                       'y_rel': (BOTTOM_ROW, 1.)}},
               'margin_px': 5,
@@ -131,7 +129,6 @@ class RLDemoWindow(object):
                     'tools': 'Tools',
                     'tournament': 'TTT Tournament',
                     'values': 'Value Function',
-                    'updates': 'Delta V(s)',
                     'step_viz': 'Step Visualization'}
 
     def __init__(self, size,  demo_app, speed_options, player_mark=Mark.X):
@@ -177,7 +174,7 @@ class RLDemoWindow(object):
         # self._init_step_viz()
 
     def add_update(self, update):
-        self._pending_updates.append(update)
+        self._pendingsel.append(update)
 
     def apply_all_updates(self):
         for update in self._pending_updates:
@@ -222,7 +219,6 @@ class RLDemoWindow(object):
             min_val = -1.
             max_val = 1.0
             range_val = max_val - min_val
-            print("Min: %.3f, Max: %.3f, Range: %.3f" % (min_val, max_val, range_val))
             if range_val == 0:
                 range_val = 1e-6
             scaled = (unscaled - min_val) / range_val
@@ -234,7 +230,6 @@ class RLDemoWindow(object):
 
         def floats_to_int_color(c_float):
             c_float=np.array(c_float).reshape(-1)[:3]
-            print(c_float)
             return int(255*c_float[0]), int(255*c_float[1]), int(255*c_float[2])
         # map to colors:
         values_colors = {s: floats_to_int_color(self._cmap(old_vals[i])) for i, s in enumerate(old_v)}
@@ -287,9 +282,6 @@ class RLDemoWindow(object):
         self._canvas_values = tk.Canvas(self._frames['values'], bg=tk_color_from_rgb(MPL_BLUE_RGB))
         self._canvas_values.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self._canvas_values.update()
-        self._canvas_updates = tk.Canvas(self._frames['updates'], bg=self._color_lines)
-        self._canvas_updates.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        self._canvas_updates.update()
         self._frame_size = self._canvas_values.winfo_width(), self._canvas_values.winfo_height()  # same size as updates
 
     def _recalc_box_positions(self):
@@ -512,8 +504,6 @@ class RLDemoWindow(object):
             canvas.image = img
             canvas.update()
 
-        update_img = self._images['updates'][self._views[self._view]]
-        update_canvas(self._canvas_updates, update_img)
         value_img = self._images['values'][self._views[self._view]]
         update_canvas(self._canvas_values, value_img)
 
@@ -548,6 +538,8 @@ class DemoWindowTester(object):
         self._seed_p = HeuristicPlayer(mark=self._player, n_rules=2, p_give_up=0.0)
         self._opponent_p = HeuristicPlayer(mark=self._opponent, n_rules=6, p_give_up=0.0)
         self._gamma = .9  # discount factor for future rewards.
+
+        logging.info("Starting DemoWindowTester with size:  %s" %(self._size,))
 
         # P.I. initialization:\
         from reinforcement_base import Environment
