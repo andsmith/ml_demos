@@ -20,17 +20,18 @@ from policies import ValueFuncPolicy
 import logging
 from baseline_players import HeuristicPlayer
 from collections import OrderedDict
-from gui_components import RLDemoWindow
+from gui_components import RLDemoWindow, EpochUpdate, SingleStateUpdate
 from threading import Thread, Lock, Event
 
 # r is known only for these states in adavnce:
 TERMINAL_REWARDS = {
     Result.X_WIN: 1.0,
     Result.O_WIN: -1.0,
-    Result.DRAW: -1.0,
+    Result.DRAW: -.666,
 }
 
-WIN_SIZE = (1920, 970)
+WIN_SIZE = (1920, 990)
+
 
 
 class PolicyImprovementDemo(ABC):
@@ -64,7 +65,7 @@ class PolicyImprovementDemo(ABC):
         self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self.running_tournament = False
         self.reset()  # Start learning from the beginning.
-        self._shutdown=False
+        self._shutdown = False
         # App  & graphics:
         self._action_signal = Event()  # learner will wait for this, action button will set it.
         self._init_gui()
@@ -78,7 +79,7 @@ class PolicyImprovementDemo(ABC):
         self._v_prev = self._v.copy()
         self._iter = 0
         self._pending_pause = False
-        # TODO: reset StateFunction images
+        # GUI calls this so it will reset its own visualizations..
 
     @abstractmethod
     def optimize_value_function(self):
@@ -93,8 +94,8 @@ class PolicyImprovementDemo(ABC):
         self._action_signal.set()
 
     def _pause(self):
+        self._gui.apply_all_updates()
         self._gui.refresh_text_labels()
-        self
         self._action_signal.wait()
         self._action_signal.clear()
 
@@ -132,11 +133,12 @@ class PolicyImprovementDemo(ABC):
             # 1. Update the value function for the current policy.
             self.optimize_value_function()
             self._maybe_pause('pi-round')
-            if self._shutdown: break
+            if self._shutdown:
+                break
 
             # 2. Update policy & check for convergence:
             if self.optimize_policy():
-                #TODO: What do do when converged?
+                # TODO: What do do when converged?
                 logging.info("Policy converged.")
 
             self._maybe_pause('pi-round')
@@ -176,7 +178,6 @@ class PolicyImprovementDemo(ABC):
 
         n_diff = 0
         for state in self.updatable_states:
-            import ipdb; ipdb.set_trace()
             actions_old = self._pi.recommend_action(state)
             actions_new = pi_new.recommend_action(state)
             if not action_dist_eq(actions_old, actions_new):
@@ -226,6 +227,7 @@ class PolicyImprovementDemo(ABC):
         self._learning_thread.join()  # wait for the learning thread to finish before exiting.
         logging.info("Learning thread finished.")
 
+
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
     Policy Improvement using Policy Evaluation as the value function estimator at each step.
@@ -233,7 +235,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     _EXTRA_PAUSE_POINTS = ['epoch']  # Pause after every epoch of Policy Evaluation updates (all states updated once).
 
     def __init__(self, seed_policy, opponent_policy, player=Mark.X, in_place=False):
-        self._gui =None
+        self._gui = None
         self._delta_v_tol = 1e-6  # tolerance for delta v(s) convergence.
         self._v_converged = False
         super().__init__(seed_policy, opponent_policy, player, in_place)
@@ -256,7 +258,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 options['epoch-update'] = epoch_button_seq
             options[k] = v
         return options
-    
+
     def _maybe_pause(self, stage, info=None):
         super()._maybe_pause(stage, info)
         if stage == 'epoch-update':
@@ -266,7 +268,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
     def get_values(self):
         return self._v, self._delta_v
-    
+
     def get_status(self):
         status = OrderedDict()
 
@@ -282,17 +284,20 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def optimize_value_function(self):
         self._epoch = 0
         self._v_converged = False
+        self._maybe_pause('state-update')  # don't start running
         while not self._v_converged:
             self._v_new = self._v_terminal.copy()
             self._n_updated = 0
             for iter, state in enumerate(self.updatable_states):
-                self._n_updated  +=1
+                self._n_updated += 1
                 self._v_new[state] = np.random.rand()
+
+                self._gui.add_update(SingleStateUpdate(state, new_value = self._v_new[state]))
 
                 self._maybe_pause('state-update', info=state)
                 if self._shutdown:
                     return
-            self._epoch +=1
+            self._epoch += 1
             # check for convergence:
             if np.random.rand() < 0.1:
                 self._v_converged = True

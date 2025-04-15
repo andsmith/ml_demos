@@ -10,6 +10,7 @@ States with N non-empty cells are placed in band N.
 import numpy as np
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
+import cv2
 MIN_BOX_SIZE = 7
 
 
@@ -39,7 +40,7 @@ class BoxOrganizer(ABC):
         # for drawing debug images
         self._bkg_color = color_bg
         self._line_color = color_lines
-
+        self._t = 0
         self.layer_spacing = self._calc_layer_spacing()
         self.box_positions, self.grid_shapes = self._calc_box_positions()
 
@@ -62,6 +63,25 @@ class BoxOrganizer(ABC):
                 grid_shapes: list, for each layer:  {'box_side_len': int, 'n_rows': int, 'n_cols': int}
         """
         pass
+
+    def draw_box(self, image, state_id, color):
+        """
+        Draw a box on the image.
+        :param image: image to draw on.
+        :param state_id: id of the box to draw.
+        :param color: color of the box.
+        """
+        self._t+=1
+        if state_id not in self.box_positions:
+            raise Exception("Box %s not found." % state_id)
+        bos_pos = self.box_positions[state_id]
+        x, y = bos_pos['x'], bos_pos['y']
+        #print("Setting box at %i, %i to color %s" % (x[0], y[0], color))
+        image[y[0]:y[1], x[0]:x[1]] = color
+        #print("image mean: ", np.mean(image))
+        #cv2.imwrite("img_%i.png" % self._t, image)
+
+
 
     def draw(self, images=None, colors=None, dest=None, show_bars=False):
         """
@@ -179,6 +199,7 @@ class BoxOrganizer(ABC):
 
 
 class FixedCellBoxOrganizer(BoxOrganizer):
+
     """
     Given each layer's box size, and the number of boxes in each layer, determine best layer spacing and box positions. 
 

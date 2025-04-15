@@ -43,8 +43,7 @@ class GameGraphApp(object):
         self._tree = get_game_tree_cached(player=Mark.X, verbose=True)
         self._term, self._children, self._parents, self._initial = self._tree.get_game_tree(generic=True)
         self._states_by_layer = [[{'id': s,
-                                   'state': s,
-                                   'color': (np.random.randint(0, 255), np.random.randint(0, 255), np.random.randint(0, 255))}
+                                   'state': s}
                                   for s in self._term if s.n_marked() == l] for l in range(self._max_levels)]
         self._layers_of_states = {s['state']: l for l, layer in enumerate(self._states_by_layer) for s in layer}
         self._states_used = {s['state']: True for state_layer in self._states_by_layer for s in state_layer}

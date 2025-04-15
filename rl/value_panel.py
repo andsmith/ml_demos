@@ -13,14 +13,14 @@ from reinforcement_base import Environment, GameTree, get_game_tree_cached
 from drawing import GameStateArtist
 
 
-def sort_states_into_layers(state_list, player_mark=Mark.X):
+def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
 
     layers = []
     for n_marks in range(6):
         layer = []
         for state in state_list:
             if np.sum(state.state == player_mark) == n_marks:
-                layer.append({'id': state})
+                layer.append({key: state})
         layers.append(layer)
         print("Layer %i had %i states." % (n_marks, len(layer)))
     return layers
@@ -30,7 +30,7 @@ BOX_SIZES = [20, 11, 7, 7, 8, 14]
 def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
                        layer_bar_w=1, player=Mark.X):
     """
-    Get the dict of box positions {x:(xmin, max), y:(ymin, max)} for each state.
+    Get the dict of box positions {x:(xmin, max), y:(ymin, max)} for each state, from a player's POV (RL states)
     Use the FixedCellBoxOrganizer to place the boxes in a grid, return it's .box_positions attribute.
     :param img_size:  The size of the output image.
     :param box_sizes:  List of icon image sizes for each layer (0-5)
@@ -47,6 +47,11 @@ def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
     box_placer = FixedCellBoxOrganizer(img_size, state_layers, box_sizes,
                                            layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
     return box_placer, box_sizes
+
+
+def optimize_layers(box_placer, all_states, player=Mark.X):
+    """
+    """
 
 def get_state_icons(all_states, box_sizes=None, player=Mark.X):
     state_layers = sort_states_into_layers(all_states, player_mark=player)
@@ -134,9 +139,9 @@ class StateFunction(object):
         box_placer = FixedCellBoxOrganizer(self._sizes[img_name], layers, self._box_sizes,
                                            layer_vpad_px=1, layer_bar_w=1,
                                            color_bg=self._color_bg, color_lines=self._color_lines)
+        # TODO:  layer placement optimization here
         image = box_placer.draw()
         image_s = box_placer.draw(images=state_images)
-        # TODO:  layer placement optimization here
 
         return {'layers': layers,
                 'value_image': image,

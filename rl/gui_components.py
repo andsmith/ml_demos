@@ -40,12 +40,14 @@ Beneath these is a toolbar setting the different options for the RL algorithm.
         the policy changes.  Each policy change is displayed as a game state image with
         the old move in red and the new move in green.
 """
+from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
 import numpy as np
 from drawing import GameStateArtist
 from node_placement import FixedCellBoxOrganizer
-from value_panel import get_box_placer, get_state_icons  # StateFunction
+from value_panel import get_box_placer, get_state_icons,sort_states_into_layers
+from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
 from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 import tkinter as tk
@@ -65,6 +67,38 @@ STATUS_W = 0.19  # Horizontal placement of first column.
 FUNC_W = (1.0 - STATUS_W) / 2.0
 
 BOTTOM_ROW = .8  # Vertical placement of bottom row.
+
+
+class GuiUpdae(ABC):
+    """
+    Learner's state has changed, propagate to visualizations.
+    """
+
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def apply(self, gui):
+        pass
+
+
+class SingleStateUpdate(GuiUpdae):
+    def __init__(self, state, new_value):
+        super().__init__()
+        self.state = state
+        self.new_value = new_value
+
+    def apply(self, gui):
+        print("Singe update new value:  ", self.new_value)
+        gui.update_state_value(state=self.state, new_value=self.new_value)
+
+
+class EpochUpdate(GuiUpdae):
+    def __init__(self):
+        super().__init__(None)
+
+    def apply(self, gui):
+        gui.refresh_images()
 
 
 class RLDemoWindow(object):
@@ -118,7 +152,8 @@ class RLDemoWindow(object):
         self._player = player_mark
         self._color_bg = tk_color_from_rgb(COLOR_BG)
         self._color_lines = tk_color_from_rgb(COLOR_LINES)
-        
+
+        self._pending_updates = []
         self._cmap = plt.get_cmap('gray')
         self._views = ['states', 'boxes']  # tic tac toe games or V(s) color box ?
         self._view = 0
@@ -133,13 +168,22 @@ class RLDemoWindow(object):
         all_states = self._app.updatable_states + self._app.terminal_states
         self._state_images = get_state_icons(all_states, box_sizes=self._box_sizes, player=self._player)
 
-        self._init_canvas_images()
+        self.redraw_canvas_images()
 
         # Calls resize which creates state images:
         self._root.bind("<Configure>", lambda event: self._resize(event))
-        self._refresh_images()
+        self.refresh_images()
         # self._init_tournament()
         # self._init_step_viz()
+
+    def add_update(self, update):
+        self._pending_updates.append(update)
+
+    def apply_all_updates(self):
+        for update in self._pending_updates:
+            update.apply(self)
+        self._pending_updates = []
+        self.refresh_images()
 
     def _init_step_viz(self):
         """
@@ -159,8 +203,8 @@ class RLDemoWindow(object):
         # Resize the canvases to fit the window
         self._canvas_values.config(width=width * FUNC_W, height=height * BOTTOM_ROW)
         self._canvas_updates.config(width=width * FUNC_W, height=height * BOTTOM_ROW)
-        #self._recalc_box_positions()
-        #self._init_canvas_images()
+        # self._recalc_box_positions()
+        # self._init_canvas_images()
 
     def _get_scaled_colors(self):
         """
@@ -173,8 +217,8 @@ class RLDemoWindow(object):
             :param unscaled:  The unscaled values to scale.
             :return:  The scaled values.
             """
-            #min_val = np.min(unscaled)
-            #max_val = np.max(unscaled)
+            # min_val = np.min(unscaled)
+            # max_val = np.max(unscaled)
             min_val = -1.
             max_val = 1.0
             range_val = max_val - min_val
@@ -182,33 +226,55 @@ class RLDemoWindow(object):
             if range_val == 0:
                 range_val = 1e-6
             scaled = (unscaled - min_val) / range_val
-            return scaled
-        
+            return scaled, (min_val, range_val)
+
         old_v, new_v = self._app.get_values()
-        old_vals = scale(np.array([old_v[s] for s in old_v]))
-        new_vals = scale(np.array([new_v[s] for s in new_v]))
-        
+        old_vals, (old_min, old_range) = scale(np.array([old_v[s] for s in old_v]))
+        new_vals, (new_min, new_range) = scale(np.array([new_v[s] for s in new_v]))
+
         def floats_to_int_color(c_float):
             return int(255*c_float[0]), int(255*c_float[1]), int(255*c_float[2])
         # map to colors:
         values_colors = {s: floats_to_int_color(self._cmap(old_vals[i])) for i, s in enumerate(old_v)}
-        updates_colors = {s: floats_to_int_color(self._cmap(new_vals[i])) for i, s in enumerate(new_v)}
-        return values_colors, updates_colors
+        new_colors = {s: floats_to_int_color(self._cmap(new_vals[i])) for i, s in enumerate(new_v)}
+        return ({'lut': values_colors,
+                'min': old_min,
+                 'range': old_range},
 
+                {'lut': new_colors,
+                 'min': new_min,
+                 'range': new_range})
 
-    def _init_canvas_images(self):
+    def update_cell_color(self, state, value):
+        self._box_placer.draw_single
+
+    def redraw_canvas_images(self):
         # for both (values & updates) for both views, create the base numpy images
         #  that will be modified as the algorithm progresses and sent to the canvas as new PhotoImages.
-        values_colors, updates_colors = self._get_scaled_colors()
+        self._values_color_LUT, self._updates_colors_LUT = self._get_scaled_colors()
         state_img_blank = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
         state_img_blank[:] = COLOR_BG
         val_img_blank = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
-        val_img_blank[:] = (100,100,100)
-        self._images = {'values': {'states': self._box_placer.draw(images = self._state_images, dest=state_img_blank.copy()),
-                                   'boxes': self._box_placer.draw(colors=values_colors, dest=val_img_blank.copy())},
-                        'updates': {'states': self._box_placer.draw(images = self._state_images, dest=state_img_blank.copy()),
-                                    'boxes': self._box_placer.draw(colors=updates_colors, dest=val_img_blank.copy())}}
-                                    
+        val_img_blank[:] = (100, 100, 100)
+        self._images = {'values': {'states': self._box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
+                                   'boxes': self._box_placer.draw(colors=self._values_color_LUT['lut'], dest=val_img_blank.copy())},
+                        'updates': {'states': self._box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
+                                    'boxes': self._box_placer.draw(colors=self._updates_colors_LUT['lut'], dest=val_img_blank.copy())}}
+
+    def update_state_value(self,  state, new_value, which='updates', as_deltas=False):
+        """
+        draw a box with the new color
+        :param state:  The state to update.
+        :param new_value:  The new value for the state.
+        :param which:  The type of image to update ('values' or 'updates').
+        :param as_deltas:  If True, show the relative change in value instead of the new value.
+        """
+        if which != 'updates':
+            raise ValueError("Only updates are supported for now.")
+        new_color = new_value
+        
+        new_color_scaled = (new_color - self._updates_colors_LUT['min']) / self._updates_colors_LUT['range']
+        self._box_placer.draw_box(self._images[which]['boxes'], state, new_color_scaled)
 
     def _init_values_and_updates_panel(self):
         """
@@ -225,9 +291,21 @@ class RLDemoWindow(object):
         self._frame_size = self._canvas_values.winfo_width(), self._canvas_values.winfo_height()  # same size as updates
 
     def _recalc_box_positions(self):
-        # only do this on resize
         all_states = self._app.updatable_states + self._app.terminal_states
         self._box_placer, self._box_sizes = get_box_placer(self._frame_size, all_states, player=self._player)
+
+        # optimize layers
+        states_by_layer = sort_states_into_layers(all_states,key='state')
+        # Need to change to {'id': s, 'state':s} for each state in each layer.
+        #states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]\
+        terminal_lut = {state: state.check_endstate() for state in all_states}
+        tree_opt = SimpleTreeOptimizer(image_size=self._frame_size,
+                                       states_by_layer = states_by_layer,
+                                       state_positions=self._box_placer.box_positions,
+                                       terminal=terminal_lut)
+        new_positions= tree_opt.get_new_positions()
+        self._box_placer.box_positions = new_positions
+        
 
     def _init_status_panel(self):
         """
@@ -351,7 +429,7 @@ class RLDemoWindow(object):
     def _toggle_view(self):
         self._view = (self._view + 1) % len(self._views)
         logging.info("Toggling view to %s" % self._views[self._view])
-        self._refresh_images()
+        self.refresh_images()
 
     def _toggle_tournament(self):
         """
@@ -421,7 +499,7 @@ class RLDemoWindow(object):
         # Update the tournament button text to the current tournament status.
         self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
-    def _refresh_images(self):        
+    def refresh_images(self):
         """
         Depending on app state, create a PhotoImage and replace whatever is on the canvas with it.
         """
@@ -431,7 +509,7 @@ class RLDemoWindow(object):
             canvas.create_image(0, 0, anchor=tk.NW, image=img)
             canvas.image = img
             canvas.update()
-            
+
         update_img = self._images['updates'][self._views[self._view]]
         update_canvas(self._canvas_updates, update_img)
         value_img = self._images['values'][self._views[self._view]]
@@ -440,8 +518,8 @@ class RLDemoWindow(object):
     def _reset(self):
         self._app.reset()
         self.cur_speed_state = 0
-        self._init_canvas_images()
-        self._refresh_images()
+        self.redraw_canvas_images()
+        self.refresh_images()
 
     def start(self):
         """

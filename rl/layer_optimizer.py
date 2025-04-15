@@ -37,8 +37,12 @@ class SimpleTreeOptimizer(object):
     def __init__(self, image_size, states_by_layer, state_positions, terminal):
         self._terminal_LUT = terminal
         self._size = image_size
-        # get rid of ids, use index into one of these lists.
-        self._states_per_layer = [[state_info['state'] for state_info in layer] for layer in states_by_layer]
+        # if in {'id','state'} format, get rid of ids, use index into one of these lists.
+        #import ipdb; ipdb.set_trace()
+        if isinstance(states_by_layer[0][0], dict):
+            self._states_per_layer = [[state_info['state'] for state_info in layer] for layer in states_by_layer]
+        else:
+            self._states_per_layer = states_by_layer
         # <-- Point of this class is to find a better bijection between states and positions.
         self._xy_position_LUT = state_positions
         logging.info("Optimizing state layout for game tree with %i layers." % len(self._states_per_layer))
