@@ -101,7 +101,7 @@ class TKAnimation(object):
         self._decrease_button.pack(side=tk.LEFT, padx=ANIM_POS[0], pady=ANIM_POS[1])
 
         # Create a slider for fps and a slider for randomness temperature
-        self._fps_slider = tk.Scale(self._root, from_=1, to=50, orient=tk.HORIZONTAL, label="Delay MS")
+        self._fps_slider = tk.Scale(self._root, from_=2, to=50, orient=tk.HORIZONTAL, label="Delay MS")
         self._fps_slider.set(16)  # Set default value to 30 fps
         self._fps_slider.pack(side=tk.LEFT, padx=5, pady=5)
 
