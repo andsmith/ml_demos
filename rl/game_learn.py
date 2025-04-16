@@ -22,6 +22,7 @@ from baseline_players import HeuristicPlayer
 from collections import OrderedDict
 from gui_components import RLDemoWindow
 from threading import Thread, Lock, Event
+from enum import IntEnum
 
 # r is known only for these states in adavnce:
 TERMINAL_REWARDS = {
@@ -31,7 +32,9 @@ TERMINAL_REWARDS = {
 }
 
 WIN_SIZE = (1920, 990)
-
+class PIPhases(object):
+    POLICY_EVAL = 0
+    POLICY_OPT = 1
 
 import pickle
 class PolicyImprovementDemo(ABC):
@@ -48,11 +51,12 @@ class PolicyImprovementDemo(ABC):
         :param opponent_policy:  The policy of the opponent.  Will be used to define the "environment" for the agent.
         :param player:  The player for the agent.  The opponent is the other player.
         """
-        self._iter=0
+        self._iter = 0  # of policy imporovement (PE/PO) cycles
+        self._max_iter = 100
         self._player = player
-        self._max_iter = 1000
-        self._n_updated =0
-        self._epoch =0 
+        self._n_updated = 0  # states updated this epoch
+        self._epoch = 0 # passes through all states
+        self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
         self._pending_pause = False
 
         self._seed_p = seed_policy
@@ -113,6 +117,7 @@ class PolicyImprovementDemo(ABC):
 
     def _pause(self):
         if not self._shutdown:
+            print("PAUSING!")
             self._gui.refresh_text_labels()
             self._action_signal.wait()
             self._action_signal.clear()
@@ -149,12 +154,14 @@ class PolicyImprovementDemo(ABC):
         self._iter = 0
         while not self._shutdown:
             # 1. Update the value function for the current policy.
+            self._phase = PIPhases.POLICY_EVAL
             self.optimize_value_function()
             self._maybe_pause('pi-round')
             if self._shutdown:
                 break
 
             # 2. Update policy & check for convergence:
+            self._phase = PIPhases.POLICY_OPT
             if self.optimize_policy():
                 # TODO: What do do when converged?
                 logging.info("Policy converged.")
@@ -292,8 +299,8 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def get_status(self):
         status = OrderedDict()
 
-        status['title'] = "Policy Evaluation / Improvement"
-        status['phase'] = "Policy Evaluation"
+        status['title'] = "Policy Improvement Demo"
+        status['phase'] = "Policy Evaluation" if self._phase == PIPhases.POLICY_EVAL else "Policy Optimization"
         status['iteration'] = self._iter
         status['epoch'] = self._epoch
         status['states processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))

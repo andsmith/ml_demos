@@ -366,8 +366,7 @@ class RLDemoWindow(object):
         label = tk.Label(self._frames['tools_left'], text="Speed options",
                          bg=self._color_bg, font=self.LAYOUT['fonts']['menu'])
         label.pack(side=tk.TOP, anchor=tk.W, padx=5, pady=0)
-        self._add_spacer(self._frames['tools_left'], height=1)
-
+        
         # Create radio buttons for each speed setting.
         self._radio_buttons = {}
         for i, (mode, states) in enumerate(self._speed_options.items()):
@@ -379,12 +378,12 @@ class RLDemoWindow(object):
             self._radio_buttons[mode] = rb
         # set current radio button to the current speed option.
         self._radio_buttons[self.cur_speed_option].select()
+        self._add_spacer(self._frames['tools_left'], height=1)
 
         # Create the "view options" (states, values, updates) under the speed options:
         label = tk.Label(self._frames['tools_left'], text="View options",
                          bg=self._color_bg, font=self.LAYOUT['fonts']['menu'])
         label.pack(side=tk.TOP, anchor=tk.W, padx=5, pady=0)
-        self._add_spacer(self._frames['tools_left'], height=1)
         # Create radio buttons for each view option.
         for i, mode in enumerate(['states', 'values', 'updates']):
             # Create a radio button for each view setting.
@@ -396,15 +395,16 @@ class RLDemoWindow(object):
         # set the current view option to 'states'
         self._radio_buttons['states'].select()
 
+        #self._add_spacer(self._frames['tools_left'], height=1)
         # Create action button, set text to current speed opton's 'text' value.
         self._action_button = tk.Button(self._frames['tools_right'], text=self._speed_options[self.cur_speed_option][self.cur_speed_state]['text'],
                                         command=lambda: self._action(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
         self._action_button.pack(side=tk.TOP, padx=5, pady=5)
 
         # Create tournament start/stop button.
-        self._tournament_button = tk.Button(self._frames['tools_right'], text="Start Tournament" if not self._app.running_tournament else "Stop Tournament",
-                                            command=lambda: self._toggle_tournament(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
-        self._tournament_button.pack(side=tk.TOP, padx=5, pady=5)
+        #self._tournament_button = tk.Button(self._frames['tools_right'], text="Start Tournament" if not self._app.running_tournament else "Stop Tournament",
+        #                                    command=lambda: self._toggle_tournament(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
+        #self._tournament_button.pack(side=tk.TOP, padx=5, pady=5)
 
         # Create reset button:
         self._reset_button = tk.Button(self._frames['tools_right'], text="Reset",
@@ -427,7 +427,7 @@ class RLDemoWindow(object):
         Toggles the tournament run status and updates the button text.
         """
         self._app.toggle_tournament()
-        self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
+        #self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
     def _action(self):
         """
@@ -487,7 +487,7 @@ class RLDemoWindow(object):
         # Update the action button text to the current speed option's 'text' value.
         self._action_button['text'] = self._speed_options[self.cur_speed_option][self.cur_speed_state]['text']
         # Update the tournament button text to the current tournament status.
-        self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
+        #self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
     def refresh_images(self):
         """
