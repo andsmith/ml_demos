@@ -20,7 +20,7 @@ from policies import ValueFuncPolicy
 import logging
 from baseline_players import HeuristicPlayer
 from collections import OrderedDict
-from gui_components import RLDemoWindow, EpochUpdate, SingleStateUpdate
+from gui_components import RLDemoWindow
 from threading import Thread, Lock, Event
 
 # r is known only for these states in adavnce:
@@ -33,7 +33,7 @@ TERMINAL_REWARDS = {
 WIN_SIZE = (1920, 990)
 
 
-
+import pickle
 class PolicyImprovementDemo(ABC):
     """
     Abstract class for Policy Improvment, i.e. iteration between:
@@ -48,15 +48,23 @@ class PolicyImprovementDemo(ABC):
         :param opponent_policy:  The policy of the opponent.  Will be used to define the "environment" for the agent.
         :param player:  The player for the agent.  The opponent is the other player.
         """
-
+        self._iter=0
         self._player = player
         self._max_iter = 1000
+        self._n_updated =0
+        self._epoch =0 
+        self._pending_pause = False
+
         self._seed_p = seed_policy
         self._opponent_p = opponent_policy
         self._gamma = gamma  # discount factor for future rewards.
 
         # P.I. initialization:
-        self._env = Environment(opponent_policy, player)
+        #self._env = Environment(opponent_policy, player)
+        #with open('env_x.pkl', 'wb') as f:
+        #    pickle.dump(self._env, f)
+        with open('env_x.pkl', 'rb') as f:
+            self._env = pickle.load(f)
         self.children = self._env.get_children()
 
         self._pi = seed_policy
@@ -64,22 +72,32 @@ class PolicyImprovementDemo(ABC):
         self.terminal_states = self._env.get_terminal_states()
         self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self.running_tournament = False
-        self.reset()  # Start learning from the beginning.
+        self._v = None  # dict from state to value function V_t (s)
+        self._v_new = None  # dict from state to new value function V_{t+1} (s)
+
+        self.reset()  
+
         self._shutdown = False
         # App  & graphics:
+        
         self._action_signal = Event()  # learner will wait for this, action button will set it.
         self._init_gui()
 
+
+
     def reset(self):
+        logging.info("Learn app reset.")
         # initial value function
         self._v = {state: 0.0 for state in self.updatable_states}
         self._v.update(self._v_terminal)
-        self._delta_v = {state: 0.0 for state in self.updatable_states}
-        self._delta_v.update(self._v_terminal)
-        self._v_prev = self._v.copy()
+        self._v_new = {state: 0.0 for state in self.updatable_states}
+        self._v_new.update(self._v_terminal)
+
         self._iter = 0
         self._pending_pause = False
-        # GUI calls this so it will reset its own visualizations..
+
+
+
 
     @abstractmethod
     def optimize_value_function(self):
@@ -94,10 +112,10 @@ class PolicyImprovementDemo(ABC):
         self._action_signal.set()
 
     def _pause(self):
-        self._gui.apply_all_updates()
-        self._gui.refresh_text_labels()
-        self._action_signal.wait()
-        self._action_signal.clear()
+        if not self._shutdown:
+            self._gui.refresh_text_labels()
+            self._action_signal.wait()
+            self._action_signal.clear()
 
     def _maybe_pause(self, stage, info=None):
         """
@@ -237,6 +255,8 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def __init__(self, seed_policy, opponent_policy, player=Mark.X, in_place=False):
         self._gui = None
         self._delta_v_tol = 1e-6  # tolerance for delta v(s) convergence.
+        self._delta_v_max = 0  # running max for each epoch (epoch ends if it's < delta_v_tol)
+
         self._v_converged = False
         super().__init__(seed_policy, opponent_policy, player, in_place)
 
@@ -267,7 +287,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 self._pause()
 
     def get_values(self):
-        return self._v, self._delta_v
+        return self._v, self._v_new
 
     def get_status(self):
         status = OrderedDict()
@@ -292,7 +312,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 self._n_updated += 1
                 self._v_new[state] = np.random.rand()
 
-                self._gui.add_update(SingleStateUpdate(state, new_value = self._v_new[state]))
+                #self._gui.add_update(SingleStateUpdate(state, new_value = self._v_new[state]))
 
                 self._maybe_pause('state-update', info=state)
                 if self._shutdown:

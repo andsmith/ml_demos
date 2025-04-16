@@ -71,7 +71,7 @@ class TKAnimation(object):
                            't_last': time.perf_counter(),
                            'fps': 0.0,
                            'frame_count': 0,
-                           'update_n': 10}
+                           'update_n': 50}
 
         self._init_gui()
         self._init_geom()
