@@ -124,8 +124,8 @@ class RLDemoWindow(object):
         self._app = demo_app
         self._speed_options = speed_options
         self._player = player_mark
-        self._color_bg = tk_color_from_rgb(COLOR_BG)
-        self._color_lines = tk_color_from_rgb(COLOR_LINES)
+        self.color_bg = tk_color_from_rgb(COLOR_BG)
+        self.color_lines = tk_color_from_rgb(COLOR_LINES)
         self._img_label = None
         self._pending_updates = []
         self._color_scalers = {'values': None, 'updates': None}
@@ -138,6 +138,8 @@ class RLDemoWindow(object):
         self._init_frames()
         self._init_status_panel()
         self._init_tools_panel()
+        self._init_step_viz()
+        #self._init_tournament_panel()
 
         self._state_images = None
 
@@ -177,10 +179,10 @@ class RLDemoWindow(object):
         """
         self._step_viz_frame = self._frames['step_viz']
         # Create a label to hold the step vis image:
-        self._step_viz_label = tk.Label(self._step_viz_frame, bg=self._color_bg, font=self.LAYOUT['fonts']['default'])
+        self._step_viz_label = tk.Label(self._step_viz_frame, bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
         self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
 
-    def update_step_vis_image(self, image=None):
+    def update_step_viz_image(self, image=None):
         """
         Update the step visualization image.
         :param image:  The image to update.
@@ -188,13 +190,17 @@ class RLDemoWindow(object):
         if image is not None:
             self._step_viz_label['image'] = ImageTk.PhotoImage(Image.fromarray(image))
             self._step_viz_label.image = image
-            self._frame_labels['step_vis'].pack_forget()
+            self._frame_labels['step_viz'].pack_forget()
+            self._frame_lines['step_viz'].pack_forget()
+
         else:
             self._step_viz_label['image'] = None
             self._step_viz_label.image = None
-            self._frame_labels['step_vis'].pack(side=tk.TOP, fill=tk.X)
+            self._frame_labels['step_viz'].pack(side=tk.TOP, fill=tk.X)
+            self._frame_lines['step_viz'].pack(side=tk.TOP)
 
-    def get_step_vis_frame_size(self):
+
+    def get_step_viz_frame_size(self):
         """
         Get the size of the step visualization frame.
         :return:  The width and height of the step visualization frame.
@@ -236,7 +242,7 @@ class RLDemoWindow(object):
         logging.info("Recalculating box positions")
         if self._img_label is not None:
             self._img_label.destroy()
-        self._img_label = tk.Label(self._frames['values'], bg=self._color_bg, font=self.LAYOUT['fonts']['default'])
+        self._img_label = tk.Label(self._frames['values'], bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
         # top center
         self._img_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
         # The image to put in the label will be this size:
@@ -288,7 +294,7 @@ class RLDemoWindow(object):
                 status_str = stat_val
                 font = self.LAYOUT['fonts']['flag']
             label = tk.Label(self._frames['status'], text=status_str,
-                             bg=self._color_bg, font=font, anchor=tk.W, justify=tk.LEFT)
+                             bg=self.color_bg, font=font, anchor=tk.W, justify=tk.LEFT)
             label.pack(side=tk.TOP, fill=tk.X)
             self._status_labels[stat_name] = label
 
@@ -302,23 +308,25 @@ class RLDemoWindow(object):
         y_pad_rel = self.LAYOUT['margin_px'] / self._size[1]
 
         self._frame_labels = {}
+        self._frame_lines = {}
 
         for name, layout in self.LAYOUT['frames'].items():
 
             x_rel = layout['x_rel']
             y_rel = layout['y_rel']
             font = self.LAYOUT['fonts']['pannel_title']
-            frame = tk.Frame(self._root, bg=self._color_bg)
+            frame = tk.Frame(self._root, bg=self.color_bg)
             frame.place(relx=x_rel[0]+x_pad_rel, rely=y_rel[0]+y_pad_rel, relwidth=x_rel[1] - x_rel[0] - 2*x_pad_rel,
                         relheight=y_rel[1] - y_rel[0] - 2*y_pad_rel)
 
-            label = tk.Label(frame, text=self.FRAME_TITLES[name], bg=self._color_bg, font=font)
+            label = tk.Label(frame, text=self.FRAME_TITLES[name], bg=self.color_bg, font=font)
             label.pack(side=tk.TOP, fill=tk.X)
             self._frame_labels[name] = label
 
             # Add dark line under label
             if name not in ['values', 'updates']:
-                tk.Frame(frame, height=2, width=100, bg=self._color_lines).pack(side=tk.TOP)
+                self._frame_lines[name] = tk.Frame(frame, height=2, width=100, bg=self.color_lines)
+                self._frame_lines[name].pack(side=tk.TOP)
 
             self._frames[name] = frame
 
@@ -328,7 +336,7 @@ class RLDemoWindow(object):
         :param frame:  The frame to add the spacer to.
         :param height:  Height of the spacer in pixels.
         """
-        label = tk.Label(frame, text="", bg=self._color_bg, font=('Helvetica', height))
+        label = tk.Label(frame, text="", bg=self.color_bg, font=('Helvetica', height))
         label.pack(side=tk.TOP, fill=tk.X, pady=0)
 
     def _init_tools_panel(self):
@@ -343,14 +351,14 @@ class RLDemoWindow(object):
         self.cur_speed_state = 0
 
         # Create frames for both sides of the tools panel.
-        self._frames['tools_left'] = tk.Frame(self._frames['tools'], bg=self._color_bg)
-        self._frames['tools_right'] = tk.Frame(self._frames['tools'], bg=self._color_bg)
+        self._frames['tools_left'] = tk.Frame(self._frames['tools'], bg=self.color_bg)
+        self._frames['tools_right'] = tk.Frame(self._frames['tools'], bg=self.color_bg)
         self._frames['tools_left'].pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self._frames['tools_right'].pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         # Add "Speed options" label, left justified at the top:
         label = tk.Label(self._frames['tools_left'], text="Speed options",
-                         bg=self._color_bg, font=self.LAYOUT['fonts']['menu'])
+                         bg=self.color_bg, font=self.LAYOUT['fonts']['menu'])
         label.pack(side=tk.TOP, anchor=tk.W, padx=5, pady=0)
 
         # Create radio buttons for each speed setting.
@@ -358,7 +366,7 @@ class RLDemoWindow(object):
         for i, (mode, states) in enumerate(self._speed_options.items()):
             # Create a radio button for each speed setting.
             rb = tk.Radiobutton(self._frames['tools_left'], text=mode, variable=self.cur_speed_option, value=mode,
-                                command=lambda m=mode: self._set_speed_mode(m), bg=self._color_bg,
+                                command=lambda m=mode: self._set_speed_mode(m), bg=self.color_bg,
                                 font=self.LAYOUT['fonts']['default'])
             rb.pack(side=tk.TOP, anchor=tk.W, padx=35, pady=0)
             self._radio_buttons[mode] = rb
@@ -368,13 +376,13 @@ class RLDemoWindow(object):
 
         # Create the "view options" (states, values, updates) under the speed options:
         label = tk.Label(self._frames['tools_left'], text="View options",
-                         bg=self._color_bg, font=self.LAYOUT['fonts']['menu'])
+                         bg=self.color_bg, font=self.LAYOUT['fonts']['menu'])
         label.pack(side=tk.TOP, anchor=tk.W, padx=5, pady=0)
         # Create radio buttons for each view option.
         for i, mode in enumerate(['states', 'values', 'updates']):
             # Create a radio button for each view setting.
             rb = tk.Radiobutton(self._frames['tools_left'], text=mode, variable=self._view, value=i,
-                                command=lambda m=mode: self._set_view_mode(m), bg=self._color_bg,
+                                command=lambda m=mode: self._set_view_mode(m), bg=self.color_bg,
                                 font=self.LAYOUT['fonts']['default'])
             rb.pack(side=tk.TOP, anchor=tk.W, padx=35, pady=0)
             self._radio_buttons[mode] = rb
@@ -450,7 +458,7 @@ class RLDemoWindow(object):
         self._root.title("Tic Tac Toe RL Demo")
         # set window to 1200x800 pixels
         self._root.geometry(f"{self._size[0]}x{self._size[1]}")
-        self._root.configure(bg=self._color_lines)
+        self._root.configure(bg=self.color_lines)
 
     def _set_speed_mode(self, mode):
         """

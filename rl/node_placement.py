@@ -108,7 +108,12 @@ class BoxOrganizer(ABC):
                 bos_pos = self.box_positions[box['id']]
                 x, y = bos_pos['x'], bos_pos['y']
                 if images is None:
-                    img[y[0]:y[1], x[0]:x[1]] = box['color'] if colors is None else colors[box['id']]
+                    if colors is None:
+                        img[y[0]:y[1], x[0]:x[1]] = box['color']
+                    else:
+                        if box['id'] not in colors:
+                            print(box['id'], "not in colors")
+                        img[y[0]:y[1], x[0]:x[1]] = colors[box['id']]
                 else:
                     tile = images[box['id']]
                     img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile

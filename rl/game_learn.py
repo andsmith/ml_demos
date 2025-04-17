@@ -110,6 +110,11 @@ class PolicyImprovementDemo(ABC):
 
         if vis_update is not None:
             self._gui.annotate_frame(vis_update)
+            step_viz_img = vis_update.draw_step_viz()
+            self._gui.update_step_viz_image(step_viz_img)
+        else:
+            # TODO: something for continuous mode?
+            self._gui.update_step_viz_image()
 
         if not self._shutdown:
             print("PAUSING!")
@@ -172,7 +177,7 @@ class PolicyImprovementDemo(ABC):
             
             if self._shutdown:
                 break
-            
+
             vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self._pi, 'new': new_policy})
             self._maybe_pause('pi-round', vis)
 

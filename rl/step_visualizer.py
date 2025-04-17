@@ -43,7 +43,7 @@ class PEStep(ABC):
         pass
 
     @abstractmethod
-    def draw_step_vis(self, img_size):
+    def draw_step_viz(self, img_size):
         """
         Draw the step visualization in the GUI.
 
@@ -57,7 +57,7 @@ class StateUpdateStep(PEStep):
     Update for a specific state.
     """
 
-    def __init__(self, demo, gui, state, actions, next_states, rewards, old_value, new_value):
+    def __init__(self, demo, gui, state, actions, next_states, rewards, old_value, new_value, bg_color=(0,0,0)):
         super().__init__(demo, gui)
         self._state = state  # the state being updated
         self._actions = actions  # possible actions for the state
@@ -66,6 +66,7 @@ class StateUpdateStep(PEStep):
         self._old_value = old_value  # old value for the state
         self._new_value = new_value  # new value for the state
         self.delta = new_value - old_value
+        self._bg_color = bg_color  # background color for the images
 
     def get_annotated_images(self, images):
         """
@@ -107,7 +108,7 @@ class StateUpdateStep(PEStep):
         # update the updates image with the new values:
         self._gui.update_updates_image(images['updates'])
 
-    def draw_step_vis(self, img_size):
+    def draw_step_viz(self):
         """
         Draw the state being updated in the top left, the intermediate states resulting from 
         each action distributed in a row under it, and the distribution of next states
@@ -116,7 +117,12 @@ class StateUpdateStep(PEStep):
         Under the RL states, print the value function. 
         Under the intermediate states, print the reward values.
         """
-        pass  # TODO:  implement this
+        w,h = self._gui.get_step_viz_frame_size()
+        logging.info("Creating step visualization with size %i x %i" % (w, h))
+        img = np.zeros((h, w, 3), dtype=np.uint8)
+        img[:] = self._bg_color
+
+        return img
 
 
 class EpochStep(PEStep):
