@@ -20,7 +20,7 @@ class PEStep(ABC):
         self._gui = gui
 
     @abstractmethod
-    def get_annotated_images(self, images):
+    def annotate_images(self, images):
         """
         Calculations ran, now we need to display something with the results.  These images disappear.
         (For speed modes that pause between steps.)
@@ -68,7 +68,7 @@ class StateUpdateStep(PEStep):
         self.delta = new_value - old_value
         self._bg_color = bg_color  # background color for the images
 
-    def get_annotated_images(self, images):
+    def annotate_images(self, images):
         """
         1. Draw a thick green box around the state being updated.
         
@@ -82,13 +82,13 @@ class StateUpdateStep(PEStep):
         n_actions = len(self._actions)
         n_next_states = [len(self._next_states[a_ind]) for a_ind in range(n_actions)]
         colors = get_n_colors(n_actions)
-        print(colors)
+
         shades = [shade_color(c, n_next_states[c_i]) for c_i,c in enumerate(colors)]
 
         def add_box(state, color, thickness):
-            for image in images.values():
-
-                self._gui.box_placer.draw_box(image, state, color=color, thickness=thickness)
+            #print("Adding state:\n%s\n" % str(state))
+            for img in images.values():
+                self._gui.box_placer.draw_box(img, state, color=color, thickness=thickness)
 
         add_box(self._state, NEON_GREEN, 1)
         for a_ind, action in enumerate(self._actions):
@@ -121,6 +121,16 @@ class StateUpdateStep(PEStep):
         logging.info("Creating step visualization with size %i x %i" % (w, h))
         img = np.zeros((h, w, 3), dtype=np.uint8)
         img[:] = self._bg_color
+
+        #In the top right, draw the updating state in a green box.
+        
+
+        # divide the strip into |actions| columns, show the action in the top
+
+
+        # show each following state under each action in the appropriate color.
+
+        # annotate with value functions, etc.
 
         return img
 

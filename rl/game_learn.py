@@ -51,7 +51,9 @@ class PolicyImprovementDemo(ABC):
 
         # app state:
         self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
-        self._pending_pause = False
+        self._pending_pause = False  # TODO: Change to state to pause after updating
+        
+        self.started = False
         self.running_tournament = False
         self.running_continuous = False
         self._converged = False
@@ -59,7 +61,7 @@ class PolicyImprovementDemo(ABC):
         self._seed_p = seed_policy
         self._opponent_p = opponent_policy
         self._gamma = gamma  # discount factor for future rewards.
-
+        self._learning_thread = None
         # P.I. initialization:
         self._env = Environment(opponent_policy, player)
         with open('env_x.pkl', 'wb') as f:
@@ -93,6 +95,11 @@ class PolicyImprovementDemo(ABC):
 
         self._iter = 0
         self._pending_pause = False
+        self._converged = False
+        self._convergence_iter = None
+        self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
+        self._n_updated = 0  # states updated this epoch
+        self.started = False
 
     @abstractmethod
     def optimize_value_function(self):
@@ -103,12 +110,17 @@ class PolicyImprovementDemo(ABC):
         pass
 
     def _resume(self):
-        print("RESUMING")
+        #print("RESUMING")
+        if not self.started:
+            self.start_learn_loop()
+            self.started = True
+
         self._action_signal.set()
 
     def _pause(self, vis_update=None):
 
         if vis_update is not None:
+            #import ipdb; ipdb.set_trace()
             self._gui.annotate_frame(vis_update)
             step_viz_img = vis_update.draw_step_viz()
             self._gui.update_step_viz_image(step_viz_img)
@@ -117,7 +129,7 @@ class PolicyImprovementDemo(ABC):
             self._gui.update_step_viz_image()
 
         if not self._shutdown:
-            print("PAUSING!")
+            #print("PAUSING!")
             self._gui.refresh_text_labels()
             self._action_signal.wait()
             self._action_signal.clear()
@@ -155,6 +167,8 @@ class PolicyImprovementDemo(ABC):
 
         """
         self._iter = 0
+
+        self._maybe_pause('state-update', None)
 
         while not self._shutdown:
 
@@ -258,12 +272,14 @@ class PolicyImprovementDemo(ABC):
         Start the GUI (doesn't return until the GUI is closed).
         """
         # let the gui call start_learn_loop after it knows where everything goes
+        self._action_signal.clear()  # start paused
         self._gui.start()
         logging.info("GUI closed, waiting for learning thread to finish...")
         self._shutdown = True  # set shutdown flag to stop the learning loop.
         # set event signal in case gui is waiting for user to click a button:
         self._action_signal.set()
-        self._learning_thread.join()  # wait for the learning thread to finish before exiting.
+        if self._learning_thread is not None:
+            self._learning_thread.join()  # wait for the learning thread to finish before exiting.
         logging.info("Learning thread finished.")
 
     def start_learn_loop(self):

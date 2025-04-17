@@ -54,8 +54,8 @@ def optimize_layers(box_placer, all_states, player=Mark.X):
     """
     """
 
-def get_state_icons(all_states, box_sizes=None, player=Mark.X):
-    state_layers = sort_states_into_layers(all_states, player_mark=player)
+def get_state_icons(state_layers, box_sizes=None, player=Mark.X):
+    
     space_sizes = [GameStateArtist.get_space_size(box_size, bar_w_frac=0.0) for box_size in box_sizes]
     artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in space_sizes]
     images = {state['id']: artists[layer_no].get_image(state['id']) for layer_no, layer in enumerate(state_layers) for state in layer}

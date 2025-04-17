@@ -44,15 +44,18 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
 import numpy as np
-from value_panel import get_box_placer, get_state_icons, sort_states_into_layers
+from value_panel import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
 from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 import tkinter as tk
 from PIL import Image, ImageTk
+from copy import deepcopy
 import matplotlib.pyplot as plt
 from enum import IntEnum
 from color_scaler import ColorScaler
+
+from threading import Lock, get_ident
 
 
 def tk_color_from_rgb(rgb):
@@ -139,9 +142,10 @@ class RLDemoWindow(object):
         self._init_status_panel()
         self._init_tools_panel()
         self._init_step_viz()
-        #self._init_tournament_panel()
+        # self._init_tournament_panel()
 
         self._state_images = None
+        self._resize_lock = Lock()
 
         # self.make_images()
         self._base_images = {'states': None,  # representation of game state
@@ -154,9 +158,6 @@ class RLDemoWindow(object):
 
         # Calls resize which creates state images:
         self._root.bind("<Configure>", lambda event: self._resize(event))
-        # Schedule images to be built after window is created:
-        # self._root.after_idle(self._resize)
-        self._root.after(100,   self._app.start_learn_loop)
 
     def toggle_fullscreen(self):
 
@@ -199,7 +200,6 @@ class RLDemoWindow(object):
             self._frame_labels['step_viz'].pack(side=tk.TOP, fill=tk.X)
             self._frame_lines['step_viz'].pack(side=tk.TOP)
 
-
     def get_step_viz_frame_size(self):
         """
         Get the size of the step visualization frame.
@@ -221,9 +221,10 @@ class RLDemoWindow(object):
         logging.info("Creating images for states, values, and updates")
         if self._state_images is None:
             all_states = self._app.updatable_states + self._app.terminal_states
-            self._state_images = get_state_icons(all_states, box_sizes=self._box_sizes, player=self._player)
+            self._state_images = get_state_icons(self._states_by_layer, box_sizes=self._box_sizes, player=self._player)
         # set size from frame dimensions
         frame_size = self.get_image_frame_size()
+
         values, new_values = self._app.get_values()
         self._color_scalers = {'values': ColorScaler(values), 'updates': ColorScaler(new_values)}
         state_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
@@ -233,6 +234,7 @@ class RLDemoWindow(object):
         self._base_images = {'values': self.box_placer.draw(colors=self._color_scalers['values'].color_LUT, dest=val_img_blank.copy()),
                              'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
                              'updates': self.box_placer.draw(colors=self._color_scalers['updates'].color_LUT, dest=val_img_blank.copy())}
+        self._disp_images = deepcopy(self._base_images)
 
     def _recalc_box_positions(self):
         """
@@ -258,12 +260,13 @@ class RLDemoWindow(object):
             self._box_sizes = self._layout_cache[layout_key]['box_sizes']
             return
         all_states = self._app.updatable_states + self._app.terminal_states
-        self.box_placer, self._box_sizes, states_by_layer = get_box_placer(frame_size, all_states, player=self._player)
+        self.box_placer, self._box_sizes, self._states_by_layer = get_box_placer(
+            frame_size, all_states, player=self._player)
         # Need to change to {'id': s, 'state':s} for each state in each layer.
         # states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]
         terminal_lut = {state: state.check_endstate() for state in all_states}
         tree_opt = SimpleTreeOptimizer(image_size=frame_size,
-                                       states_by_layer=states_by_layer,
+                                       states_by_layer=self._states_by_layer,
                                        state_positions=self.box_placer.box_positions,
                                        terminal=terminal_lut)
         new_positions = tree_opt.get_new_positions()
@@ -494,7 +497,9 @@ class RLDemoWindow(object):
         Update screen with appropriate image depending on app state.
         Create a PhotoImage and replace whatever is in the label with it.
         """
-        images = self._base_images if not self._app.running_continuous else self._disp_images
+        print("Refreshing with %s images, %s view." %
+              ("base" if self._app.running_continuous else "annotated", self._view))
+        images = self._base_images if self._app.running_continuous else self._disp_images
         image = images[self._view]
         img = ImageTk.PhotoImage(Image.fromarray(image))
         self._img_label.config(image=img)
@@ -504,7 +509,8 @@ class RLDemoWindow(object):
         """
         Annotate the current base images.
         """
-        self._disp_images = vis_update.get_annotated_images(self._base_images)
+        self._disp_images = deepcopy(self._base_images)
+        vis_update.annotate_images(self._disp_images)
         self.refresh_images()
 
     def _reset(self):
@@ -512,17 +518,24 @@ class RLDemoWindow(object):
         self._app.reset()
 
         self.cur_speed_state = 0
-        self._recalc_box_positions()
+        # self._recalc_box_positions()
         self.make_images()
         self.refresh_images()
 
     def _resize(self, event):
         if event.widget == self._frames['values']:
-            logging.info("Resizing state image: %s x %s" % (event.width, event.height))
-            self._recalc_box_positions()
-            self.make_images()
-            self.refresh_images()
-            # TODO: Apply latest PEStep
+            new_size = (event.width, event.height)
+            with self._resize_lock:
+                # Check if the size has changed:
+                if new_size == self._size:
+                    return
+                logging.info("Resizing state image: %s  (thread %s)" % (new_size, get_ident()))
+                self._size = new_size
+
+                self._recalc_box_positions()
+                self.make_images()
+                self.refresh_images()
+                # TODO: Apply latest PEStep
 
     def get_box_positions(self):
         return self.box_placer.box_positions
@@ -533,6 +546,8 @@ class RLDemoWindow(object):
         """
         self._root.mainloop()
 
+
+'''
 
 class DemoWindowTester(object):
     """
@@ -644,3 +659,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     tester = DemoWindowTester()
     tester.run()
+'''
