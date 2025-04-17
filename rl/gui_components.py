@@ -66,7 +66,8 @@ def tk_color_from_rgb(rgb):
     return f'#{r:02x}{g:02x}{b:02x}'
 
 
-STATUS_W = 0.175  # Horizontal placement of first column.
+STATUS_W = 0.17  # Horizontal placement of first column.
+STEP_VIZ_W = 0.22  # Horizontal placement of step visualization.
 FUNC_W = (1.0 - STATUS_W) / 2.0
 T_CUTOFF = .7  # Vertical top of tournament frame.
 BOTTOM_ROW = .8  # Vertical placement of bottom row.
@@ -93,10 +94,10 @@ class RLDemoWindow(object):
                                    'y_rel': (0.25, T_CUTOFF)},
                          'tournament': {'x_rel': (0, STATUS_W),
                                         'y_rel': (T_CUTOFF, 1.)},
-                         'values': {'x_rel': (STATUS_W,  STATUS_W + 2 * FUNC_W),
-                                    'y_rel': (0, BOTTOM_ROW)},
-                         'step_viz': {'x_rel': (STATUS_W, 1),
-                                      'y_rel': (BOTTOM_ROW, 1.)}},
+                         'values': {'x_rel': (STATUS_W + STEP_VIZ_W,  1.),
+                                    'y_rel': (0, 1.)},
+                         'step_viz': {'x_rel': (STATUS_W, STATUS_W + STEP_VIZ_W),
+                                      'y_rel': (0, 1.)}},
               'margin_px': 5,
               'fonts': {'pannel_title': ('Helvetica', 16),
                         'title': ('Helvetica', 14, 'bold'),
