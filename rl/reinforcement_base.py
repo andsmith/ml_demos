@@ -3,10 +3,14 @@ Base classes and functions for RL demos.
 """
 from tic_tac_toe import Game, get_game_tree_cached, GameTree
 from game_base import Mark, Result
-
+from enum import IntEnum
 import numpy as np
 import logging
 
+
+class PIPhases(IntEnum):
+    POLICY_EVAL = 0
+    POLICY_OPT = 1
 
 class Environment(object):
     """

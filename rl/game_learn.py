@@ -15,7 +15,7 @@ from drawing import GameStateArtist
 from tic_tac_toe import Game, get_game_tree_cached
 from node_placement import FixedCellBoxOrganizer
 from game_base import Result, Mark, TERMINAL_REWARDS, get_reward
-from reinforcement_base import Environment
+from reinforcement_base import Environment, PIPhases
 from abc import ABC, abstractmethod
 from policy_optim import ValueFuncPolicy
 import logging
@@ -27,11 +27,6 @@ from enum import IntEnum
 from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
 
 WIN_SIZE = (1920, 990)
-
-
-class PIPhases(object):
-    POLICY_EVAL = 0
-    POLICY_OPT = 1
 
 
 class PolicyImprovementDemo(ABC):
@@ -156,7 +151,7 @@ class PolicyImprovementDemo(ABC):
             # 1. Update the value function for the current policy.
             self._phase = PIPhases.POLICY_EVAL
             state_updates = self.optimize_value_function()
-            vis = PIStep(self, self._gui, 'value_function', state_updates)
+            vis = PIStep(self, self._gui, PIPhases.POLICY_EVAL, info={'state_updates': state_updates})
             self._maybe_pause('pi-round', vis)
 
             if self._shutdown:
@@ -165,7 +160,7 @@ class PolicyImprovementDemo(ABC):
             # 2. Update policy & check for convergence:
             self._phase = PIPhases.POLICY_OPT
             new_policy, self._converged = self.optimize_policy()
-            vis = PIStep(self, self._gui, 'policy', self._pi, new_policy)
+            vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self._pi, 'new': new_policy})
             self._maybe_pause('pi-round', vis)
 
             self._iter += 1
@@ -244,8 +239,7 @@ class PolicyImprovementDemo(ABC):
         Start the learning loop in its own thread.
         Start the GUI (doesn't return until the GUI is closed).
         """
-        self._learning_thread = Thread(target=self._learn_loop)
-        self._learning_thread.start()
+        # let the gui call start_learn_loop after it knows where everything goes
         self._gui.start()
         logging.info("GUI closed, waiting for learning thread to finish...")
         self._shutdown = True  # set shutdown flag to stop the learning loop.
@@ -253,6 +247,11 @@ class PolicyImprovementDemo(ABC):
         self._action_signal.set()
         self._learning_thread.join()  # wait for the learning thread to finish before exiting.
         logging.info("Learning thread finished.")
+
+    def start_learn_loop(self):
+        self._learning_thread = Thread(target=self._learn_loop)
+        self._learning_thread.start()
+
 
 
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
@@ -330,7 +329,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         """
         logging.info("Starting Policy Evaluation, (PI round %i)" % self._iter)
         self._epoch = 0
-        self._maybe_pause('state-update')  # don't start running
+
         if self._state_update_order is None:
             self._set_state_update_order()
         while True:
@@ -362,16 +361,17 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                             next_states.append((next_next_state, prob))
                             next_next_result = next_next_state.check_endstate()
                             if next_next_result in [self.winning_result, self.losing_result, self.draw_result]:
-                                reward_term += prob * TERMINAL_REWARDS[next_next_result]                                
+                                reward_term += prob * TERMINAL_REWARDS[next_next_result]
                             else:
                                 reward_term += prob * self._v[next_next_state] * self._gamma
                     return reward_term, next_states
 
                 actions = state.get_actions()
                 reward_terms, next_states = []
-                
-                import ipdb; ipdb.set_trace()
-                print("state:\n%s"% state)
+
+                import ipdb
+                ipdb.set_trace()
+                print("state:\n%s" % state)
                 for action in actions:
                     print("testing action :", action)
                     reward_term, next_state_dist = get_reward_term_and_next_states(action)
@@ -382,7 +382,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
                 # Handle visualizer updates
                 vis = StateUpdateStep(self, self._gui, state, actions, next_states, reward_terms,
-                                     self._v[state], self._v_new[state])
+                                      self._v[state], self._v_new[state])
                 state_updates.append(vis)
 
                 self._n_updated = iter + 1
@@ -421,7 +421,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             color = cmap(norm(self._v[state]))
             colors[state] = color
             layers.append(state)
-            
+
         # create a color map for the values:
 
 

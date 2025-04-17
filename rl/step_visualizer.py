@@ -107,3 +107,37 @@ class EpochStep(PEStep):
         super().__init__(demo, gui)
         self._state_updates = state_updates
         self._epoch = demo._epoch  # the epoch being updated
+
+
+class PIStep(PEStep):
+    def __init__(self, demo, gui, phase, update_info):
+        super().__init__(demo, gui)
+        self._phase = phase
+        self._info = update_info
+
+    def annotate_images(self, images):
+        """
+        Draw a green box around the state being updated.
+        For the N possible actions, pick N colors and draw boxes in those colors around 
+        each of the next states for each action.
+
+        Do this for all three images.        
+        """
+        pass  # TODO:  implement this
+
+
+class ContinuousStep(PEStep):
+    def __init__(self, demo, gui, state_updates):
+        super().__init__(demo, gui)
+        self._state_updates = state_updates
+        self._epoch = demo._epoch  # the epoch being updated
+
+    def annotate_images(self, images):
+        """
+        Draw a green box around the state being updated.
+        For the N possible actions, pick N colors and draw boxes in those colors around 
+        each of the next states for each action.
+
+        Do this for all three images.        
+        """
+        pass  # TODO:  implement this

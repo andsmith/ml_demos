@@ -52,7 +52,7 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import matplotlib.pyplot as plt
 from enum import IntEnum
-
+from color_scaler import ColorScaler
 
 def tk_color_from_rgb(rgb):
     """translates an rgb tuple of int to a tkinter friendly color code
@@ -127,7 +127,7 @@ class RLDemoWindow(object):
         self._color_lines = tk_color_from_rgb(COLOR_LINES)
         self._img_label = None
         self._pending_updates = []
-        self._cmap = plt.get_cmap('gray')
+        self._color_scalers = {'values': None, 'updates': None}
         self._view = 'states'  # one of ['states', 'values', 'updates']
         self._fullscreen = False
 
@@ -149,7 +149,7 @@ class RLDemoWindow(object):
         self._root.bind("<Configure>", lambda event: self._resize(event))
         # Schedule images to be built after window is created:
         # self._root.after_idle(self._resize)
-        # self._root.after(100,   self._reset)
+        self._root.after(100,   self._app.start_learn_loop)
 
     def toggle_fullscreen(self):
 
@@ -189,45 +189,6 @@ class RLDemoWindow(object):
             self._step_viz_label.image = None
             self._frame_labels['step_vis'].pack(side=tk.TOP, fill=tk.X)
 
-    def _get_scaled_colors(self):
-        """
-        For values and updates, get the range, map to colors, return a dicts from game_state to rgb tuple
-        :returns: values_colors, updates_colors
-        """
-        def scale(unscaled):
-            """
-            Get the scaled values for the given unscaled values.
-            :param unscaled:  The unscaled values to scale.
-            :return:  The scaled values.
-            """
-            # min_val = np.min(unscaled)
-            # max_val = np.max(unscaled)
-            min_val = -1.
-            max_val = 1.0
-            range_val = max_val - min_val
-            if range_val == 0:
-                range_val = 1e-6
-            scaled = (unscaled - min_val) / range_val
-            return scaled, (min_val, range_val)
-
-        old_v, new_v = self._app.get_values()
-
-        old_vals, (old_min, old_range) = scale(np.array([old_v[s] for s in old_v]))
-        new_vals, (new_min, new_range) = scale(np.array([new_v[s] for s in new_v]))
-
-        def floats_to_int_color(c_float):
-            c_float = np.array(c_float).reshape(-1)[:3]
-            return int(255*c_float[0]), int(255*c_float[1]), int(255*c_float[2])
-        # map to colors:
-        values_colors = {s: floats_to_int_color(self._cmap(old_vals[i])) for i, s in enumerate(old_v)}
-        new_colors = {s: floats_to_int_color(self._cmap(new_vals[i])) for i, s in enumerate(new_v)}
-        return ({'lut': values_colors,
-                'min': old_min,
-                 'range': old_range},
-
-                {'lut': new_colors,
-                 'min': new_min,
-                 'range': new_range})
     
     def get_step_vis_frame_size(self):
         """
@@ -253,14 +214,15 @@ class RLDemoWindow(object):
             self._state_images = get_state_icons(all_states, box_sizes=self._box_sizes, player=self._player)
         # set size from frame dimensions
         frame_size = self.get_image_frame_size()
-        self._values_color_LUT, self._updates_colors_LUT = self._get_scaled_colors()
+        values, new_values = self._app.get_values()
+        self._color_scalers = {'values': ColorScaler(values), 'updates': ColorScaler(new_values)}
         state_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
         state_img_blank[:] = COLOR_BG
         val_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
         val_img_blank[:] = (100, 100, 100)
-        self._images = {'values': self.box_placer.draw(colors=self._values_color_LUT['lut'], dest=val_img_blank.copy()),
+        self._images = {'values': self.box_placer.draw(colors=self._color_scalers['values'].color_LUT, dest=val_img_blank.copy()),
                         'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
-                        'updates': self.box_placer.draw(colors=self._updates_colors_LUT['lut'], dest=val_img_blank.copy())}
+                        'updates': self.box_placer.draw(colors=self._color_scalers['updates'].color_LUT, dest=val_img_blank.copy())}
 
     def _recalc_box_positions(self):
         """
