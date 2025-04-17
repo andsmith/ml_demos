@@ -127,7 +127,7 @@ class RLDemoWindow(object):
         self._size = size
         self._app = demo_app
         self._speed_options = speed_options
-        self._player = player_mark
+        self.player = player_mark
         self.color_bg = tk_color_from_rgb(COLOR_BG)
         self.color_lines = tk_color_from_rgb(COLOR_LINES)
         self._img_label = None
@@ -222,7 +222,7 @@ class RLDemoWindow(object):
         logging.info("Creating images for states, values, and updates")
         if self._state_images is None:
             all_states = self._app.updatable_states + self._app.terminal_states
-            self._state_images = get_state_icons(self._states_by_layer, box_sizes=self._box_sizes, player=self._player)
+            self._state_images = get_state_icons(self._states_by_layer, box_sizes=self._box_sizes, player=self.player)
         # set size from frame dimensions
         frame_size = self.get_image_frame_size()
 
@@ -262,7 +262,7 @@ class RLDemoWindow(object):
             return
         all_states = self._app.updatable_states + self._app.terminal_states
         self.box_placer, self._box_sizes, self._states_by_layer = get_box_placer(
-            frame_size, all_states, player=self._player)
+            frame_size, all_states, player=self.player)
         # Need to change to {'id': s, 'state':s} for each state in each layer.
         # states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]
         terminal_lut = {state: state.check_endstate() for state in all_states}
@@ -536,6 +536,7 @@ class RLDemoWindow(object):
                 self._recalc_box_positions()
                 self.make_images()
                 self.refresh_images()
+                print("New state vis img size: %s" % (self.get_step_viz_frame_size(),))
                 # TODO: Apply latest PEStep
 
     def get_box_positions(self):
@@ -562,10 +563,10 @@ class DemoWindowTester(object):
         self._running = False  # for continuous mode
         self.running_tournament = False
         from baseline_players import HeuristicPlayer
-        self._player = Mark.X
+        self.player = Mark.X
         self._opponent = Mark.O
         self._max_iter = 1000
-        self._seed_p = HeuristicPlayer(mark=self._player, n_rules=2, p_give_up=0.0)
+        self._seed_p = HeuristicPlayer(mark=self.player, n_rules=2, p_give_up=0.0)
         self._opponent_p = HeuristicPlayer(mark=self._opponent, n_rules=6, p_give_up=0.0)
         self._gamma = .9  # discount factor for future rewards.
 
@@ -573,7 +574,7 @@ class DemoWindowTester(object):
 
         # P.I. initialization:\
         from reinforcement_base import Environment
-        self._env = Environment(self._opponent_p, self._player)
+        self._env = Environment(self._opponent_p, self.player)
         self.children = self._env.get_children()
 
         self._pi = self._seed_p
@@ -583,7 +584,7 @@ class DemoWindowTester(object):
 
         def _get_val(term_state):
             term = term_state.check_endstate()
-            if term == Result.X_WIN:  # check self._player here
+            if term == Result.X_WIN:  # check self.player here
                 return 1.0
             elif term == Result.O_WIN:
                 return -1.0
