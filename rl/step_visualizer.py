@@ -59,20 +59,21 @@ class StateUpdateStep(PEStep):
     Update for a specific state.
     """
 
-    def __init__(self, demo, gui, state, actions, next_states, rewards, old_value, new_value, bg_color=OFF_WHITE_RGB):
+    def __init__(self, demo, gui, state, actions, next_states, rewards, old_values, new_value, bg_color=OFF_WHITE_RGB):
         super().__init__(demo, gui)
         self._state = state  # the state being updated
         self._actions = actions  # possible actions for the state
         self._next_states = next_states  # distribution of next states for each action
         self._rewards = rewards  # reward for each action
-        self._old_value = old_value  # old value for the state
+        self._old_value_LUT = old_values  # old value for the state
         self._new_value = new_value  # new value for the state
-        self.delta = new_value - old_value
+        self.delta = new_value - old_values[state]
         self._bg_color = bg_color  # background color for the images
 
         self._font = cv2.FONT_HERSHEY_SIMPLEX
         self._title_font_scale = 0.5
         self._font_scale = 0.4
+        self._tiny_scale = 0.3
 
         self._init_colors()
 
@@ -118,7 +119,7 @@ class StateUpdateStep(PEStep):
         # update the updates image with the new values:
         self._gui.update_updates_image(images['updates'])
 
-    def _calc_dims(self, w, h, pad=20):
+    def _calc_dims(self, w, h, pad=17):
         """
         Calculate where everything goes, e.g. for 3 possible actions using 2 next-state columns:
 
@@ -178,13 +179,15 @@ class StateUpdateStep(PEStep):
 
         title_text_h = cv2.getTextSize("V'(s)=9.9", self._font, self._title_font_scale, 1)[0][1]
         state_h = box_sizes['state']   # height of the state box + text
-        dims = {'artists': artists,
-                'state': {'pos': (pad, pad), 'size': box_sizes['state'],
-                          'text1_pos': (pad + 8 + box_sizes['state'],  title_text_h + pad),
-                          'text2_pos': (pad + 8 + box_sizes['state'],  title_text_h*2 + pad+10)},
-                'inter_states': [],
-                'next_states': [],
-                'y_lines': []}
+        dims = {
+            'state': {'pos': (pad, pad), 'size': box_sizes['state'],
+                      'text1_pos': (pad + 8 + box_sizes['state'],  title_text_h + pad),
+                      'text2_pos': (pad + 8 + box_sizes['state'],  title_text_h*2 + pad+10),
+                      'artist': artists['state'],
+                      'font_scale': self._title_font_scale},
+            'inter_states': [],
+            'next_states': [],
+            'y_lines': []}
         y = state_h
         dims['y_lines'].append(y)
         inter_h = box_sizes['inter_states'] + pad
@@ -193,8 +196,10 @@ class StateUpdateStep(PEStep):
 
         for a_ind, action in enumerate(self._actions):
             inter_state = {'pos': (inter_x_left, y), 'size': box_sizes['inter_states'],
-                           'text1_pos': (inter_x_left, y + inter_h),
-                           'action': action}
+                           'text1_pos': (inter_x_left + box_sizes['inter_states']+9, y+14),
+                           'action': action,
+                           'artist': artists['inter_states'],
+                           'font_scale': self._font_scale}
             dims['inter_states'].append(inter_state)
 
             y += inter_h
@@ -210,13 +215,16 @@ class StateUpdateStep(PEStep):
 
                 x = nex_col_x_lefts[s_ind % n_next_states]  # left edge of the next state box
                 next_state = {'pos': (x, y), 'size': box_sizes['inter_states'],
-                              'text1_pos': (x, y + next_h),
-                              'prob': prob}
+                              'text1_pos': (x-8, y+box_sizes['next_states'] + 18),
+                              'text2_pos': (x-8, y + box_sizes['next_states'] + 29),
+                              'prob': prob,
+                              'artist': artists['next_states'],
+                              'font_scale': self._tiny_scale}
                 dims['next_states'][-1].append(next_state)
                 if s_ind % n_next_states == n_next_states-1 and s_ind < len(self._next_states[a_ind]) - 1:
                     y += next_h
 
-            y += next_h   # add padding between rows of next states
+            y += next_h  +10 # add padding between rows of next states
 
         return dims
 
@@ -245,7 +253,7 @@ class StateUpdateStep(PEStep):
                                         1 + n_actions*interm_ratio + n_next_state_rows * next_ratio
         :returns: artists for each box kind
         """
-        box_sizes = {'state': 50, 'inter_states': 25, 'next_states': 19}
+        box_sizes = {'state': 45, 'inter_states': 23, 'next_states': 19}
         space_sizes = {kind: GameStateArtist.get_space_size(box_size) for kind, box_size in box_sizes.items()}
         artists = {kind: GameStateArtist(space_size=sp_size, bar_w_frac=0) for kind, sp_size in space_sizes.items()}
         return artists
@@ -287,42 +295,55 @@ class StateUpdateStep(PEStep):
         img = np.zeros((h, w, 3), dtype=np.uint8)
         img[:] = self._bg_color
         print("BG COLOR:", img[0, 0])
-        m = 5
+        m = 3
 
-        def add_gamestate(state, pos, kind, box_color, text_1=None, text_2=None, font_scale=0.5):
-            x, y = pos
-            state_img = dims['artists'][kind].get_image(state)
+        def add_gamestate(state, info, box_color, text_1=None, text_2=None, thickness=1):
+            import pprint
+            pprint.pprint(info)
+
+            print("\n")
+            x, y = info['pos']
+            state_img = info['artist'].get_image(state)
             try:
                 img[y:y+state_img.shape[1], x:x+state_img.shape[1]] = state_img
             except ValueError as e:
                 logging.warning("Error adding state image: %s" % str(e))
             # Add the text
             if text_1 is not None:
-                tx, ty = dims[kind]['text1_pos']
+                tx, ty = info['text1_pos']
+                font_scale = info['font_scale']
                 cv2.putText(img, text_1, (tx, ty), self._font, font_scale, (0, 0, 0), 1, cv2.LINE_AA)
             if text_2 is not None:
-                tx, ty = dims[kind]['text2_pos']
+                tx, ty = info['text2_pos']
+                font_scale = info['font_scale']
                 cv2.putText(img, text_2, (tx, ty), self._font, font_scale, (0, 0, 0), 1, cv2.LINE_AA)
 
             box_color = int(box_color[0]), int(box_color[1]), int(box_color[2])
             # import ipdb; ipdb.set_trace()
-            cv2.rectangle(img, (x-1-m, y-1-m), (x+state_img.shape[1]+m, y+state_img.shape[0]+m), box_color, 3)
+            cv2.rectangle(img, (x-1-m, y-1-m), (x+state_img.shape[1]+m, y+state_img.shape[0]+m), box_color, thickness, cv2.LINE_AA)
             # add the reward value under the intermediate state: (skip for now)
-
+        # import ipdb; ipdb.set_trace()
         # In the top right, draw the updating state in a green box.
-        add_gamestate(self._state, dims['state']['pos'], 'state', NEON_GREEN, text_1="V(s)=%.4f" % self._old_value,
-                      text_2="V(s)=%.4f" % self._new_value, font_scale=self._title_font_scale)
+        add_gamestate(self._state, dims['state'], NEON_GREEN, text_1="V(s)=%.3f" % self._old_value_LUT[self._state],
+                      text_2="V'(s)=%.4f" % self._new_value, thickness =3)
 
         # show each following state under each action in the appropriate color.
         for a_ind, action in enumerate(self._actions):
             inter_state = self._state.clone_and_move(action, self._gui.player)
-            pos = dims['inter_states'][a_ind]['pos']
-            add_gamestate(inter_state, pos, 'inter_states', self._colors[a_ind])
+            add_gamestate(inter_state, dims['inter_states'][a_ind], self._colors[a_ind],
+                          text_1="Reward(a)=%.3f" % self._rewards[a_ind], thickness=2)
 
             # Show the final states under each intermediate:
             for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
-                pos = dims['next_states'][a_ind][s_ind]['pos']
-                add_gamestate(next_state, pos, 'next_states', self._shades[a_ind][s_ind])
+
+                if next_state not in self._old_value_LUT:
+                    print("State not in LUT: %s" % str(next_state))
+
+                add_gamestate(next_state, dims['next_states'][a_ind][s_ind], self._shades[a_ind][s_ind],
+                              text_1="P: %.2f" % prob,
+                              text_2="V: %.2f" % self._old_value_LUT[next_state],
+                              thickness=2)
+
         # for y in dims['y_lines']:
         #    cv2.line(img, (0, y), (w, y), (0, 0, 0), 1)
         return img
@@ -389,9 +410,10 @@ def test_state_update_vis():
     next_states = [[(inter_state.clone_and_move(act, Mark.O), np.random.rand())
                     for act in inter_state.get_actions()] for inter_state in intermediate_states]
     rewards = [0.0 for _ in actions]
-    old_value = 0.0
+    all_states = [state] + [next_pair[0] for state_dist in next_states for next_pair in state_dist]
+    old_values = {state: np.random.rand(1) for state in all_states}
     new_value = 0.5
-    step = StateUpdateStep(None, FakeGui(), state, actions, next_states, rewards, old_value, new_value)
+    step = StateUpdateStep(None, FakeGui(), state, actions, next_states, rewards, old_values, new_value)
 
     img = step.draw_step_viz()
     cv2.imshow("Step Visualization", img)
