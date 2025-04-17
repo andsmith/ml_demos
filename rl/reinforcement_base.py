@@ -33,6 +33,13 @@ class Environment(object):
         """
         self.player = player_mark
         self.opponent = GameTree.opponent(player_mark)
+
+        self.winning_result = Result.X_WIN if player_mark == Mark.X else Result.O_WIN
+        self.losing_result = Result.O_WIN if player_mark == Mark.X else Result.X_WIN
+        self.draw_result = Result.DRAW
+
+
+
         self.pi_opp = opponent_policy
         self.tree = get_game_tree_cached(player=player_mark, verbose=True)
         self.terminal, self.children, self.parents, self.initial = self.tree.get_game_tree()
