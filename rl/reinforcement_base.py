@@ -27,54 +27,21 @@ class Environment(object):
             used to define the "environment" for the agent.
         :param player_mark: The player for the agent.  The opponent is the other player.
         """
-        self._player = player_mark
-        self._opponent = GameTree.opponent(player_mark)
-        self._opp = opponent_policy
-        self._tree = get_game_tree_cached(player=player_mark)
-        self._terminal, self._children, self._parents, self._initial = self._tree.get_game_tree()
-        self._p_next_state = self._calc_state_transitions()
-
-    def get_children(self):
-        return self._children
-
-    def _calc_state_transitions(self):
-        """
-        The state transitions from the agent's perspective are the probabilities of the opponents moves
-        for every move the agent can make.
-
-        For every state our OPPONENT can be confronted with (i.e. even number of moves made or one more player move),
-        calculate the probability of each possible next state by evaluating the opponent's policy.
-        """
-        p_sp_g_sa = {}  # for every state, for every action the agent can take,
-        # what is the distribution of next states for the agent (after opponent makes a move).
-        logging.info("Calculating opponent's state transitions...")
-
-        nonterm = self.get_nonterminal_states()
-        for s_i, state in enumerate(nonterm):
-            if s_i % 100 == 0:
-                logging.info("\tprocessing state %d of %d nonterminals." % (s_i, len(nonterm)))
-            agent_actions = state.get_actions()
-            for agent_action in agent_actions:
-                # get the next state after the agent makes a move
-                inter_state = state.clone_and_move(agent_action, self._player)  # after agent, before opponent
-                next_state_dist = self._opp.recommend_action(inter_state)
-
-                # store the distribution of next states for this state and action
-                p_sp_g_sa[(state, agent_action)] = {agent_action: next_state_dist}
-
-        return p_sp_g_sa
+        self.player = player_mark
+        self.opponent = GameTree.opponent(player_mark)
+        self.pi_opp = opponent_policy
+        self.tree = get_game_tree_cached(player=player_mark, verbose=True)
+        self.terminal, self.children, self.parents, self.initial = self.tree.get_game_tree()
 
     def _state_valid(self, state):
         """
-        Check if the given state is valid for self._player.
+        Check if it's really agent's turn.
         """
-        return np.sum(state.state == self._player) <= np.sum(state.state == self._opponent)
-
-    def p_next_states(self, state, action):
-        return self._p_next_state[(state, action)]
+        return np.sum(state.state == self.player) <= np.sum(state.state == self.opponent)
 
     def get_terminal_states(self):
-        return [state for state in self._terminal if self._terminal[state] is not None]
+        return [state for state in self.terminal if self.terminal[state] is not None]
 
     def get_nonterminal_states(self):
-        return [state for state in self._terminal if (self._terminal[state] is None and self._state_valid(state))]
+        # states player can see in a game (when it's their turn)
+        return [state for state in self.terminal if (self.terminal[state] is None and self._state_valid(state))]

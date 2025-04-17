@@ -44,8 +44,6 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
 import numpy as np
-from drawing import GameStateArtist
-from node_placement import FixedCellBoxOrganizer
 from value_panel import get_box_placer, get_state_icons, sort_states_into_layers
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
@@ -66,7 +64,7 @@ def tk_color_from_rgb(rgb):
 
 STATUS_W = 0.175  # Horizontal placement of first column.
 FUNC_W = (1.0 - STATUS_W) / 2.0
-T_CUTOFF = .7 # Vertical top of tournament frame.
+T_CUTOFF = .7  # Vertical top of tournament frame.
 BOTTOM_ROW = .8  # Vertical placement of bottom row.
 
 global geom
@@ -150,8 +148,8 @@ class RLDemoWindow(object):
         # Calls resize which creates state images:
         self._root.bind("<Configure>", lambda event: self._resize(event))
         # Schedule images to be built after window is created:
-        #self._root.after_idle(self._resize)
-        #self._root.after(100,   self._reset)
+        # self._root.after_idle(self._resize)
+        # self._root.after(100,   self._reset)
 
     def toggle_fullscreen(self):
 
@@ -173,6 +171,23 @@ class RLDemoWindow(object):
         For now just add a label that says "Step visualization"
         """
         self._step_viz_frame = self._frames['step_viz']
+        # Create a label to hold the step vis image:
+        self._step_viz_label = tk.Label(self._step_viz_frame, bg=self._color_bg, font=self.LAYOUT['fonts']['default'])
+        self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
+
+    def update_step_vis_image(self, image = None):
+        """
+        Update the step visualization image.
+        :param image:  The image to update.
+        """
+        if image is not None:
+            self._step_viz_label['image'] = ImageTk.PhotoImage(Image.fromarray(image))
+            self._step_viz_label.image = image
+            self._frame_labels['step_vis'].pack_forget()
+        else:
+            self._step_viz_label['image'] = None
+            self._step_viz_label.image = None
+            self._frame_labels['step_vis'].pack(side=tk.TOP, fill=tk.X)
 
     def _get_scaled_colors(self):
         """
@@ -213,9 +228,15 @@ class RLDemoWindow(object):
                 {'lut': new_colors,
                  'min': new_min,
                  'range': new_range})
-
-    def update_cell_color(self, state, value):
-        self._box_placer.draw_single
+    
+    def get_step_vis_frame_size(self):
+        """
+        Get the size of the step visualization frame.
+        :return:  The width and height of the step visualization frame.
+        """
+        width = self._frames['step_viz'].winfo_width()
+        height = self._frames['step_viz'].winfo_height()
+        return width, height
 
     def get_image_frame_size(self):
         width = self._frames['values'].winfo_width() - 8
@@ -226,7 +247,7 @@ class RLDemoWindow(object):
     def make_images(self):
         # for both (values & updates) for both views, create the base numpy images
         #  that will be modified as the algorithm progresses and sent to the canvas as new PhotoImages.
-
+        logging.info("Creating images for states, values, and updates")
         if self._state_images is None:
             all_states = self._app.updatable_states + self._app.terminal_states
             self._state_images = get_state_icons(all_states, box_sizes=self._box_sizes, player=self._player)
@@ -237,15 +258,16 @@ class RLDemoWindow(object):
         state_img_blank[:] = COLOR_BG
         val_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
         val_img_blank[:] = (100, 100, 100)
-        self._images = {'values': self._box_placer.draw(colors=self._values_color_LUT['lut'], dest=val_img_blank.copy()),
-                        'states': self._box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
-                        'updates': self._box_placer.draw(colors=self._updates_colors_LUT['lut'], dest=val_img_blank.copy())}
+        self._images = {'values': self.box_placer.draw(colors=self._values_color_LUT['lut'], dest=val_img_blank.copy()),
+                        'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
+                        'updates': self.box_placer.draw(colors=self._updates_colors_LUT['lut'], dest=val_img_blank.copy())}
 
     def _recalc_box_positions(self):
         """
         Create label to hold the main image.
         Determine the layout of the boxes in the image.
         """
+        logging.info("Recalculating box positions")
         if self._img_label is not None:
             self._img_label.destroy()
         self._img_label = tk.Label(self._frames['values'], bg=self._color_bg, font=self.LAYOUT['fonts']['default'])
@@ -260,24 +282,22 @@ class RLDemoWindow(object):
         #  BOX LAYOUT:
         layout_key = (frame_size[0], frame_size[1])
         if layout_key in self._layout_cache:
-            self._box_placer = self._layout_cache[layout_key]['box_placer']
+            self.box_placer = self._layout_cache[layout_key]['box_placer']
             self._box_sizes = self._layout_cache[layout_key]['box_sizes']
             return
         all_states = self._app.updatable_states + self._app.terminal_states
-        self._box_placer, self._box_sizes = get_box_placer(frame_size, all_states, player=self._player)
-        # optimize layers
-        states_by_layer = sort_states_into_layers(all_states, key='state')
+        self.box_placer, self._box_sizes, states_by_layer = get_box_placer(frame_size, all_states, player=self._player)
         # Need to change to {'id': s, 'state':s} for each state in each layer.
-        # states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]\
+        # states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]
         terminal_lut = {state: state.check_endstate() for state in all_states}
         tree_opt = SimpleTreeOptimizer(image_size=frame_size,
                                        states_by_layer=states_by_layer,
-                                       state_positions=self._box_placer.box_positions,
+                                       state_positions=self.box_placer.box_positions,
                                        terminal=terminal_lut)
         new_positions = tree_opt.get_new_positions()
-        self._box_placer.box_positions = new_positions
+        self.box_placer.box_positions = new_positions
 
-        self._layout_cache[layout_key] = {'box_placer': self._box_placer,
+        self._layout_cache[layout_key] = {'box_placer': self.box_placer,
                                           'box_sizes': self._box_sizes}
 
     def _init_status_panel(self):
@@ -366,7 +386,7 @@ class RLDemoWindow(object):
         label = tk.Label(self._frames['tools_left'], text="Speed options",
                          bg=self._color_bg, font=self.LAYOUT['fonts']['menu'])
         label.pack(side=tk.TOP, anchor=tk.W, padx=5, pady=0)
-        
+
         # Create radio buttons for each speed setting.
         self._radio_buttons = {}
         for i, (mode, states) in enumerate(self._speed_options.items()):
@@ -395,16 +415,18 @@ class RLDemoWindow(object):
         # set the current view option to 'states'
         self._radio_buttons['states'].select()
 
-        #self._add_spacer(self._frames['tools_left'], height=1)
+        # self._add_spacer(self._frames['tools_left'], height=1)
         # Create action button, set text to current speed opton's 'text' value.
         self._action_button = tk.Button(self._frames['tools_right'], text=self._speed_options[self.cur_speed_option][self.cur_speed_state]['text'],
                                         command=lambda: self._action(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
         self._action_button.pack(side=tk.TOP, padx=5, pady=5)
 
+        # TODO gamma slider
+
         # Create tournament start/stop button.
-        #self._tournament_button = tk.Button(self._frames['tools_right'], text="Start Tournament" if not self._app.running_tournament else "Stop Tournament",
+        # self._tournament_button = tk.Button(self._frames['tools_right'], text="Start Tournament" if not self._app.running_tournament else "Stop Tournament",
         #                                    command=lambda: self._toggle_tournament(), font=self.LAYOUT['fonts']['buttons'], anchor=tk.CENTER)
-        #self._tournament_button.pack(side=tk.TOP, padx=5, pady=5)
+        # self._tournament_button.pack(side=tk.TOP, padx=5, pady=5)
 
         # Create reset button:
         self._reset_button = tk.Button(self._frames['tools_right'], text="Reset",
@@ -417,6 +439,10 @@ class RLDemoWindow(object):
         self._fullscreen_button.pack(side=tk.TOP, padx=5, pady=5)
 
     def _set_view_mode(self, mode):
+        """
+        Change which image is being shown.
+        # TODO:  Change title label text.
+        """
         logging.info("Setting view mode:  %s" % mode)
         self._view = mode
         self.refresh_images()
@@ -427,7 +453,7 @@ class RLDemoWindow(object):
         Toggles the tournament run status and updates the button text.
         """
         self._app.toggle_tournament()
-        #self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
+        # self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
     def _action(self):
         """
@@ -487,7 +513,7 @@ class RLDemoWindow(object):
         # Update the action button text to the current speed option's 'text' value.
         self._action_button['text'] = self._speed_options[self.cur_speed_option][self.cur_speed_state]['text']
         # Update the tournament button text to the current tournament status.
-        #self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
+        # self._tournament_button['text'] = "Stop Tournament" if self._app.running_tournament else "Start Tournament"
 
     def refresh_images(self):
         """
@@ -502,7 +528,7 @@ class RLDemoWindow(object):
     def _reset(self):
         logging.info("Resetting demo window...")
         self._app.reset()
-        
+
         self.cur_speed_state = 0
         self._recalc_box_positions()
         self.make_images()
@@ -514,7 +540,10 @@ class RLDemoWindow(object):
             self._recalc_box_positions()
             self.make_images()
             self.refresh_images()
-        
+            # TODO: Apply latest PEStep
+
+    def get_box_positions(self):
+        return self.box_placer.box_positions
 
     def start(self):
         """

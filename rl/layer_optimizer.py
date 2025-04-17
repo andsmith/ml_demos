@@ -40,7 +40,7 @@ class SimpleTreeOptimizer(object):
         # if in {'id','state'} format, get rid of ids, use index into one of these lists.
         #import ipdb; ipdb.set_trace()
         if isinstance(states_by_layer[0][0], dict):
-            self._states_per_layer = [[state_info['state'] for state_info in layer] for layer in states_by_layer]
+            self._states_per_layer = [[state_info['id'] for state_info in layer] for layer in states_by_layer]
         else:
             self._states_per_layer = states_by_layer
         # <-- Point of this class is to find a better bijection between states and positions.

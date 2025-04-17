@@ -49,7 +49,7 @@ class HeuristicPlayer(Policy):
 
     """
 
-    def __init__(self, mark, n_rules=6, p_give_up=1e-2):
+    def __init__(self, mark, n_rules=6, p_give_up=0):
         """
         :param mark:  one of Mark.X or Mark.O  Player optimizes actions for this player.
         :param n_rules:  number of rules to apply.  If n_rules=0, then just return  all actions with uniform probability.

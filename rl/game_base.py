@@ -12,6 +12,21 @@ class Mark(IntEnum):
     X = 1  # also denotes the player
     O = 2
 
+# r is known only for these states in adavnce:
+TERMINAL_REWARDS = {
+    Result.X_WIN: 1.0,
+    Result.O_WIN: -1.0,
+    Result.DRAW: -.666,
+}
+
+def get_reward(state, action, player_mark=Mark.X):
+    next_state = state.clone_and_move(action, player_mark)
+    result = next_state.check_endstate()
+    if result is None:
+        return 0.0
+    return TERMINAL_REWARDS[result]
+
+
 WIN_MARKS ={Mark.X: Result.X_WIN, 
             Mark.O: Result.O_WIN}
 

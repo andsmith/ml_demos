@@ -47,7 +47,7 @@ def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
     state_layers = sort_states_into_layers(all_states, player_mark=player)
     box_placer = FixedCellBoxOrganizer(img_size, state_layers, box_sizes,
                                            layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
-    return box_placer, box_sizes
+    return box_placer, box_sizes, state_layers
 
 
 def optimize_layers(box_placer, all_states, player=Mark.X):
