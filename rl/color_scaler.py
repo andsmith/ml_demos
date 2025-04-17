@@ -3,7 +3,7 @@ Determine range of colors corresponding to range of values.
 """
 import numpy as np
 import matplotlib.pyplot as plt
-
+import logging
 
 class ColorScaler(object):
 
@@ -16,6 +16,7 @@ class ColorScaler(object):
         :param state_value_map:  The mapping of states to values (dict)
         :param cmap_name:  The name of the colormap to use.
         """
+        logging.info("Initializing ColorScaler with %i states." % len(state_value_map))
         self._cmap = plt.get_cmap(cmap_name)
         self._state_value_map = state_value_map
         self.balance()

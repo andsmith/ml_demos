@@ -64,7 +64,7 @@ class BoxOrganizer(ABC):
         """
         pass
 
-    def draw_box(self, image, state_id, color):
+    def draw_box(self, image, state_id, color, thickness=0):
         """
         Draw a box on the image.
         :param image: image to draw on.
@@ -76,11 +76,11 @@ class BoxOrganizer(ABC):
             raise Exception("Box %s not found." % state_id)
         bos_pos = self.box_positions[state_id]
         x, y = bos_pos['x'], bos_pos['y']
-        #print("Setting box at %i, %i to color %s" % (x[0], y[0], color))
-        image[y[0]:y[1], x[0]:x[1]] = color
-        #print("image mean: ", np.mean(image))
-        #cv2.imwrite("img_%i.png" % self._t, image)
-
+        if thickness==0:
+            image[y[0]:y[1], x[0]:x[1]] = color
+        else:
+            color = int(color[0]), int(color[1]), int(color[2])
+            cv2.rectangle(image, (x[0], y[0]), (x[1], y[1]), color, thickness, cv2.LINE_AA)
 
 
     def draw(self, images=None, colors=None, dest=None, show_bars=False):

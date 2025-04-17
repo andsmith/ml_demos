@@ -54,6 +54,7 @@ import matplotlib.pyplot as plt
 from enum import IntEnum
 from color_scaler import ColorScaler
 
+
 def tk_color_from_rgb(rgb):
     """translates an rgb tuple of int to a tkinter friendly color code
        https://stackoverflow.com/questions/51591456/can-i-use-rgb-in-tkinter
@@ -141,9 +142,13 @@ class RLDemoWindow(object):
         self._state_images = None
 
         # self.make_images()
-        self._images = {'states': None,
-                        'values': None,
-                        'updates': None}
+        self._base_images = {'states': None,  # representation of game state
+                             'values': None,  # colors indicating value
+                             'updates': None}  # (same)
+
+        self._disp_images = {'states': None,  # annotate version of base_images
+                             'values': None,
+                             'updates': None}
 
         # Calls resize which creates state images:
         self._root.bind("<Configure>", lambda event: self._resize(event))
@@ -175,7 +180,7 @@ class RLDemoWindow(object):
         self._step_viz_label = tk.Label(self._step_viz_frame, bg=self._color_bg, font=self.LAYOUT['fonts']['default'])
         self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
 
-    def update_step_vis_image(self, image = None):
+    def update_step_vis_image(self, image=None):
         """
         Update the step visualization image.
         :param image:  The image to update.
@@ -189,7 +194,6 @@ class RLDemoWindow(object):
             self._step_viz_label.image = None
             self._frame_labels['step_vis'].pack(side=tk.TOP, fill=tk.X)
 
-    
     def get_step_vis_frame_size(self):
         """
         Get the size of the step visualization frame.
@@ -220,9 +224,9 @@ class RLDemoWindow(object):
         state_img_blank[:] = COLOR_BG
         val_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
         val_img_blank[:] = (100, 100, 100)
-        self._images = {'values': self.box_placer.draw(colors=self._color_scalers['values'].color_LUT, dest=val_img_blank.copy()),
-                        'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
-                        'updates': self.box_placer.draw(colors=self._color_scalers['updates'].color_LUT, dest=val_img_blank.copy())}
+        self._base_images = {'values': self.box_placer.draw(colors=self._color_scalers['values'].color_LUT, dest=val_img_blank.copy()),
+                             'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
+                             'updates': self.box_placer.draw(colors=self._color_scalers['updates'].color_LUT, dest=val_img_blank.copy())}
 
     def _recalc_box_positions(self):
         """
@@ -482,10 +486,18 @@ class RLDemoWindow(object):
         Update screen with appropriate image depending on app state.
         Create a PhotoImage and replace whatever is in the label with it.
         """
-        image = self._images[self._view]
+        images = self._base_images if not self._app.running_continuous else self._disp_images
+        image = images[self._view]
         img = ImageTk.PhotoImage(Image.fromarray(image))
         self._img_label.config(image=img)
         self._img_label.image = img
+
+    def annotate_frame(self, vis_update):
+        """
+        Annotate the current base images.
+        """
+        self._disp_images = vis_update.get_annotated_images(self._base_images)
+        self.refresh_images()
 
     def _reset(self):
         logging.info("Resetting demo window...")

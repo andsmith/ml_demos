@@ -53,6 +53,7 @@ class PolicyImprovementDemo(ABC):
         self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
         self._pending_pause = False
         self.running_tournament = False
+        self.running_continuous = False
         self._converged = False
 
         self._seed_p = seed_policy
@@ -105,7 +106,11 @@ class PolicyImprovementDemo(ABC):
         print("RESUMING")
         self._action_signal.set()
 
-    def _pause(self):
+    def _pause(self, vis_update=None):
+
+        if vis_update is not None:
+            self._gui.annotate_frame(vis_update)
+
         if not self._shutdown:
             print("PAUSING!")
             self._gui.refresh_text_labels()
@@ -151,6 +156,10 @@ class PolicyImprovementDemo(ABC):
             # 1. Update the value function for the current policy.
             self._phase = PIPhases.POLICY_EVAL
             state_updates = self.optimize_value_function()
+
+            if self._shutdown:
+                break
+
             vis = PIStep(self, self._gui, PIPhases.POLICY_EVAL, info={'state_updates': state_updates})
             self._maybe_pause('pi-round', vis)
 
@@ -160,6 +169,10 @@ class PolicyImprovementDemo(ABC):
             # 2. Update policy & check for convergence:
             self._phase = PIPhases.POLICY_OPT
             new_policy, self._converged = self.optimize_policy()
+            
+            if self._shutdown:
+                break
+            
             vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self._pi, 'new': new_policy})
             self._maybe_pause('pi-round', vis)
 
@@ -338,7 +351,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
             state_updates = []  # list of state updates for the GUI to display.
             for iter, state in enumerate(self._state_update_order):
-                logging.info("Updating state:\n%s" % state)
+                #logging.info("Updating state:\n%s" % state)
 
                 def get_reward_term_and_next_states(action):
                     """
@@ -347,7 +360,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                     """
                     next_state = state.clone_and_move(action, self._player)
                     next_result = next_state.check_endstate()
-                    if next_result in [self.winning_result, self.losing_result, self.draw_result]:
+                    if next_result in [self._env.winning_result, self._env.losing_result, self._env.draw_result]:
                         # if the next state is a terminal, we got a reward so just return that.
                         return TERMINAL_REWARDS[next_result], [(next_state, 1.0)]
                     else:
@@ -357,23 +370,22 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                         reward_term = 0.0
                         next_states = []
                         for opp_action, prob in opp_move_dist:
+                            if prob==0:
+                                # TODO: Don't include zero probability actions in the next state distribution.
+                                continue
                             next_next_state = next_state.clone_and_move(opp_action, self._env.opponent)
                             next_states.append((next_next_state, prob))
                             next_next_result = next_next_state.check_endstate()
-                            if next_next_result in [self.winning_result, self.losing_result, self.draw_result]:
+                            if next_next_result in [self._env.winning_result, self._env.losing_result, self._env.draw_result]:
                                 reward_term += prob * TERMINAL_REWARDS[next_next_result]
                             else:
                                 reward_term += prob * self._v[next_next_state] * self._gamma
                     return reward_term, next_states
 
                 actions = state.get_actions()
-                reward_terms, next_states = []
+                reward_terms, next_states = [],[]
 
-                import ipdb
-                ipdb.set_trace()
-                print("state:\n%s" % state)
                 for action in actions:
-                    print("testing action :", action)
                     reward_term, next_state_dist = get_reward_term_and_next_states(action)
                     reward_terms.append(reward_term)
                     next_states.append(next_state_dist)
