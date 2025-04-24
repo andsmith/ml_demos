@@ -24,9 +24,13 @@ from collections import OrderedDict
 from gui_components import RLDemoWindow
 from threading import Thread, Lock, Event
 from enum import IntEnum
+import time
 from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
 
 WIN_SIZE = (1920, 990)
+
+
+FPS = 20.
 
 
 class PolicyImprovementDemo(ABC):
@@ -52,7 +56,7 @@ class PolicyImprovementDemo(ABC):
         # app state:
         self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
         self._pending_pause = False  # TODO: Change to state to pause after updating
-        
+
         self.started = False
         self.running_tournament = False
         self.running_continuous = False
@@ -101,6 +105,9 @@ class PolicyImprovementDemo(ABC):
         self._n_updated = 0  # states updated this epoch
         self.started = False
 
+        # Timing
+        self._t_last_updated = time.perf_counter()
+
     @abstractmethod
     def optimize_value_function(self):
         """
@@ -110,56 +117,73 @@ class PolicyImprovementDemo(ABC):
         pass
 
     def _resume(self):
-        #print("RESUMING")
+        # print("RESUMING")
         if not self.started:
             self.start_learn_loop()
             self.started = True
 
         self._action_signal.set()
 
-    def _pause(self, vis_update=None):
+    def _pause(self, vis_update):
+        """
+        Draw stuff to window before waiting for action signal.
+        """
 
         if vis_update is not None:
-            self._gui.annotate_frame(vis_update)
-            step_viz_img = vis_update.draw_step_viz()
-            self._gui.update_step_viz_image(step_viz_img)
+            self._gui.annotate_frame(vis_update)  # update state/value/update images in GUI for display
+            step_viz_img = vis_update.draw_step_viz()  # Make the step image
+            self._gui.update_step_viz_image(step_viz_img)  # update step image in GUI
         else:
-            # TODO: something for continuous mode?
-            self._gui.update_step_viz_image()
+            #raise Exception("Paused without a ")
+            self._gui.refresh_text_labels()
+
+            pass
 
         if not self._shutdown:
-            #print("PAUSING!")
+            # print("PAUSING!")
             self._gui.refresh_text_labels()
             self._action_signal.wait()
             self._action_signal.clear()
 
-    def _maybe_pause(self, stage, vis_update):
+    def _maybe_pause(self, stage, vis_update, cont_update=True):
         """
         Caller has just finished something. 
         If we need to pause, do so and create temporary images for the GUI.
-        
-        NOTE:  If more speed options are added in subclasses, they can override this method
-          and handle them AFTER handling these two via a super() call.
-        """
-        
-        if self._pending_pause:
-            self._pause(vis_update)
-            self._pending_pause = False
-            return
 
-        elif stage == 'state-update':
+        :param stage:  The stage of the algorithm that just finished (e.g. 'state-update', 'pi-round', 'epoch-update').
+        :param vis_update:  The visualization object to use for the pause.
+        :param cont_update:  If True, update the screen even if we didn't pause (only false if called by someone overriding this method).
+        :return:  True if we paused, False otherwise.
+
+        NOTE:  If more speed options are added in subclasses:
+          1. override this method, call super()._maybe_pause(...,cont_update=False)
+        """
+
+        if stage == 'state-update':
             if self._gui.cur_speed_option == 'state-update':
                 logging.info("Pausing for state update...")
                 self._pause(vis_update)
-
-            # TODO:  "Breakpoints" for specifc state updates in here
+                return True
 
         elif stage == 'pi-round':
             if self._gui.cur_speed_option == 'pi-round':
                 logging.info("Pausing for policy update...")
                 self._pause(vis_update)
-        else:
-            print("________running continuously__________NO PAUSE!")
+                return True
+
+        if cont_update:
+            self._didnt_pause()
+
+        return False
+
+    def _didnt_pause(self):
+        # Not paused, need to update screen anyway
+        now = time.perf_counter()
+        if now - self._t_last_updated > 1.0 / FPS:
+            self._t_last_updated = now
+            self._gui.update_step_viz_image()  # clear step vis for continuous mode.
+            self._gui.refresh_text_labels()  # update text labels in GUI for display
+            self._gui.refresh_continuous()
 
     def _learn_loop(self):
         """
@@ -188,7 +212,7 @@ class PolicyImprovementDemo(ABC):
             # 2. Update policy & check for convergence:
             self._phase = PIPhases.POLICY_OPT
             new_policy, self._converged = self.optimize_policy()
-            
+
             if self._shutdown:
                 break
 
@@ -273,13 +297,13 @@ class PolicyImprovementDemo(ABC):
         """
         # clear action event to start paused
         self._action_signal.clear()
-        
+
         self._gui.start()
 
         logging.info("GUI closed, waiting for learning thread to finish...")
         # set shutdown flag to stop the learning loop
-        self._shutdown = True  
-        
+        self._shutdown = True
+
         # set event signal in case gui is waiting for user to click a button:
         self._action_signal.set()
         if self._learning_thread is not None:
@@ -290,7 +314,6 @@ class PolicyImprovementDemo(ABC):
         self._learning_thread = Thread(target=self._learn_loop)
         self._learning_thread.start()
 
-    
 
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
@@ -336,12 +359,19 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             options[k] = v
         return options
 
-    def _maybe_pause(self, stage, vis_update):
-        super()._maybe_pause(stage, vis_update)
-        if stage == 'epoch-update':
+    def _maybe_pause(self, stage, vis_update, cont_update=True):
+        if super()._maybe_pause(stage, vis_update, cont_update=False):
+            return True
+
+        elif stage == 'epoch-update':
             if self._gui.cur_speed_option == 'epoch-update':
                 logging.info("Pausing for epoch update...")
                 self._pause(vis_update)
+
+        if cont_update:
+            self._didnt_pause()
+
+        return False
 
     def get_values(self):
         return self._v, self._v_new
@@ -377,7 +407,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
 
             for iter, state in enumerate(self._state_update_order):
-                #logging.info("Updating state:\n%s" % state)
+                # logging.info("Updating state:\n%s" % state)
 
                 def get_reward_term_and_next_states(action):
                     """
@@ -396,7 +426,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                         reward_term = 0.0
                         next_states = []
                         for opp_action, prob in opp_move_dist:
-                            if prob==0:
+                            if prob == 0:
                                 # TODO: Don't include zero probability actions in the next state distribution.
                                 continue
                             next_next_state = next_state.clone_and_move(opp_action, self._env.opponent)
@@ -409,7 +439,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                     return reward_term, next_states
 
                 actions = state.get_actions()
-                reward_terms, next_states = [],[]
+                reward_terms, next_states = [], []
 
                 for action in actions:
                     reward_term, next_state_dist = get_reward_term_and_next_states(action)
@@ -421,7 +451,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 # Handle visualizer updates
                 vis = StateUpdateStep(self, self._gui, state, actions, next_states, reward_terms,
                                       self._v, self._v_new[state])
-                
+
                 self._n_updated = iter + 1
                 self._maybe_pause('state-update', vis)
                 if self._shutdown:

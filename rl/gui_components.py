@@ -47,7 +47,7 @@ import numpy as np
 from value_panel import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
-from colors import COLOR_BG, COLOR_LINES, DARK_GRAY
+from colors import COLOR_BG, COLOR_LINES, SKY_BLUE as DARK_GRAY
 import tkinter as tk
 from PIL import Image, ImageTk
 from copy import deepcopy
@@ -239,6 +239,14 @@ class RLDemoWindow(object):
         height = self._frames['values'].winfo_height()
         label_height = self._frame_labels['values'].winfo_height()
         return width, height - label_height
+    
+    def refresh_continuous(self):
+        """
+        Just copy base update / value images to disp images
+        """
+        self.disp_images['values'] = deepcopy(self.base_images['values'])
+        self.disp_images['updates'] = deepcopy(self.base_images['updates'])
+        self.refresh_images()
 
     def make_images(self):
         # for both (values & updates) for both views, create the base numpy images

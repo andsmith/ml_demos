@@ -6,7 +6,7 @@ DARK_NAVY_RGB = 0, 4, 51       # Lines
 GREEN = 0, 255, 0
 RED = 255, 0, 0
 DARK_GRAY = 100,100,100 # background against state value images
-
+SKY_BLUE = 135, 206, 235
 NEON_GREEN = 57, 255, 20
 NEON_BLUE = (31, 81, 255)
 NEON_RED = (255, 20, 147)

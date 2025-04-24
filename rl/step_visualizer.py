@@ -361,7 +361,9 @@ class EpochStep(PEStep):
         self._v_old = v_old  # old value function
         self._v_new = v_new  # new value function
         self._epoch_ind = epoch_ind  # epoch being updated
+        import ipdb; ipdb.set_trace()
         self._delta_v = {state: v_new[state] - v_old[state] for state in v_old.keys()}
+
         self._color_scaler = ColorScaler(self._delta_v.values(), cmap_name='hot')
 
     def update_images(self):
@@ -370,7 +372,11 @@ class EpochStep(PEStep):
         values:  The update image should now be the values image.
         updates: compute a delta image for the values.
         """
-        delta_img = self.box_placer.draw(colors=self._color_scaler.get_LUT(self._delta_v), dest=self._gui.get_blank('values'))
+        import ipdb; ipdb.set_trace()
+
+
+        delta_img = self._gui.box_placer.draw(colors=self._gui.color_scalers['values'].get_LUT(self._delta_v), 
+                                              dest=self._gui.get_blank('values'))
 
         self._gui.base_images['values'] = self._gui.base_images['updates']
         self._gui.base_images['updates'] = delta_img

@@ -26,7 +26,7 @@ class TinyHistogram(object):
         Draw to a matplotlib axis, export to an image and paste to img.
         """
         # draw a bounding box:
-        cv2.rectangle(img, (x, y), (x + self._size[0], y + self._size[1]), self._color, 1)
+        # cv2.rectangle(img, (x, y), (x + self._size[0], y + self._size[1]), self._color, 1)
         
         # Create a figure and axis
         fig, ax = plt.subplots(figsize=(self._size[0] / 100, self._size[1] / 100))

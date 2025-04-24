@@ -5,9 +5,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 
+from colors import SKY_BLUE
+
 class ColorScaler(object):
 
-    def __init__(self, values, cmap_name='gray'):
+    def __init__(self, values, cmap_name='gray', undef_val_color=SKY_BLUE):
         """
         Balance colors so a range of values spans the whole range of the colormap.
 
