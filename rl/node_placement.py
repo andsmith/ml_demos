@@ -202,6 +202,34 @@ class BoxOrganizer(ABC):
 
         return best['n_rows'], best['n_cols']
 
+    def get_layer_at(self, pos):
+        """
+        Return the index of the layer containing the x, y position, or None if it is out of bounds / between layers.
+        """
+        for l_ind, layer in enumerate(self.layer_spacing):
+            y_min, y_max = layer['y']
+            if y_min <= pos[1] <= y_max:
+                return l_ind
+        return None
+
+    def get_state_at(self, pos):
+        """
+        Return the state id at the given x, y position, or None if it is out of bounds / between layers.
+        """
+        
+        l_ind = self.get_layer_at(pos)
+        if l_ind is None:
+            return None, -1
+        layer = self.layer_spacing[l_ind]
+        y_min, y_max = layer['y']
+        if y_min <= pos[1] <= y_max:
+            for box_id, box_pos in self.box_positions.items():
+                x_min, x_max = box_pos['x']
+                if x_min <= pos[0] <= x_max and y_min <= pos[1] <= y_max:
+                    return box_id, l_ind
+        return None, -1
+    
+    
 
 class FixedCellBoxOrganizer(BoxOrganizer):
 

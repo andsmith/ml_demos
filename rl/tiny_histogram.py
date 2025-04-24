@@ -8,6 +8,26 @@ import logging
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
 
 
+def get_n_bins(values):
+    """
+    Use the Freedman-Diaconis rule to determine the number of bins for a histogram.
+    """
+    n_distinct = len(np.unique(values))
+    if n_distinct <= 5:
+        return 20
+    q25, q75 = np.percentile(values, [25, 75])
+    iqr = q75 - q25
+    bin_width = 2 * iqr / (len(values) ** (1 / 3))
+    if bin_width == 0:
+        bin_width = 1
+    #print(values.size,n_distinct, bin_width)
+    #print(values.min(), values.max(), q25, q75, iqr)
+
+    n_bins = int(np.ceil((values.max() - values.min()) / bin_width))
+    if n_bins < 1:
+        return 1
+    return n_bins
+
 class TinyHistogram(object):
     """A small histogram, meant to be roughly parallel to each layer in the state representations.
        i.e. 6 in a column.
@@ -35,7 +55,7 @@ class TinyHistogram(object):
         fig.patch.set_facecolor(self._color_bg)
 
         # Draw the histogram
-        ax.hist(self._vals, bins=20, color=np.array(self._color) / 255, edgecolor=self._color_text, alpha=0.7)
+        ax.hist(self._vals, bins=get_n_bins(self._vals), color=np.array(self._color) / 255, edgecolor=self._color_text, alpha=0.7)
         if xlabel !="":ax.set_xlabel(xlabel, fontsize=10, color=self._color_text)
         if ylabel !="": ax.set_ylabel(ylabel, fontsize=10, color=self._color_text)
         # reduce tick font label size
@@ -44,7 +64,7 @@ class TinyHistogram(object):
 
         # Set limits and remove ticks
         plt.tight_layout()
-        fig.subplots_adjust(bottom=.15,left=.16)
+        fig.subplots_adjust(bottom=.15,left=.18)
         
         if test_plot:
             plt.show()
@@ -88,6 +108,7 @@ class MultiHistogram(object):
         for l_num, hist in enumerate(self._histograms):
             hist.draw(img, x, y, ylabel="Layer %i" %(l_num+1))
             y += self._v_space + self._pad
+        return img
 
 def test_multihist():
     values = [np.random.randn(np.random.randint(1,50)**2) for _ in range(6)]

@@ -259,7 +259,7 @@ class StateUpdateStep(PEStep):
                                         1 + n_actions*interm_ratio + n_next_state_rows * next_ratio
         :returns: artists for each box kind
         """
-        box_sizes = {'state': 45, 'inter_states': 23, 'next_states': 19}
+        box_sizes = {'state': 50, 'inter_states': 40, 'next_states': 30}
         space_sizes = {kind: GameStateArtist.get_space_size(box_size) for kind, box_size in box_sizes.items()}
         artists = {kind: GameStateArtist(space_size=sp_size, bar_w_frac=0) for kind, sp_size in space_sizes.items()}
         return artists
@@ -356,15 +356,19 @@ class StateUpdateStep(PEStep):
 
 
 class EpochStep(PEStep):
-    def __init__(self, demo, gui, v_old, v_new, epoch_ind):
-        super().__init__(demo, gui)
+    def __init__(self, demo, gui, v_old, v_new, epoch_ind, states_by_layer):
         self._v_old = v_old  # old value function
         self._v_new = v_new  # new value function
         self._epoch_ind = epoch_ind  # epoch being updated
-        import ipdb; ipdb.set_trace()
+        #import ipdb; ipdb.set_trace()
         self._delta_v = {state: v_new[state] - v_old[state] for state in v_old.keys()}
+        all_deltas = np.array(list(self._delta_v.values()))
+        print(np.sum(np.isnan(all_deltas)), np.sum(np.isinf(all_deltas)), np.sum(np.isfinite(all_deltas)))
+        print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
+        self._states_by_layer = states_by_layer  # states by layer
 
         self._color_scaler = ColorScaler(self._delta_v.values(), cmap_name='hot')
+        super().__init__(demo, gui)
 
     def update_images(self):
         """
@@ -372,16 +376,15 @@ class EpochStep(PEStep):
         values:  The update image should now be the values image.
         updates: compute a delta image for the values.
         """
-        import ipdb; ipdb.set_trace()
+        #import ipdb; ipdb.set_trace()
 
 
-        delta_img = self._gui.box_placer.draw(colors=self._gui.color_scalers['values'].get_LUT(self._delta_v), 
-                                              dest=self._gui.get_blank('values'))
+        delta_img = self._gui.box_placer.draw(colors=self._color_scaler.get_LUT(self._delta_v),dest=self._gui.get_blank('values'))
 
         self._gui.base_images['values'] = self._gui.base_images['updates']
         self._gui.base_images['updates'] = delta_img
 
-    def annotate_images(self, images):
+    def annotate_images(self):
         """
         Draw the epoch in the base images.
         values:  The update image should now be the values image.
@@ -391,11 +394,22 @@ class EpochStep(PEStep):
         self._gui.disp_images['values'] = self._gui.base_images['values']
         self._gui.disp_images['updates'] = self._gui.base_images['updates']
 
-    def draw_step_viz(self, img_size):
+    def draw_step_viz(self):
         """
         Epoch visualization:  For each level, show a small histogram of the changes in value function at that level.
         """
-        raise NotImplementedError("EpochStep.draw_step_viz not implemented")
+        #import ipdb; ipdb.set_trace()
+        blank = self._gui.get_blank('step_vis')
+        size = blank.shape[1], blank.shape[0]
+        deltas_by_layer = [[self._delta_v[state] for state in self._states_by_layer[lyr]] for lyr in range(6)]
+        #import pprint
+        #pprint.pprint(deltas_by_layer)
+        
+        mh = MultiHistogram(img_size=size, value_lists=deltas_by_layer)
+        #import ipdb; ipdb.set_trace()
+        hist_img = mh.draw(blank)
+        #cv2.imwrite("epoch_%i_hist.png"% self._epoch_ind, hist_img)
+        return hist_img
 
 class PIStep(PEStep):
     def __init__(self, demo, gui, phase, update_info):

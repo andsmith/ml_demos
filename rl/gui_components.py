@@ -47,10 +47,11 @@ import numpy as np
 from value_panel import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
-from colors import COLOR_BG, COLOR_LINES, SKY_BLUE as DARK_GRAY
+from colors import COLOR_BG, COLOR_LINES, SKY_BLUE as DARK_GRAY, UI_COLORS
 import tkinter as tk
 from PIL import Image, ImageTk
 from copy import deepcopy
+import time
 import matplotlib.pyplot as plt
 from enum import IntEnum
 from color_scaler import ColorScaler
@@ -147,6 +148,10 @@ class RLDemoWindow(object):
 
         self._layout_cache = {}  # {(w,h): {'box_placer': BoxPlacer, 'box_sizes': box_size_list}}
 
+        self._mouseover_state = None
+        self._held_state = None
+        self.selected_states = []
+
         self._init_tk()
         self._init_frames()
         self._init_status_panel()
@@ -157,7 +162,6 @@ class RLDemoWindow(object):
         self._state_images = None
         self._resize_lock = Lock()
 
-        # self.make_images()
         self.base_images = {'states': None,  # representation of game state
                              'values': None,  # colors indicating value
                              'updates': None}  # (same)
@@ -248,13 +252,13 @@ class RLDemoWindow(object):
         self.disp_images['updates'] = deepcopy(self.base_images['updates'])
         self.refresh_images()
 
-    def make_images(self):
+    def build_images(self):
         # for both (values & updates) for both views, create the base numpy images
         #  that will be modified as the algorithm progresses and sent to the canvas as new PhotoImages.
         logging.info("Creating images for states, values, and updates")
         if self._state_images is None:  
             all_states = self._app.updatable_states + self._app.terminal_states
-            self._state_images = get_state_icons(self._states_by_layer, box_sizes=self._box_sizes, player=self.player)
+            self._state_images = get_state_icons(self.states_by_layer, box_sizes=self._box_sizes, player=self.player)
         # set size from frame dimensions
 
         values, new_values = self._app.get_values()
@@ -274,10 +278,15 @@ class RLDemoWindow(object):
         self.disp_images = deepcopy(self.base_images)
 
     def get_blank(self, which='states'):
-        frame_size = self.get_image_frame_size()
+        if which in ['states','values','updates']:
+            frame_size = self.get_image_frame_size()
+            color = self.color_bg_rbg if which == 'states' else self.color_val_bg_rbg
+        elif which =='step_vis':
+            frame_size = self.get_step_viz_frame_size()
+            color = self.color_val_bg_rbg
         img = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
-        color = self.color_bg_rbg if which == 'states' else self.color_val_bg_rbg
         img[:] = color
+        print("Made a blank of type '%s' and size: %s" % (which, str(frame_size)))
         return img
 
     def _recalc_box_positions(self):
@@ -291,6 +300,14 @@ class RLDemoWindow(object):
         self._img_label = tk.Label(self._frames['values'], bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
         # top center
         self._img_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
+
+
+        # Bind mouse events to the image label
+        #self._img_label.bind("<Motion>", lambda e: self._state_mouse_callback(e))
+        #self._img_label.bind("<ButtonPress-1>", lambda e: self._state_mouse_callback(e))
+        #self._img_label.bind("<ButtonRelease-1>", lambda e: self._state_mouse_callback(e))
+        
+
         # The image to put in the label will be this size:
         frame_size = self.get_image_frame_size()
         logging.info("Image in states/values frame will be %s" % str(frame_size))
@@ -304,13 +321,13 @@ class RLDemoWindow(object):
             self._box_sizes = self._layout_cache[layout_key]['box_sizes']
             return
         all_states = self._app.updatable_states + self._app.terminal_states
-        self.box_placer, self._box_sizes, self._states_by_layer = get_box_placer(
+        self.box_placer, self._box_sizes, self.states_by_layer = get_box_placer(
             frame_size, all_states, player=self.player)
         # Need to change to {'id': s, 'state':s} for each state in each layer.
         # states_by_layer = [[{'state': state} for state in layer] for layer in states_by_layer]
         terminal_lut = {state: state.check_endstate() for state in all_states}
         tree_opt = SimpleTreeOptimizer(image_size=frame_size,
-                                       states_by_layer=self._states_by_layer,
+                                       states_by_layer=self.states_by_layer,
                                        state_positions=self.box_placer.box_positions,
                                        terminal=terminal_lut)
         new_positions = tree_opt.get_new_positions()
@@ -377,6 +394,49 @@ class RLDemoWindow(object):
 
             self._frames[name] = frame
 
+    def _toggle_state_selection(self, state):
+        """
+        Toggle the selection of a state.
+        :param state:  The state to toggle.
+        """
+        if state in self.selected_states:
+            self.selected_states.remove(state)
+        else:
+            self.selected_states.append(state)
+
+    def _state_mouse_callback(self, event):
+        """
+        Mouseover:  Highlight the state that the mouse is over, it's parents &  children.
+        Click:  If one of them gets clicked, tell the main app.
+
+        :param event:  The event that triggered this function.
+        """
+        
+
+        if self._img_label is not None and self._img_label == event.widget:
+            # Get the mouse position in the frame.
+            x, y = event.x, event.y
+            # Get the state at the mouse position.
+            new_mouseover_state, layer = self.box_placer.get_state_at((x, y))
+
+            if (new_mouseover_state is not None and self._mouseover_state is None) or (
+                (new_mouseover_state is None and self._mouseover_state is not None) or (
+                    new_mouseover_state != self._mouseover_state)):
+                print("Changing mouseover state from\n%s   to\n%s   (Layer %i)\n" % (self._mouseover_state, new_mouseover_state, layer))
+                self._mouseover_state = new_mouseover_state
+
+            if new_mouseover_state is not None:
+                if event.type == '4':  # ButtonPress-1
+                    self._held_state = new_mouseover_state
+                elif event.type == '5':  # ButtonRelease-1
+                    if self._held_state is not None:
+                        self._held_state = None
+                        self._toggle_state_selection(new_mouseover_state)
+                        self._app.set_selected_state(new_mouseover_state)
+            elif self._held_state is not None and event.type == '5':
+                # If the mouse is released outside of a state, clear the held state.
+                self._held_state = None
+                
     def _add_spacer(self, frame, height=5):
         """
         Add a spacer label to the given frame.
@@ -541,9 +601,7 @@ class RLDemoWindow(object):
         Update screen with appropriate image depending on app state.
         Create a PhotoImage and replace whatever is in the label with it.
         """
-        print("Refreshing with %s images, %s view." %
-              ("base" if self._app.running_continuous else "annotated", self._view))
-
+        
         image = self.disp_images[self._view]
         img = ImageTk.PhotoImage(Image.fromarray(image))
         self._img_label.config(image=img)
@@ -551,10 +609,28 @@ class RLDemoWindow(object):
 
     def annotate_frame(self, vis_update):
         """
-        Annotate the current base images.
+        Annotate the current base images:
+          1. draw the annotations on the base images
+          2. draw all selected states in RED
+          3. draw mouseovered state in GREEN
+          4. draw held state in BLUE
+          5. Send the images to the display.
         """
         self.disp_images = deepcopy(self.base_images)
         vis_update.annotate_images()
+        if False:
+            # Draw the selected states in RED:
+            for state in self.selected_states:
+                self.box_placer.draw_box(self.disp_images[self._view], state, color=UI_COLORS['selected'])
+
+            # Draw the mouseovered state in GREEN:
+            if self._mouseover_state is not None:
+                self.box_placer.draw_box(self.disp_images[self._view], self._mouseover_state, color=UI_COLORS['mouseovered'])
+
+            # Draw the held state in BLUE:
+            if self._held_state is not None:
+                self.box_placer.draw_box(self.disp_images[self._view], self._held_state, color=UI_COLORS['held'])
+
         self.refresh_images()
 
     def _reset(self):
@@ -563,7 +639,7 @@ class RLDemoWindow(object):
 
         self.cur_speed_state = 0
         # self._recalc_box_positions()
-        self.make_images()
+        self.build_images()
         self.refresh_images()
 
     def _resize(self, event):
@@ -577,7 +653,7 @@ class RLDemoWindow(object):
                 self._size = new_size
 
                 self._recalc_box_positions()
-                self.make_images()
+                self.build_images()
                 self.refresh_images()
                 print("New state vis img size: %s" % (self.get_step_viz_frame_size(),))
                 # TODO: Apply latest PEStep
@@ -592,7 +668,7 @@ class RLDemoWindow(object):
         self._root.mainloop()
 
 
-'''
+
 
 class DemoWindowTester(object):
     """
@@ -612,13 +688,14 @@ class DemoWindowTester(object):
         self._seed_p = HeuristicPlayer(mark=self.player, n_rules=2, p_give_up=0.0)
         self._opponent_p = HeuristicPlayer(mark=self._opponent, n_rules=6, p_give_up=0.0)
         self._gamma = .9  # discount factor for future rewards.
+        self._cont_thread = None
 
         logging.info("Starting DemoWindowTester with size:  %s" % (self._size,))
 
         # P.I. initialization:\
         from reinforcement_base import Environment
         self._env = Environment(self._opponent_p, self.player)
-        self.children = self._env.get_children()
+        #self.children = self._env.get_children()
 
         self._pi = self._seed_p
         self.updatable_states = self._env.get_nonterminal_states()
@@ -667,6 +744,8 @@ class DemoWindowTester(object):
         return options
 
     def _step(self, n_steps):
+        self._gui.annotate_frame(None)
+
         print(f"Stepping {n_steps} steps")
 
     def toggle_tournament(self):
@@ -675,6 +754,7 @@ class DemoWindowTester(object):
 
     def _start(self):
         print("Starting continuous...")
+
         self._running = True
 
     def _stop(self):
@@ -687,6 +767,13 @@ class DemoWindowTester(object):
         """
         self._gui._root.mainloop()
         # self._gui._root.destroy()
+    def set_selected_state(self, state):
+        """
+        Set the selected state in the GUI.
+        :param state:  The state to set as selected.
+        """
+        print("\n============================\nSelecting state:\n", state)
+        
 
     def get_status(self):
 
@@ -704,4 +791,4 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     tester = DemoWindowTester()
     tester.run()
-'''
+

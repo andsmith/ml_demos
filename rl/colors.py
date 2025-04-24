@@ -17,6 +17,11 @@ COLOR_BG = OFF_WHITE_RGB
 COLOR_LINES = DARK_NAVY_RGB
 COLOR_TEXT = DARK_NAVY_RGB
 
+# UI colors
+UI_COLORS = {'selected': NEON_RED,
+             'mouseovered': NEON_GREEN,
+             'held': NEON_BLUE}
+
 # Player (and draw) colors
 COLOR_X = MPL_BLUE_RGB
 COLOR_O = MPL_ORANGE_RGB
