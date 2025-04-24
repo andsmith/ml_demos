@@ -120,7 +120,6 @@ class PolicyImprovementDemo(ABC):
     def _pause(self, vis_update=None):
 
         if vis_update is not None:
-            #import ipdb; ipdb.set_trace()
             self._gui.annotate_frame(vis_update)
             step_viz_img = vis_update.draw_step_viz()
             self._gui.update_step_viz_image(step_viz_img)
@@ -134,30 +133,31 @@ class PolicyImprovementDemo(ABC):
             self._action_signal.wait()
             self._action_signal.clear()
 
-    def _maybe_pause(self, stage, vis_updates):
+    def _maybe_pause(self, stage, vis_update):
         """
-        Caller has just finished something.  Do we need to display something and wait for user to click the action buttion?
-        If so, update the GUI then pause.
-
-        NOTE:  If more speed options are added in subclasses, they will neeed to handle them by overriding this method.
-        TODO:  Fix this.
+        Caller has just finished something. 
+        If we need to pause, do so and create temporary images for the GUI.
+        
+        NOTE:  If more speed options are added in subclasses, they can override this method
+          and handle them AFTER handling these two via a super() call.
         """
+        
         if self._pending_pause:
-            self._pause(vis_updates)
+            self._pause(vis_update)
             self._pending_pause = False
             return
 
         elif stage == 'state-update':
             if self._gui.cur_speed_option == 'state-update':
                 logging.info("Pausing for state update...")
-                self._pause(vis_updates)
+                self._pause(vis_update)
 
             # TODO:  "Breakpoints" for specifc state updates in here
 
         elif stage == 'pi-round':
             if self._gui.cur_speed_option == 'pi-round':
                 logging.info("Pausing for policy update...")
-                self._pause(vis_updates)
+                self._pause(vis_update)
         else:
             print("________running continuously__________NO PAUSE!")
 
@@ -271,11 +271,15 @@ class PolicyImprovementDemo(ABC):
         Start the learning loop in its own thread.
         Start the GUI (doesn't return until the GUI is closed).
         """
-        # let the gui call start_learn_loop after it knows where everything goes
-        self._action_signal.clear()  # start paused
+        # clear action event to start paused
+        self._action_signal.clear()
+        
         self._gui.start()
+
         logging.info("GUI closed, waiting for learning thread to finish...")
-        self._shutdown = True  # set shutdown flag to stop the learning loop.
+        # set shutdown flag to stop the learning loop
+        self._shutdown = True  
+        
         # set event signal in case gui is waiting for user to click a button:
         self._action_signal.set()
         if self._learning_thread is not None:
@@ -286,7 +290,7 @@ class PolicyImprovementDemo(ABC):
         self._learning_thread = Thread(target=self._learn_loop)
         self._learning_thread.start()
 
-
+    
 
 class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
@@ -301,7 +305,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         self._delta_v_tol = 1e-6  # tolerance for delta v(s) convergence.
         self._delta_v_max = 0  # running max for each epoch (epoch ends if it's < delta_v_tol)
 
-        self._v_converged = False
+        self.v_converged = False
         super().__init__(seed_policy, opponent_policy, player, in_place)
         self._state_update_order = None
 
@@ -316,7 +320,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     def reset(self):
         super().reset()
         self._epoch = 0
-        self._v_converged = False
+        self.v_converged = False
         self._n_updated = 0
         self._delta_v_max = 0.0  # max delta v(s) for this epoch
         if self._gui is not None:
@@ -332,12 +336,12 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             options[k] = v
         return options
 
-    def _maybe_pause(self, stage, vis_updates):
-        super()._maybe_pause(stage, vis_updates)
+    def _maybe_pause(self, stage, vis_update):
+        super()._maybe_pause(stage, vis_update)
         if stage == 'epoch-update':
             if self._gui.cur_speed_option == 'epoch-update':
                 logging.info("Pausing for epoch update...")
-                self._pause(vis_updates)
+                self._pause(vis_update)
 
     def get_values(self):
         return self._v, self._v_new
@@ -353,7 +357,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         status['PE Epoch'] = self._epoch
         status['States processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))
         status['Max delta-v(s)'] = "%.2e (max %.2e)." % (self._delta_v_max, self._delta_v_tol)
-        status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self._v_converged else ""
+        status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self.v_converged else ""
         return status
 
     def optimize_value_function(self):
@@ -366,11 +370,12 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
         if self._state_update_order is None:
             self._set_state_update_order()
+
         while True:
             logging.info("Starting epoch %i" % self._epoch)
             self._v_new = self._v_terminal.copy()
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
-            state_updates = []  # list of state updates for the GUI to display.
+
             for iter, state in enumerate(self._state_update_order):
                 #logging.info("Updating state:\n%s" % state)
 
@@ -415,20 +420,20 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
                 # Handle visualizer updates
                 vis = StateUpdateStep(self, self._gui, state, actions, next_states, reward_terms,
-                                      self._v[state], self._v_new[state])
-                state_updates.append(vis)
-
+                                      self._v, self._v_new[state])
+                
                 self._n_updated = iter + 1
                 self._maybe_pause('state-update', vis)
                 if self._shutdown:
                     return
 
             self._epoch += 1
+
             # check for convergence:
             if np.random.rand() < 0.1:
-                self._v_converged = True
+                self.v_converged = True
 
-            vis = EpochStep(self, self._gui, 'epoch', state_updates)
+            vis = EpochStep(self, self._gui, self._v, self._v_new, self._epoch)
             self._maybe_pause('epoch-update', vis)
 
             if self._shutdown:

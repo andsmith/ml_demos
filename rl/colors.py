@@ -5,6 +5,7 @@ OFF_WHITE_RGB = 246, 238, 227  # Background
 DARK_NAVY_RGB = 0, 4, 51       # Lines
 GREEN = 0, 255, 0
 RED = 255, 0, 0
+DARK_GRAY = 100,100,100 # background against state value images
 
 NEON_GREEN = 57, 255, 20
 NEON_BLUE = (31, 81, 255)
@@ -14,6 +15,7 @@ import numpy as np
 # background and line colors
 COLOR_BG = OFF_WHITE_RGB
 COLOR_LINES = DARK_NAVY_RGB
+COLOR_TEXT = DARK_NAVY_RGB
 
 # Player (and draw) colors
 COLOR_X = MPL_BLUE_RGB

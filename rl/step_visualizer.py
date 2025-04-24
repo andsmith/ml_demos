@@ -5,12 +5,17 @@ import cv2
 from tic_tac_toe import Game, Mark, Result
 from colors import get_n_colors, shade_color, NEON_GREEN, OFF_WHITE_RGB
 from drawing import GameStateArtist
-
+from color_scaler import ColorScaler
+from tiny_histogram import MultiHistogram
 
 class PEStep(ABC):
     """
-    Represent the step (state update, epoch, PI round, or continuously running).  There should be 1 subclass per speed setting.
+    Some computation just completed, two things should happen:
+        1. The permanent images should reflect the new values / changes (_update_iamges, called from constructor).
+        2. The display images might be created, if the gui is pausing, or running continuously but in need of a new frame.
+             (annotate_imgages, called by the GUI).
 
+    
     Demo will generate these, send them to the GUI, which will apply them as frames are needed and then forget them.
 
     Include all information needed to update the GUI & methods to alter the state/value/update images & 
@@ -21,26 +26,25 @@ class PEStep(ABC):
         self._demo = demo
         self._gui = gui
 
+        self.update_images()  # this one always happens
+
     @abstractmethod
-    def annotate_images(self, images):
+    def annotate_images(self):
         """
         Calculations ran, now we need to display something with the results.  These images disappear.
         (For speed modes that pause between steps.)
-
-        :param images:  dict with {'state','values','updates'} keys, each an image
-            in the "Value Function" panel.
-        :returns: set of images to display in the GUI.
+        
+        (set self._gui.disp_images)
         """
         pass
 
     @abstractmethod
-    def update_images(self, images):
+    def update_images(self):
         """
-        Modify the images so they reflect the current state of the algorithm.  These images are permanent.
-        (for continuously running speed modes)
+        Modify the images so they reflect the current state of the algorithm.  These images store the 
+        cumulative results of the algorithm, and are updated as the algorithm runs.
 
-        :param images:  dict with {'state','values','updates'} keys, each an image
-            in the "Value Function" panel.
+        (set self._gui.base_images)
         """
         pass
 
@@ -50,17 +54,17 @@ class PEStep(ABC):
         Draw the step visualization in the GUI.
 
         :param img_size:  size of the image to draw.
+        :returns:  the image to draw.
         """
         pass
 
 
 class StateUpdateStep(PEStep):
     """
-    Update for a specific state.
+    Update for v_new(S). 
     """
 
     def __init__(self, demo, gui, state, actions, next_states, rewards, old_values, new_value, bg_color=OFF_WHITE_RGB):
-        super().__init__(demo, gui)
         self._state = state  # the state being updated
         self._actions = actions  # possible actions for the state
         self._next_states = next_states  # distribution of next states for each action
@@ -74,6 +78,7 @@ class StateUpdateStep(PEStep):
         self._title_font_scale = 0.5
         self._font_scale = 0.4
         self._tiny_scale = 0.3
+        super().__init__(demo, gui)
 
         self._init_colors()
 
@@ -83,7 +88,7 @@ class StateUpdateStep(PEStep):
         self._colors = get_n_colors(n_actions)
         self._shades = [shade_color(c, self._n_next_states[c_i]) for c_i, c in enumerate(self._colors)]
 
-    def annotate_images(self, images):
+    def annotate_images(self):
         """
         1. Draw a thick green box around the state being updated.
 
@@ -98,7 +103,7 @@ class StateUpdateStep(PEStep):
 
         def add_box(state, color, thickness):
             # print("Adding state:\n%s\n" % str(state))
-            for img in images.values():
+            for img in self._gui.disp_images.values():
                 self._gui.box_placer.draw_box(img, state, color=color, thickness=thickness)
 
         add_box(self._state, NEON_GREEN, 1)
@@ -106,19 +111,18 @@ class StateUpdateStep(PEStep):
             for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
                 add_box(next_state, self._shades[a_ind][s_ind], 1)
 
-    def update_images(self, images):
+    def update_images(self):
         """
         Draw the new color in the updates image.
         Leave the other images untouched.
         """
+        new_color = self._gui.color_scalers['updates'].update_and_get_color(self._new_value)
+        self._gui.box_placer.draw_box(self._gui.base_images['updates'], self._state, color=new_color, thickness=0)
 
-        # update the state image with the new values:
-        self._gui.update_state_image(images['state'])
-        # update the value function image with the new values:
-        self._gui.update_value_image(images['values'])
-        # update the updates image with the new values:
-        self._gui.update_updates_image(images['updates'])
 
+    
+    
+    # STEP VIS STUFF BELOW HERE: 
     def _calc_dims(self, w, h, pad=17):
         """
         Calculate where everything goes, e.g. for 3 possible actions using 2 next-state columns:
@@ -170,8 +174,8 @@ class StateUpdateStep(PEStep):
         # 1. determine how many rows we need to see how big we can make the icons.
         n_action_rows = len(self._actions)
         n_next_state_rows = [np.ceil(len(self._next_states[a_ind])/2) for a_ind in range(n_action_rows)]
-        print("Nnumber of next states per action: %s" % str(self._n_next_states))
-        print("Number of next state rows per action: %s" % str(n_next_state_rows))
+        #print("Nnumber of next states per action: %s" % str(self._n_next_states))
+        #print("Number of next state rows per action: %s" % str(n_next_state_rows))
 
         text_h = 18  # height of the text to draw under the states (1 line)
         artists = self._calc_box_sizes(w, h, n_action_rows, n_next_state_rows, text_h, pad)
@@ -193,6 +197,8 @@ class StateUpdateStep(PEStep):
         inter_h = box_sizes['inter_states'] + pad
 
         inter_x_left = int((w - box_sizes['inter_states']) / 2)
+
+        row_pad = (9-n_action_rows) * 10 + 10
 
         for a_ind, action in enumerate(self._actions):
             inter_state = {'pos': (inter_x_left, y), 'size': box_sizes['inter_states'],
@@ -224,7 +230,7 @@ class StateUpdateStep(PEStep):
                 if s_ind % n_next_states == n_next_states-1 and s_ind < len(self._next_states[a_ind]) - 1:
                     y += next_h
 
-            y += next_h  +10 # add padding between rows of next states
+            y += next_h  +row_pad # add padding between rows of next states
 
         return dims
 
@@ -289,19 +295,19 @@ class StateUpdateStep(PEStep):
         """
         w, h = self._gui.get_step_viz_frame_size()
         dims = self._calc_dims(w, h)
-        import pprint
-        pprint.pprint(dims)
+        #import pprint
+        #pprint.pprint(dims)
         logging.info("Creating step visualization with size %i x %i" % (w, h))
         img = np.zeros((h, w, 3), dtype=np.uint8)
         img[:] = self._bg_color
-        print("BG COLOR:", img[0, 0])
+        #print("BG COLOR:", img[0, 0])
         m = 3
 
         def add_gamestate(state, info, box_color, text_1=None, text_2=None, thickness=1):
-            import pprint
-            pprint.pprint(info)
+            #import pprint
+            #pprint.pprint(info)
 
-            print("\n")
+            #print("\n")
             x, y = info['pos']
             state_img = info['artist'].get_image(state)
             try:
@@ -336,8 +342,8 @@ class StateUpdateStep(PEStep):
             # Show the final states under each intermediate:
             for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
 
-                if next_state not in self._old_value_LUT:
-                    print("State not in LUT: %s" % str(next_state))
+                #if next_state not in self._old_value_LUT:
+                #    print("State not in LUT: %s" % str(next_state))
 
                 add_gamestate(next_state, dims['next_states'][a_ind][s_ind], self._shades[a_ind][s_ind],
                               text_1="P: %.2f" % prob,
@@ -350,11 +356,40 @@ class StateUpdateStep(PEStep):
 
 
 class EpochStep(PEStep):
-    def __init__(self, demo, gui, state_updates):
+    def __init__(self, demo, gui, v_old, v_new, epoch_ind):
         super().__init__(demo, gui)
-        self._state_updates = state_updates
-        self._epoch = demo._epoch  # the epoch being updated
+        self._v_old = v_old  # old value function
+        self._v_new = v_new  # new value function
+        self._epoch_ind = epoch_ind  # epoch being updated
+        self._delta_v = {state: v_new[state] - v_old[state] for state in v_old.keys()}
+        self._color_scaler = ColorScaler(self._delta_v.values(), cmap_name='hot')
 
+    def update_images(self):
+        """
+        Draw the epoch in the base images.
+        values:  The update image should now be the values image.
+        updates: compute a delta image for the values.
+        """
+        delta_img = self.box_placer.draw(colors=self._color_scaler.get_LUT(self._delta_v), dest=self._gui.get_blank('values'))
+
+        self._gui.base_images['values'] = self._gui.base_images['updates']
+        self._gui.base_images['updates'] = delta_img
+
+    def annotate_images(self, images):
+        """
+        Draw the epoch in the base images.
+        values:  The update image should now be the values image.
+        updates: compute a delta image for the values.
+        """
+        # no annotations for epochs, just use the base images.
+        self._gui.disp_images['values'] = self._gui.base_images['values']
+        self._gui.disp_images['updates'] = self._gui.base_images['updates']
+
+    def draw_step_viz(self, img_size):
+        """
+        Epoch visualization:  For each level, show a small histogram of the changes in value function at that level.
+        """
+        raise NotImplementedError("EpochStep.draw_step_viz not implemented")
 
 class PIStep(PEStep):
     def __init__(self, demo, gui, phase, update_info):
@@ -403,7 +438,7 @@ class FakeGui(object):
 def test_state_update_vis():
     #     def __init__(self, demo, gui, state, actions, next_states, rewards, old_value, new_value, bg_color=(0, 0, 0)):
 
-    state = Game.from_strs(["  ", "  ", "   "])
+    state = Game.from_strs(["  ", "   ", "   "])
     actions = state.get_actions()
     print("TEST Actions: %s" % str(actions))
     intermediate_states = [state.clone_and_move(action, Mark.X) for action in actions]

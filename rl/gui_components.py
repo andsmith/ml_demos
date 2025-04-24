@@ -47,7 +47,7 @@ import numpy as np
 from value_panel import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
-from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
+from colors import COLOR_BG, COLOR_LINES, DARK_GRAY
 import tkinter as tk
 from PIL import Image, ImageTk
 from copy import deepcopy
@@ -128,11 +128,20 @@ class RLDemoWindow(object):
         self._app = demo_app
         self._speed_options = speed_options
         self.player = player_mark
-        self.color_bg = tk_color_from_rgb(COLOR_BG)
+        
+        # Color for state representations
+        self.color_bg_rbg = COLOR_BG
+        self.color_bg = tk_color_from_rgb(self.color_bg_rbg)
+        
+        # Color for background of value function images
+        self.color_val_bg_rbg = DARK_GRAY
+        self.color_val_bg = tk_color_from_rgb(self.color_val_bg_rbg)
+
+        # text & widget defs: 
         self.color_lines = tk_color_from_rgb(COLOR_LINES)
         self._img_label = None
-        self._pending_updates = []
-        self._color_scalers = {'values': None, 'updates': None}
+
+        self.color_scalers = {'values': None, 'updates': None}
         self._view = 'states'  # one of ['states', 'values', 'updates']
         self._fullscreen = False
 
@@ -149,11 +158,11 @@ class RLDemoWindow(object):
         self._resize_lock = Lock()
 
         # self.make_images()
-        self._base_images = {'states': None,  # representation of game state
+        self.base_images = {'states': None,  # representation of game state
                              'values': None,  # colors indicating value
                              'updates': None}  # (same)
 
-        self._disp_images = {'states': None,  # annotate version of base_images
+        self.disp_images = {'states': None,  # annotate version of base_images
                              'values': None,
                              'updates': None}
 
@@ -181,8 +190,8 @@ class RLDemoWindow(object):
         """
         self._step_viz_frame = self._frames['step_viz']
         # Create a label to hold the step vis image:
-        self._step_viz_label = tk.Label(self._step_viz_frame, bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
-        self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
+        self._step_viz_label = None#tk.Label(self._step_viz_frame, bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
+        #self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
 
     def update_step_viz_image(self, image=None):
         """
@@ -190,16 +199,31 @@ class RLDemoWindow(object):
         :param image:  The image to update.
         """
         if image is not None:
-            self._step_viz_label['image'] = ImageTk.PhotoImage(Image.fromarray(image))
-            self._step_viz_label.image = image
-            self._frame_labels['step_viz'].pack_forget()
-            self._frame_lines['step_viz'].pack_forget()
+            image = np.ascontiguousarray(image)
+            import cv2
+            cv2.imwrite('step_viz.png', image[:,:,::-1])
+            if self._step_viz_label is None:
+                self._step_viz_label = tk.Label(self._step_viz_frame, font=self.LAYOUT['fonts']['default'])
+                self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
+                
+            img = ImageTk.PhotoImage(Image.fromarray(image))
+        
+            self._step_viz_label.config(image=img)
+            self._step_viz_label.image = img
+            #self._frame_labels['step_viz'].pack_forget()
+           # self._frame_lines['step_viz'].pack_forget()
 
         else:
-            self._step_viz_label['image'] = None
-            self._step_viz_label.image = None
-            self._frame_labels['step_viz'].pack(side=tk.TOP, fill=tk.X)
-            self._frame_lines['step_viz'].pack(side=tk.TOP)
+            if self._step_viz_label is not None:
+
+                self._step_viz_label['image'] = None
+                self._step_viz_label.image = None
+
+            #if self._step_viz_label is not None:
+            #    self._step_viz_label['image'] = None
+            #    self._step_viz_label.image = None
+            #    self._frame_labels['step_viz'].pack(side=tk.TOP, fill=tk.X)
+            #    self._frame_lines['step_viz'].pack(side=tk.TOP)
 
     def get_step_viz_frame_size(self):
         """
@@ -220,22 +244,33 @@ class RLDemoWindow(object):
         # for both (values & updates) for both views, create the base numpy images
         #  that will be modified as the algorithm progresses and sent to the canvas as new PhotoImages.
         logging.info("Creating images for states, values, and updates")
-        if self._state_images is None:
+        if self._state_images is None:  
             all_states = self._app.updatable_states + self._app.terminal_states
             self._state_images = get_state_icons(self._states_by_layer, box_sizes=self._box_sizes, player=self.player)
         # set size from frame dimensions
-        frame_size = self.get_image_frame_size()
 
         values, new_values = self._app.get_values()
-        self._color_scalers = {'values': ColorScaler(values), 'updates': ColorScaler(new_values)}
-        state_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
-        state_img_blank[:] = COLOR_BG
-        val_img_blank = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
-        val_img_blank[:] = (100, 100, 100)
-        self._base_images = {'values': self.box_placer.draw(colors=self._color_scalers['values'].color_LUT, dest=val_img_blank.copy()),
-                             'states': self.box_placer.draw(images=self._state_images, dest=state_img_blank.copy()),
-                             'updates': self.box_placer.draw(colors=self._color_scalers['updates'].color_LUT, dest=val_img_blank.copy())}
-        self._disp_images = deepcopy(self._base_images)
+
+        vals = [value for _, value in values.items()]
+        new_vals = [value for _, value in new_values.items()]
+
+        self.color_scalers = {'values': ColorScaler(vals), 'updates': ColorScaler(new_vals)}
+        
+
+        self.base_images = {'values': self.box_placer.draw(colors=self.color_scalers['values'].get_LUT(values), 
+                                                           dest=self.get_blank(which='values')),
+                             'states': self.box_placer.draw(images=self._state_images, 
+                                                            dest=self.get_blank(which='states')),
+                             'updates': self.box_placer.draw(colors=self.color_scalers['updates'].get_LUT(values), 
+                                                             dest=self.get_blank(which='values'))}
+        self.disp_images = deepcopy(self.base_images)
+
+    def get_blank(self, which='states'):
+        frame_size = self.get_image_frame_size()
+        img = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
+        color = self.color_bg_rbg if which == 'states' else self.color_val_bg_rbg
+        img[:] = color
+        return img
 
     def _recalc_box_positions(self):
         """
@@ -322,13 +357,13 @@ class RLDemoWindow(object):
             frame = tk.Frame(self._root, bg=self.color_bg)
             frame.place(relx=x_rel[0]+x_pad_rel, rely=y_rel[0]+y_pad_rel, relwidth=x_rel[1] - x_rel[0] - 2*x_pad_rel,
                         relheight=y_rel[1] - y_rel[0] - 2*y_pad_rel)
-
-            label = tk.Label(frame, text=self.FRAME_TITLES[name], bg=self.color_bg, font=font)
-            label.pack(side=tk.TOP, fill=tk.X)
-            self._frame_labels[name] = label
+            if name !='step_viz':
+                label = tk.Label(frame, text=self.FRAME_TITLES[name], bg=self.color_bg, font=font)
+                label.pack(side=tk.TOP, fill=tk.X)
+                self._frame_labels[name] = label
 
             # Add dark line under label
-            if name not in ['values', 'updates']:
+            if name not in ['values', 'updates','step_viz']:
                 self._frame_lines[name] = tk.Frame(frame, height=2, width=100, bg=self.color_lines)
                 self._frame_lines[name].pack(side=tk.TOP)
 
@@ -500,8 +535,8 @@ class RLDemoWindow(object):
         """
         print("Refreshing with %s images, %s view." %
               ("base" if self._app.running_continuous else "annotated", self._view))
-        images = self._base_images if self._app.running_continuous else self._disp_images
-        image = images[self._view]
+
+        image = self.disp_images[self._view]
         img = ImageTk.PhotoImage(Image.fromarray(image))
         self._img_label.config(image=img)
         self._img_label.image = img
@@ -510,8 +545,8 @@ class RLDemoWindow(object):
         """
         Annotate the current base images.
         """
-        self._disp_images = deepcopy(self._base_images)
-        vis_update.annotate_images(self._disp_images)
+        self.disp_images = deepcopy(self.base_images)
+        vis_update.annotate_images()
         self.refresh_images()
 
     def _reset(self):
