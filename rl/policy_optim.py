@@ -30,9 +30,15 @@ class ValueFuncPolicy(Policy):
         """
         super().__init__(player=player)  # default player is X
         self._v = v  # hash of Game (state) to value
-        self._pi = self._optimize()
         self._env = environment
         self._gamma = gamma
+        self._pi = self._optimize()
+
+    def equals(self, other):
+        """
+        For all updatable states, is the distribution of recommended actions the same?
+        """
+        return False
 
     def _optimize(self):
         """
@@ -51,7 +57,7 @@ class ValueFuncPolicy(Policy):
                     'rewards': []}  # in case of ties, multiple are "best"
 
             for action in actions:
-                next_state = state.clone_and_move(action, self._player)
+                next_state = state.clone_and_move(action, self.player)
                 next_result = next_state.check_endstate()
                 if next_result == self.winning_result:
                     reward_term = TERMINAL_REWARDS[self.winning_result]

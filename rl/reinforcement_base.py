@@ -9,7 +9,7 @@ import logging
 
 
 class PIPhases(IntEnum):
-    POLICY_EVAL = 0
+    VALUE_F_OPT = 0
     POLICY_OPT = 1
 
 class Environment(object):

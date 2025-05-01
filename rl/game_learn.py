@@ -28,9 +28,9 @@ import time
 from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
 from value_panel import sort_states_into_layers
 WIN_SIZE = (1920, 990)
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
-
-FPS = 20.
+FPS = 0.50
 
 
 class PolicyImprovementDemo(ABC):
@@ -48,20 +48,7 @@ class PolicyImprovementDemo(ABC):
         :param player:  The player for the agent.  The opponent is the other player.
         """
         logging.info("Initializing Policy Improvement demo...")
-        self._iter = 0  # of policy imporovement (PE/PO) cycles
-        self._max_iter = 100  # of policy improvement.
         self._player = player
-        self._n_updated = 0  # states updated this epoch
-        self._convergence_iter = None
-
-        # app state:
-        self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
-        self._pending_pause = False  # TODO: Change to state to pause after updating
-
-        self.started = False
-        self.running_tournament = False
-        self.running_continuous = False
-        self._converged = False  # Policy stable
 
         self._seed_p = seed_policy
         self._opponent_p = opponent_policy
@@ -93,19 +80,25 @@ class PolicyImprovementDemo(ABC):
 
     def reset(self):
         logging.info("Learn app reset.")
-        # initial value function
+        # initial value function parts:
         self._v = {state: 0.0 for state in self.updatable_states}
         self._v.update(self._v_terminal)
         self._v_new = {state: 0.0 for state in self.updatable_states}
         self._v_new.update(self._v_terminal)
 
-        self._iter = 0
+        # App state:
+        self._convergence_iter = None
+        self._n_updated = 0  # states updated this epoch
+        self._iter = 0  # of policy imporovement (PE/PO) cycles
+        self._max_iter = 100  # of policy improvement.
         self._pending_pause = False
         self._converged = False
         self._convergence_iter = None
-        self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
+        self._phase = PIPhases.VALUE_F_OPT  # current phase of the algorithm
         self._n_updated = 0  # states updated this epoch
         self.started = False
+        self.running_tournament = False
+        self.running_continuous = False
 
         # Timing
         self._t_last_updated = time.perf_counter()
@@ -148,6 +141,10 @@ class PolicyImprovementDemo(ABC):
             print("---------------------- CLEARING RESUME EVENT (WILL PAUS ON NEXT WAIT)")
             self._action_signal.clear()
 
+        if vis_update is not None:
+            vis_update.post_viz_cleanup()
+
+    @LPT.time_function
     def _maybe_pause(self, stage, vis_update, cont_update=True):
         """
         Caller has just finished something. 
@@ -178,7 +175,7 @@ class PolicyImprovementDemo(ABC):
             self._didnt_pause()
 
         return False
-
+    @LPT.time_function
     def _didnt_pause(self):
         # Not paused, need to update screen anyway
         now = time.perf_counter()
@@ -206,17 +203,16 @@ class PolicyImprovementDemo(ABC):
         self._maybe_pause('state-update', None)
 
         self._init_layers()
-
         while not self._shutdown:
 
             # 1. Update the value function for the current policy.
-            self._phase = PIPhases.POLICY_EVAL
+            self._phase = PIPhases.VALUE_F_OPT
             state_updates = self.optimize_value_function()
 
             if self._shutdown:
                 break
 
-            vis = PIStep(self, self._gui, PIPhases.POLICY_EVAL, info={'state_updates': state_updates})
+            vis = PIStep(self, self._gui, PIPhases.VALUE_F_OPT, info={'state_updates': state_updates})
             self._maybe_pause('pi-round', vis)
 
             if self._shutdown:
@@ -245,7 +241,7 @@ class PolicyImprovementDemo(ABC):
         returns: True if converged
         """
 
-        pi_new = ValueFuncPolicy(self._v)
+        pi_new = ValueFuncPolicy(self._v,self._env, gamma=self._gamma, player=self._player)
         converged = pi_new.equals(self._pi)
         return pi_new, converged
 
@@ -373,6 +369,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             options[k] = v
         return options
 
+    @LPT.time_function
     def _maybe_pause(self, stage, vis_update, cont_update=True):
         if super()._maybe_pause(stage, vis_update, cont_update=False):
             return True
@@ -395,12 +392,12 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         status = OrderedDict()
 
         status['title'] = "Policy Improvement Demo"
-        status['PI Phase'] = "Policy Evaluation" if self._phase == PIPhases.POLICY_EVAL else "Policy Optimization"
-        status['PI Iteration'] = self._iter
+        status['PI Phase'] = "Policy Evaluation" if self._phase == PIPhases.VALUE_F_OPT else "Policy Optimization"
+        status['PI Iteration'] = self._iter +1
         status['PI Convergence'] = "YES (%i iter)" % (self._convergence_iter,) if self._converged else "no"
-        status['PE Epoch'] = self._epoch
+        status['PE Epoch'] = self._epoch +1
         status['States processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))
-        status['Max delta-v(s)'] = "%.3f (max %.1e)." % (self._delta_v_max, self._delta_v_tol)
+        status['Max delta V(s)'] = "%.3f (max %.1e)." % (self._delta_v_max, self._delta_v_tol)
         status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self.v_converged else ""
         return status
     
@@ -421,11 +418,16 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
         self._v_new =self._init_empty_v()
         verbose = False
-        while True:
+
+        LPT.reset(enable=False, burn_in=100, display_after=30, save_filename=None)
+
+
+        while not self._shutdown and not self.v_converged:
             logging.info("Starting epoch %i" % self._epoch)
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
 
             for iter, state in enumerate(self._state_update_order):
+                LPT.mark_loop_start()
                 # logging.info("Updating state:\n%s" % state)
                 #if state == Game.from_strs(["XOX", "O  ", "   "]):
                 #    verbose=True
@@ -495,46 +497,24 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 self.v_converged = True
             #import ipdb; ipdb.set_trace()
 
-            vis = EpochStep(self, self._gui, self._v, self._v_new, self._epoch, self._states_by_layer)
-            self._maybe_pause('epoch-update', vis)
 
             # now swap the new and old value functions:
+            v_old = self._v
             self._v = self._v_new
             self._v_new = self._init_empty_v()
 
-            # and update the gui
+            # and update the gui            
+            vis = EpochStep(self, self._gui, v_old,self._v, self._epoch, self._states_by_layer)
+            self._maybe_pause('epoch-update', vis)
             self._gui.build_images()
+            self._gui.refresh_text_labels()
+            self._gui.refresh_images()
+
 
             # and clear the action signal so we don't block the next action:
             if self._action_signal.is_set():
                 self._action_signal.clear()
 
-
-            if self._shutdown:
-                return
-
-    def _init_visualizations(self):
-        # create layout of value function visualization using hot-cold heatmap and
-        # positions from the FixedCellBoxOrganizer.
-
-        # START HERE
-        space_size = 2
-        artists = GameStateArtist(space_size=space_size)
-        heat_colors = plt.colormaps['hot']
-        # create a color map for the values:
-        all_values = [self._v.values()]
-        value_range = max(all_values), min(all_values)
-        norm = plt.Normalize(vmin=value_range[1], vmax=value_range[0])
-        cmap = plt.get_cmap(heat_colors, 256)
-        # create a color map for the values:
-        layers = []
-        colors = {}
-        for state in self._v:
-            color = cmap(norm(self._v[state]))
-            colors[state] = color
-            layers.append(state)
-
-        # create a color map for the values:
 
 
 def run_app():

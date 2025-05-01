@@ -58,12 +58,20 @@ class PEStep(ABC):
         """
         pass
 
+    def post_viz_cleanup(self):
+        """
+        Called when the step visualization is done.  Clean up any temporary images or data.
+        Restore GUI, etc.
+        """
+        pass
 
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 class StateUpdateStep(PEStep):
     """
     Update for v_new(S). 
     """
 
+    @LPT.time_function
     def __init__(self, demo, gui, state, actions, next_states, rewards, old_values, new_value, bg_color=OFF_WHITE_RGB):
         self._state = state  # the state being updated
         self._actions = actions  # possible actions for the state
@@ -111,6 +119,7 @@ class StateUpdateStep(PEStep):
             for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
                 add_box(next_state, self._shades[a_ind][s_ind], 1)
 
+    @LPT.time_function
     def update_images(self):
         """
         Draw the new color in the updates image.
@@ -367,7 +376,7 @@ class EpochStep(PEStep):
         print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
         self._states_by_layer = states_by_layer  # states by layer
 
-        self._color_scaler = ColorScaler(self._delta_v.values(), cmap_name='hot')
+        self._color_scaler = ColorScaler(self._delta_v.values())
         super().__init__(demo, gui)
 
     def update_images(self):
@@ -393,6 +402,13 @@ class EpochStep(PEStep):
         # no annotations for epochs, just use the base images.
         self._gui.disp_images['values'] = self._gui.base_images['values']
         self._gui.disp_images['updates'] = self._gui.base_images['updates']
+        self._old_gui_disp_titles = self._gui.disp_titles
+        self._gui.disp_titles['values'] = "New V(s)" 
+        self._gui.disp_titles['updates'] = "Delta V(s)" 
+        
+    def post_viz_cleanup(self):
+        self._gui.disp_titles = self._old_gui_disp_titles   
+        
 
     def draw_step_viz(self):
         """
@@ -405,7 +421,7 @@ class EpochStep(PEStep):
         #import pprint
         #pprint.pprint(deltas_by_layer)
         
-        mh = MultiHistogram(img_size=size, value_lists=deltas_by_layer)
+        mh = MultiHistogram(img_size=size, value_lists=deltas_by_layer, title = 'delta v(s)')
         #import ipdb; ipdb.set_trace()
         hist_img = mh.draw(blank)
         #cv2.imwrite("epoch_%i_hist.png"% self._epoch_ind, hist_img)

@@ -57,6 +57,7 @@ from enum import IntEnum
 from color_scaler import ColorScaler
 
 from threading import Lock, get_ident
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 
 def tk_color_from_rgb(rgb):
@@ -110,7 +111,7 @@ class RLDemoWindow(object):
     FRAME_TITLES = {'status': 'Status',
                     'tools': 'Tools',
                     'tournament': 'TTT Tournament',
-                    'values': 'Value Function',
+                    'values': {'states': 'RL Game states', 'values': 'Value(s)', 'updates': 'New Value(s)'},
                     'step_viz': 'Step Visualization'}
 
     def __init__(self, size,  demo_app, speed_options, player_mark=Mark.X):
@@ -129,16 +130,16 @@ class RLDemoWindow(object):
         self._app = demo_app
         self._speed_options = speed_options
         self.player = player_mark
-        
+
         # Color for state representations
         self.color_bg_rbg = COLOR_BG
         self.color_bg = tk_color_from_rgb(self.color_bg_rbg)
-        
+
         # Color for background of value function images
         self.color_val_bg_rbg = DARK_GRAY
         self.color_val_bg = tk_color_from_rgb(self.color_val_bg_rbg)
 
-        # text & widget defs: 
+        # text & widget defs:
         self.color_lines = tk_color_from_rgb(COLOR_LINES)
         self._img_label = None
 
@@ -163,12 +164,15 @@ class RLDemoWindow(object):
         self._resize_lock = Lock()
 
         self.base_images = {'states': None,  # representation of game state
-                             'values': None,  # colors indicating value
-                             'updates': None}  # (same)
+                            'values': None,  # colors indicating value
+                            'updates': None}  # (same)
 
         self.disp_images = {'states': None,  # annotate version of base_images
-                             'values': None,
-                             'updates': None}
+                            'values': None,
+                            'updates': None}
+        
+        self.disp_titles = {view_mode: RLDemoWindow.FRAME_TITLES['values'][view_mode] for view_mode in
+                            RLDemoWindow.FRAME_TITLES['values']}
 
         # Calls resize which creates state images:
         self._root.bind("<Configure>", lambda event: self._resize(event))
@@ -194,8 +198,9 @@ class RLDemoWindow(object):
         """
         self._step_viz_frame = self._frames['step_viz']
         # Create a label to hold the step vis image:
-        self._step_viz_label = None#tk.Label(self._step_viz_frame, bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
-        #self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
+        # tk.Label(self._step_viz_frame, bg=self.color_bg, font=self.LAYOUT['fonts']['default'])
+        self._step_viz_label = None
+        # self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
 
     def update_step_viz_image(self, image=None):
         """
@@ -205,16 +210,16 @@ class RLDemoWindow(object):
         if image is not None:
             image = np.ascontiguousarray(image)
             import cv2
-            cv2.imwrite('step_viz.png', image[:,:,::-1])
+            cv2.imwrite('step_viz.png', image[:, :, ::-1])
             if self._step_viz_label is None:
                 self._step_viz_label = tk.Label(self._step_viz_frame, font=self.LAYOUT['fonts']['default'])
                 self._step_viz_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
-                
+
             img = ImageTk.PhotoImage(Image.fromarray(image))
-        
+
             self._step_viz_label.config(image=img)
             self._step_viz_label.image = img
-            #self._frame_labels['step_viz'].pack_forget()
+            # self._frame_labels['step_viz'].pack_forget()
            # self._frame_lines['step_viz'].pack_forget()
 
         else:
@@ -223,7 +228,7 @@ class RLDemoWindow(object):
                 self._step_viz_label['image'] = None
                 self._step_viz_label.image = None
 
-            #if self._step_viz_label is not None:
+            # if self._step_viz_label is not None:
             #    self._step_viz_label['image'] = None
             #    self._step_viz_label.image = None
             #    self._frame_labels['step_viz'].pack(side=tk.TOP, fill=tk.X)
@@ -243,7 +248,7 @@ class RLDemoWindow(object):
         height = self._frames['values'].winfo_height()
         label_height = self._frame_labels['values'].winfo_height()
         return width, height - label_height
-    
+
     def refresh_continuous(self):
         """
         Just copy base update / value images to disp images
@@ -252,38 +257,43 @@ class RLDemoWindow(object):
         self.disp_images['updates'] = deepcopy(self.base_images['updates'])
         self.refresh_images()
 
-    def build_images(self):
+    def build_images(self, old_vals=None, new_vals=None):
         # for both (values & updates) for both views, create the base numpy images
         #  that will be modified as the algorithm progresses and sent to the canvas as new PhotoImages.
         logging.info("Creating images for states, values, and updates")
-        if self._state_images is None:  
+        if self._state_images is None:
             all_states = self._app.updatable_states + self._app.terminal_states
             self._state_images = get_state_icons(self.states_by_layer, box_sizes=self._box_sizes, player=self.player)
         # set size from frame dimensions
 
-        values, new_values = self._app.get_values()
+        if old_vals is None:
+            values, new_values = self._app.get_values()
+        elif new_vals is not None:
+            values = old_vals
+            new_values = new_vals
+        else:
+            raise ValueError("Must provide both old and new values or neither.")
 
         vals = [value for _, value in values.items()]
         new_vals = [value for _, value in new_values.items()]
 
         self.color_scalers = {'values': ColorScaler(vals), 'updates': ColorScaler(new_vals)}
-        
 
-        self.base_images = {'values': self.box_placer.draw(colors=self.color_scalers['values'].get_LUT(values), 
+        self.base_images = {'values': self.box_placer.draw(colors=self.color_scalers['values'].get_LUT(values),
                                                            dest=self.get_blank(which='values')),
-                             'states': self.box_placer.draw(images=self._state_images, 
-                                                            dest=self.get_blank(which='states')),
-                             'updates': self.box_placer.draw(colors=self.color_scalers['updates'].get_LUT(values), 
-                                                             dest=self.get_blank(which='values'))}
+                            'states': self.box_placer.draw(images=self._state_images,
+                                                           dest=self.get_blank(which='states')),
+                            'updates': self.box_placer.draw(colors=self.color_scalers['updates'].get_LUT(values),
+                                                            dest=self.get_blank(which='values'))}
         self.disp_images = deepcopy(self.base_images)
 
     def get_blank(self, which='states'):
-        if which in ['states','values','updates']:
+        if which in ['states', 'values', 'updates']:
             frame_size = self.get_image_frame_size()
             color = self.color_bg_rbg if which == 'states' else self.color_val_bg_rbg
-        elif which =='step_vis':
+        elif which == 'step_vis':
             frame_size = self.get_step_viz_frame_size()
-            color = self.color_val_bg_rbg
+            color = self.color_bg_rbg
         img = np.zeros((frame_size[1], frame_size[0], 3), dtype=np.uint8)
         img[:] = color
         print("Made a blank of type '%s' and size: %s" % (which, str(frame_size)))
@@ -301,12 +311,10 @@ class RLDemoWindow(object):
         # top center
         self._img_label.pack(side=tk.TOP, anchor=tk.N, fill=tk.BOTH, expand=True)
 
-
         # Bind mouse events to the image label
-        #self._img_label.bind("<Motion>", lambda e: self._state_mouse_callback(e))
-        #self._img_label.bind("<ButtonPress-1>", lambda e: self._state_mouse_callback(e))
-        #self._img_label.bind("<ButtonRelease-1>", lambda e: self._state_mouse_callback(e))
-        
+        # self._img_label.bind("<Motion>", lambda e: self._state_mouse_callback(e))
+        # self._img_label.bind("<ButtonPress-1>", lambda e: self._state_mouse_callback(e))
+        # self._img_label.bind("<ButtonRelease-1>", lambda e: self._state_mouse_callback(e))
 
         # The image to put in the label will be this size:
         frame_size = self.get_image_frame_size()
@@ -382,13 +390,17 @@ class RLDemoWindow(object):
             frame = tk.Frame(self._root, bg=self.color_bg)
             frame.place(relx=x_rel[0]+x_pad_rel, rely=y_rel[0]+y_pad_rel, relwidth=x_rel[1] - x_rel[0] - 2*x_pad_rel,
                         relheight=y_rel[1] - y_rel[0] - 2*y_pad_rel)
-            if name !='step_viz':
-                label = tk.Label(frame, text=self.FRAME_TITLES[name], bg=self.color_bg, font=font)
+            if name != 'step_viz':
+                if isinstance(self.FRAME_TITLES[name], str):
+                    frame_label_str = self.FRAME_TITLES[name]
+                else:
+                    frame_label_str = self.FRAME_TITLES[name][self._view]
+                label = tk.Label(frame, text=frame_label_str, bg=self.color_bg, font=font)
                 label.pack(side=tk.TOP, fill=tk.X)
                 self._frame_labels[name] = label
 
             # Add dark line under label
-            if name not in ['values', 'updates','step_viz']:
+            if name not in ['values', 'updates', 'step_viz']:
                 self._frame_lines[name] = tk.Frame(frame, height=2, width=100, bg=self.color_lines)
                 self._frame_lines[name].pack(side=tk.TOP)
 
@@ -411,7 +423,6 @@ class RLDemoWindow(object):
 
         :param event:  The event that triggered this function.
         """
-        
 
         if self._img_label is not None and self._img_label == event.widget:
             # Get the mouse position in the frame.
@@ -422,7 +433,8 @@ class RLDemoWindow(object):
             if (new_mouseover_state is not None and self._mouseover_state is None) or (
                 (new_mouseover_state is None and self._mouseover_state is not None) or (
                     new_mouseover_state != self._mouseover_state)):
-                print("Changing mouseover state from\n%s   to\n%s   (Layer %i)\n" % (self._mouseover_state, new_mouseover_state, layer))
+                print("Changing mouseover state from\n%s   to\n%s   (Layer %i)\n" %
+                      (self._mouseover_state, new_mouseover_state, layer))
                 self._mouseover_state = new_mouseover_state
 
             if new_mouseover_state is not None:
@@ -436,7 +448,7 @@ class RLDemoWindow(object):
             elif self._held_state is not None and event.type == '5':
                 # If the mouse is released outside of a state, clear the held state.
                 self._held_state = None
-                
+
     def _add_spacer(self, frame, height=5):
         """
         Add a spacer label to the given frame.
@@ -526,6 +538,9 @@ class RLDemoWindow(object):
         """
         logging.info("Setting view mode:  %s" % mode)
         self._view = mode
+        # Change label text to the current view mode.
+        self._frame_labels['values']['text'] = self.disp_titles[self._view]
+        # Change the image to the current view mode.
         self.refresh_images()
 
     def _toggle_tournament(self):
@@ -601,12 +616,17 @@ class RLDemoWindow(object):
         Update screen with appropriate image depending on app state.
         Create a PhotoImage and replace whatever is in the label with it.
         """
-        
+
         image = self.disp_images[self._view]
         img = ImageTk.PhotoImage(Image.fromarray(image))
         self._img_label.config(image=img)
         self._img_label.image = img
 
+        self._frame_labels['values']['text'] = self.disp_titles[self._view]
+
+
+
+    @LPT.time_function
     def annotate_frame(self, vis_update):
         """
         Annotate the current base images:
@@ -625,7 +645,8 @@ class RLDemoWindow(object):
 
             # Draw the mouseovered state in GREEN:
             if self._mouseover_state is not None:
-                self.box_placer.draw_box(self.disp_images[self._view], self._mouseover_state, color=UI_COLORS['mouseovered'])
+                self.box_placer.draw_box(self.disp_images[self._view],
+                                         self._mouseover_state, color=UI_COLORS['mouseovered'])
 
             # Draw the held state in BLUE:
             if self._held_state is not None:
@@ -668,8 +689,6 @@ class RLDemoWindow(object):
         self._root.mainloop()
 
 
-
-
 class DemoWindowTester(object):
     """
     fill-in for PolicyImprovmentDemo for testing the GUI.
@@ -695,7 +714,7 @@ class DemoWindowTester(object):
         # P.I. initialization:\
         from reinforcement_base import Environment
         self._env = Environment(self._opponent_p, self.player)
-        #self.children = self._env.get_children()
+        # self.children = self._env.get_children()
 
         self._pi = self._seed_p
         self.updatable_states = self._env.get_nonterminal_states()
@@ -767,13 +786,13 @@ class DemoWindowTester(object):
         """
         self._gui._root.mainloop()
         # self._gui._root.destroy()
+
     def set_selected_state(self, state):
         """
         Set the selected state in the GUI.
         :param state:  The state to set as selected.
         """
         print("\n============================\nSelecting state:\n", state)
-        
 
     def get_status(self):
 
@@ -791,4 +810,3 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     tester = DemoWindowTester()
     tester.run()
-

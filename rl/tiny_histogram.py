@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import cv2
 import logging
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
-
+from util import calc_font_size
 
 def get_n_bins(values):
     """
@@ -50,7 +50,7 @@ class TinyHistogram(object):
         
         # Create a figure and axis
         fig, ax = plt.subplots(figsize=(self._size[0] / 100, self._size[1] / 100))
-        print(fig.canvas.get_width_height()[::-1])
+
         ax.set_facecolor(self._color_bg)
         fig.patch.set_facecolor(self._color_bg)
 
@@ -85,25 +85,49 @@ class MultiHistogram(object):
     """
     Space several histograms evenly on an image.
     """
-    def __init__(self, img_size, value_lists, pad=10,  **kwargs):
+    def __init__(self, img_size, value_lists, pad=10,title="",  **kwargs):
         """
         Divide into len(value_lists) rows, 1 column. 
         Pad on all sides & between histotrams.
+
+        :param img_size:  The size of the image to draw on.
+        :param value_lists:  A list of lists of values to draw histograms for.
+        :param pad:  The padding between histograms and the image edges.
+        :param title:  The title of the image.
+        :param h_top:  The height of the title area.
+        :param kwargs:  Additional arguments to pass to the TinyHistogram constructor.
         """
-        v_pad_total = (len(value_lists)+1) * pad
-        h_pad_total = 2 * pad
-        self._v_space = (img_size[1] - v_pad_total) // len(value_lists)
-        self._h_space = img_size[0] - h_pad_total
         self._pad = pad
         self._img_size = img_size
+        self._title = title       
+        self._font = cv2.FONT_HERSHEY_SIMPLEX
+        self._font_scale = self._calc_font_scale(title) if len(title) > 0 else None
+
+        v_pad_total = (len(value_lists)+1) * pad
+        h_pad_total = 2 * pad
+        self._v_space = (img_size[1]-self._h_top - v_pad_total) // len(value_lists)
+        self._h_space = img_size[0] - h_pad_total
         self._tiny_size = (self._h_space, self._v_space)
         self._histograms = [TinyHistogram(self._tiny_size, values, **kwargs) for values in value_lists]
+
+    def _calc_font_scale(self, txt):
+        bbox = {'x': (self._pad, self._img_size[0]-self._pad), 'y': (self._pad, self._img_size[1]-self._pad)}
+        item_spacing_px = 0
+        n_extra_v_spaces = 0
+        font_scale,_ = calc_font_size(txt, bbox, self._font, item_spacing_px, n_extra_v_spaces,max_font_size=1.0)
+        title_h = cv2.getTextSize(txt, self._font, font_scale, 1)[0][1]
+        self._h_top = title_h + self._pad
+        logging.info("Font scale: %f, title height: %i" %(font_scale, title_h))
+        return font_scale
 
     def draw(self, img):
         """
         Draw all histograms to the image.
         """
-        y = self._pad
+        y = self._pad + self._h_top
+        if len(self._title) > 0:
+            text_pos = (self._pad, self._pad + self._h_top - 5)
+            cv2.putText(img, self._title, text_pos, self._font, self._font_scale, COLOR_TEXT, 1, cv2.LINE_AA)
         x = self._pad
         for l_num, hist in enumerate(self._histograms):
             hist.draw(img, x, y, ylabel="Layer %i" %(l_num+1))
@@ -113,7 +137,7 @@ class MultiHistogram(object):
 def test_multihist():
     values = [np.random.randn(np.random.randint(1,50)**2) for _ in range(6)]
     size = (413, 980)
-    mh = MultiHistogram(size, values, color_draw=COLOR_LINES, color_text=COLOR_TEXT)
+    mh = MultiHistogram(size, values, color_draw=COLOR_LINES, color_text=COLOR_TEXT, title="Tiny ")
     img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
     img[:] += np.array(COLOR_BG, dtype=np.uint8)
     print("Created image of size:", img.shape, "with color", COLOR_BG)
