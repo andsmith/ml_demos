@@ -1,3 +1,4 @@
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 from abc import ABC, abstractmethod
 import numpy as np
 import logging
@@ -7,7 +8,9 @@ from colors import get_n_colors, shade_color, NEON_GREEN, OFF_WHITE_RGB
 from drawing import GameStateArtist
 from color_scaler import ColorScaler
 from tiny_histogram import MultiHistogram
-
+from baseline_players import HeuristicPlayer
+from reinforcement_base import Environment
+from value_panel import get_box_placer
 class PEStep(ABC):
     """
     Some computation just completed, two things should happen:
@@ -15,7 +18,7 @@ class PEStep(ABC):
         2. The display images might be created, if the gui is pausing, or running continuously but in need of a new frame.
              (annotate_imgages, called by the GUI).
 
-    
+
     Demo will generate these, send them to the GUI, which will apply them as frames are needed and then forget them.
 
     Include all information needed to update the GUI & methods to alter the state/value/update images & 
@@ -33,7 +36,7 @@ class PEStep(ABC):
         """
         Calculations ran, now we need to display something with the results.  These images disappear.
         (For speed modes that pause between steps.)
-        
+
         (set self._gui.disp_images)
         """
         pass
@@ -65,7 +68,7 @@ class PEStep(ABC):
         """
         pass
 
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
+
 class StateUpdateStep(PEStep):
     """
     Update for v_new(S). 
@@ -76,10 +79,10 @@ class StateUpdateStep(PEStep):
         self._state = state  # the state being updated
         self._actions = actions  # possible actions for the state
         self._next_states = next_states  # distribution of next states for each action
+        #print("Next states: %s" % str(self._next_states))
         self._rewards = rewards  # reward for each action
         self._old_value_LUT = old_values  # old value for the state
         self._new_value = new_value  # new value for the state
-        self.delta = new_value - old_values[state]
         self._bg_color = bg_color  # background color for the images
 
         self._font = cv2.FONT_HERSHEY_SIMPLEX
@@ -128,10 +131,8 @@ class StateUpdateStep(PEStep):
         new_color = self._gui.color_scalers['updates'].update_and_get_color(self._new_value)
         self._gui.box_placer.draw_box(self._gui.base_images['updates'], self._state, color=new_color, thickness=0)
 
+    # STEP VIS STUFF BELOW HERE:
 
-    
-    
-    # STEP VIS STUFF BELOW HERE: 
     def _calc_dims(self, w, h, pad=17):
         """
         Calculate where everything goes, e.g. for 3 possible actions using 2 next-state columns:
@@ -179,12 +180,11 @@ class StateUpdateStep(PEStep):
         :param pad: padding between the boxes & edges. 
         :returns:  dict with keys 'state', 'next_states', and 'leaf_states' with their positions and sizes.
         """
-        # import ipdb; ipdb.set_trace()
         # 1. determine how many rows we need to see how big we can make the icons.
         n_action_rows = len(self._actions)
         n_next_state_rows = [np.ceil(len(self._next_states[a_ind])/2) for a_ind in range(n_action_rows)]
-        #print("Nnumber of next states per action: %s" % str(self._n_next_states))
-        #print("Number of next state rows per action: %s" % str(n_next_state_rows))
+        # print("Nnumber of next states per action: %s" % str(self._n_next_states))
+        # print("Number of next state rows per action: %s" % str(n_next_state_rows))
 
         text_h = 18  # height of the text to draw under the states (1 line)
         artists = self._calc_box_sizes(w, h, n_action_rows, n_next_state_rows, text_h, pad)
@@ -239,7 +239,7 @@ class StateUpdateStep(PEStep):
                 if s_ind % n_next_states == n_next_states-1 and s_ind < len(self._next_states[a_ind]) - 1:
                     y += next_h
 
-            y += next_h  +row_pad # add padding between rows of next states
+            y += next_h + row_pad  # add padding between rows of next states
 
         return dims
 
@@ -304,19 +304,19 @@ class StateUpdateStep(PEStep):
         """
         w, h = self._gui.get_step_viz_frame_size()
         dims = self._calc_dims(w, h)
-        #import pprint
-        #pprint.pprint(dims)
+        # import pprint
+        # pprint.pprint(dims)
         logging.info("Creating step visualization with size %i x %i" % (w, h))
         img = np.zeros((h, w, 3), dtype=np.uint8)
         img[:] = self._bg_color
-        #print("BG COLOR:", img[0, 0])
+        # print("BG COLOR:", img[0, 0])
         m = 3
 
         def add_gamestate(state, info, box_color, text_1=None, text_2=None, thickness=1):
-            #import pprint
-            #pprint.pprint(info)
+            # import pprint
+            # pprint.pprint(info)
 
-            #print("\n")
+            # print("\n")
             x, y = info['pos']
             state_img = info['artist'].get_image(state)
             try:
@@ -334,24 +334,23 @@ class StateUpdateStep(PEStep):
                 cv2.putText(img, text_2, (tx, ty), self._font, font_scale, (0, 0, 0), 1, cv2.LINE_AA)
 
             box_color = int(box_color[0]), int(box_color[1]), int(box_color[2])
-            # import ipdb; ipdb.set_trace()
-            cv2.rectangle(img, (x-1-m, y-1-m), (x+state_img.shape[1]+m, y+state_img.shape[0]+m), box_color, thickness, cv2.LINE_AA)
+            cv2.rectangle(img, (x-1-m, y-1-m), (x+state_img.shape[1]+m,
+                          y+state_img.shape[0]+m), box_color, thickness, cv2.LINE_AA)
             # add the reward value under the intermediate state: (skip for now)
-        # import ipdb; ipdb.set_trace()
         # In the top right, draw the updating state in a green box.
         add_gamestate(self._state, dims['state'], NEON_GREEN, text_1="V(s)=%.3f" % self._old_value_LUT[self._state],
-                      text_2="V'(s)=%.4f" % self._new_value, thickness =3)
+                      text_2="V'(s)=%.4f" % self._new_value, thickness=3)
 
         # show each following state under each action in the appropriate color.
         for a_ind, action in enumerate(self._actions):
             inter_state = self._state.clone_and_move(action, self._gui.player)
             add_gamestate(inter_state, dims['inter_states'][a_ind], self._colors[a_ind],
-                          text_1="Reward(a)=%.3f" % self._rewards[a_ind], thickness=2)
+                          text_1="E G(a): %.3f" % self._rewards[a_ind], thickness=2)
 
             # Show the final states under each intermediate:
             for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
 
-                #if next_state not in self._old_value_LUT:
+                # if next_state not in self._old_value_LUT:
                 #    print("State not in LUT: %s" % str(next_state))
 
                 add_gamestate(next_state, dims['next_states'][a_ind][s_ind], self._shades[a_ind][s_ind],
@@ -369,11 +368,10 @@ class EpochStep(PEStep):
         self._v_old = v_old  # old value function
         self._v_new = v_new  # new value function
         self._epoch_ind = epoch_ind  # epoch being updated
-        #import ipdb; ipdb.set_trace()
         self._delta_v = {state: v_new[state] - v_old[state] for state in v_old.keys()}
         all_deltas = np.array(list(self._delta_v.values()))
-        print(np.sum(np.isnan(all_deltas)), np.sum(np.isinf(all_deltas)), np.sum(np.isfinite(all_deltas)))
-        print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
+        #print(np.sum(np.isnan(all_deltas)), np.sum(np.isinf(all_deltas)), np.sum(np.isfinite(all_deltas)))
+        #print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
         self._states_by_layer = states_by_layer  # states by layer
 
         self._color_scaler = ColorScaler(self._delta_v.values())
@@ -385,10 +383,9 @@ class EpochStep(PEStep):
         values:  The update image should now be the values image.
         updates: compute a delta image for the values.
         """
-        #import ipdb; ipdb.set_trace()
 
-
-        delta_img = self._gui.box_placer.draw(colors=self._color_scaler.get_LUT(self._delta_v),dest=self._gui.get_blank('values'))
+        delta_img = self._gui.box_placer.draw(colors=self._color_scaler.get_LUT(
+            self._delta_v), dest=self._gui.get_blank('values'))
 
         self._gui.base_images['values'] = self._gui.base_images['updates']
         self._gui.base_images['updates'] = delta_img
@@ -403,29 +400,43 @@ class EpochStep(PEStep):
         self._gui.disp_images['values'] = self._gui.base_images['values']
         self._gui.disp_images['updates'] = self._gui.base_images['updates']
         self._old_gui_disp_titles = self._gui.disp_titles
-        self._gui.disp_titles['values'] = "New V(s)" 
-        self._gui.disp_titles['updates'] = "Delta V(s)" 
-        
+        self._gui.disp_titles['values'] = "New V(s)"
+        self._gui.disp_titles['updates'] = "Delta V(s)"
+
     def post_viz_cleanup(self):
-        self._gui.disp_titles = self._old_gui_disp_titles   
-        
+        self._gui.disp_titles = self._old_gui_disp_titles
 
     def draw_step_viz(self):
         """
         Epoch visualization:  For each level, show a small histogram of the changes in value function at that level.
         """
-        #import ipdb; ipdb.set_trace()
         blank = self._gui.get_blank('step_vis')
         size = blank.shape[1], blank.shape[0]
         deltas_by_layer = [[self._delta_v[state] for state in self._states_by_layer[lyr]] for lyr in range(6)]
-        #import pprint
-        #pprint.pprint(deltas_by_layer)
-        
-        mh = MultiHistogram(img_size=size, value_lists=deltas_by_layer, title = 'delta v(s)')
-        #import ipdb; ipdb.set_trace()
+        # import pprint
+        # pprint.pprint(deltas_by_layer)
+
+        mh = MultiHistogram(img_size=size, value_lists=deltas_by_layer, title='delta v(s)')
         hist_img = mh.draw(blank)
-        #cv2.imwrite("epoch_%i_hist.png"% self._epoch_ind, hist_img)
+        # cv2.imwrite("epoch_%i_hist.png"% self._epoch_ind, hist_img)
         return hist_img
+
+
+class PIStateStep(StateUpdateStep):
+    """
+    Similar structure to value function update for single state, but for policy optimization.
+    Instead of old/new values for each state we have old/new best action for each state.
+    """
+
+    def __init__(self, demo, gui, state, actions, next_states, rewards, old_actions, new_actions):
+        values, _ = demo.get_values()
+        super().__init__(demo, gui, state, actions, next_states, rewards, old_values=values, new_value=0)
+        self._old_actions = old_actions  # old policy recommendations for the state
+        self._new_actions = new_actions  # new policy recommendations for the state
+
+    def update_images(self):
+        pass  # dont' change value function images, just annotate them the same as v(s) updates.
+    
 
 class PIStep(PEStep):
     def __init__(self, demo, gui, phase, update_info):
@@ -462,11 +473,38 @@ class ContinuousStep(PEStep):
 
 
 class FakeGui(object):
-    def __init__(self):
-        self._size = 431, 980
+    def __init__(self, value_map):
+
+        self._size = 413, 999
         self.player = Mark.X
         self.opponent = Mark.O
+        self._values = value_map
+        self.color_scalers = {'values': ColorScaler(self._values), 'updates': ColorScaler(self._values)}
 
+        opponent_policy = HeuristicPlayer(Mark.O, self._values)
+        self._gamma = .9  # discount factor for future rewards.
+        self._learning_thread = None
+        # P.I. initialization:
+        self.env = Environment(opponent_policy, Mark.X)
+        self.updatable_states = self.env.get_nonterminal_states()
+        self.terminal_states = self.env.get_terminal_states()
+        all_states = self.updatable_states + self.terminal_states
+
+        self.box_placer, self._box_sizes, self.states_by_layer = get_box_placer(
+            self._size, all_states, player=self.player)
+
+        self.base_images = {'states': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8),  # representation of game state
+                            'values': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8),  # colors indicating value
+                            'updates': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8)}  # (same)
+
+        self.disp_images = {'states': None,  # annotate version of base_images
+                            'values': None,
+                            'updates': None}
+        
+        self.disp_titles = {'states': "States",
+                            'values': "Values",
+                            'updates': "Updates"}
+        
     def get_step_viz_frame_size(self):
         return self._size
 
@@ -483,11 +521,12 @@ def test_state_update_vis():
     rewards = [0.0 for _ in actions]
     all_states = [state] + [next_pair[0] for state_dist in next_states for next_pair in state_dist]
     old_values = {state: np.random.rand(1) for state in all_states}
+
     new_value = 0.5
-    step = StateUpdateStep(None, FakeGui(), state, actions, next_states, rewards, old_values, new_value)
+    step = PIStateStep(None, FakeGui(old_values), state, actions, next_states, rewards, old_values, new_value)
 
     img = step.draw_step_viz()
-    cv2.imshow("Step Visualization", img)
+    cv2.imshow("Step Visualization", img[:,:,::-1])
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 

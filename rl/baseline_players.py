@@ -77,8 +77,9 @@ class HeuristicPlayer(Policy):
         def _get_probs(good_action_inds):
             n_good = len(good_action_inds)
             n_bad = len(actions) - n_good
-            if n_good == 0 or n_bad == 0:
+            if n_good == 0 or n_bad == 0 or self._p_give_up == 0:
                 return [ap for ap in zip(actions, np.ones(len(actions)) / len(actions))]
+            
             probs = np.zeros(len(actions)) + self._p_give_up / n_bad
             probs[good_action_inds] = (1 - self._p_give_up) / n_good
             return [ap for ap in zip(actions, probs / np.sum(probs))]

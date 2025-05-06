@@ -8,6 +8,7 @@ Two image panels at the top are:
 The image of a function of s, a game state is reprsented as a game-state tree with single colored
 boxes instead of game state images, the color of a "state" indicating the value.
 """
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 import pickle
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +29,6 @@ import time
 from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
 from value_panel import sort_states_into_layers
 WIN_SIZE = (1920, 990)
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 FPS = 0.50
 
@@ -62,7 +62,7 @@ class PolicyImprovementDemo(ABC):
         #    self._env = pickle.load(f)
         self.children = self._env.children
 
-        self._pi = seed_policy
+        self.pi = seed_policy
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
         self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
@@ -71,12 +71,12 @@ class PolicyImprovementDemo(ABC):
 
         self.reset()
 
-        self._shutdown = False
+        self.shutdown = False
         # App  & graphics:
 
         self._action_signal = Event()  # learner will wait for this, action button will set it.
         self._init_gui()
-        self._states_by_layer = None # for passing to visualizer  (init later)
+        self._states_by_layer = None  # for passing to visualizer  (init later)
 
     def reset(self):
         logging.info("Learn app reset.")
@@ -102,6 +102,7 @@ class PolicyImprovementDemo(ABC):
 
         # Timing
         self._t_last_updated = time.perf_counter()
+        self._t_last_txt_updated = time.perf_counter()
 
     @abstractmethod
     def optimize_value_function(self):
@@ -129,12 +130,12 @@ class PolicyImprovementDemo(ABC):
             step_viz_img = vis_update.draw_step_viz()  # Make the step image
             self._gui.update_step_viz_image(step_viz_img)  # update step image in GUI
         else:
-            #raise Exception("Paused without a ")
+            # raise Exception("Paused without a ")
             self._gui.refresh_text_labels()
 
             pass
 
-        if not self._shutdown:
+        if not self.shutdown:
             # print("PAUSING!")
             self._gui.refresh_text_labels()
             self._action_signal.wait()
@@ -145,7 +146,7 @@ class PolicyImprovementDemo(ABC):
             vis_update.post_viz_cleanup()
 
     @LPT.time_function
-    def _maybe_pause(self, stage, vis_update, cont_update=True):
+    def maybe_pause(self, stage, vis_update, cont_update=True):
         """
         Caller has just finished something. 
         If we need to pause, do so and create temporary images for the GUI.
@@ -156,7 +157,7 @@ class PolicyImprovementDemo(ABC):
         :return:  True if we paused, False otherwise.
 
         NOTE:  If more speed options are added in subclasses:
-          1. override this method, call super()._maybe_pause(...,cont_update=False)
+          1. override this method, call super().maybe_pause(...,cont_update=False)
         """
 
         if stage == 'state-update':
@@ -175,18 +176,23 @@ class PolicyImprovementDemo(ABC):
             self._didnt_pause()
 
         return False
+
     @LPT.time_function
     def _didnt_pause(self):
         # Not paused, need to update screen anyway
         now = time.perf_counter()
+
         if now - self._t_last_updated > 1.0 / FPS:
             self._t_last_updated = now
             self._gui.update_step_viz_image()  # clear step vis for continuous mode.
             self._gui.refresh_text_labels()  # update text labels in GUI for display
             self._gui.refresh_continuous()
-            # make sure action signal is clear, so we don't block the next action: 
+            # make sure action signal is clear, so we don't block the next action:
             if self._action_signal.is_set():
                 self._action_signal.clear()
+        elif now - self._t_last_txt_updated > .5:
+            self._gui.refresh_text_labels()  # update text labels faster
+            self._t_last_txt_updated = now
 
     def _init_layers(self):
         # set self._states_by_layer, from the gui
@@ -200,33 +206,39 @@ class PolicyImprovementDemo(ABC):
         """
         self._iter = 0
 
-        self._maybe_pause('state-update', None)
+        self.maybe_pause('state-update', None)
 
         self._init_layers()
-        while not self._shutdown:
+        while not self.shutdown:
 
             # 1. Update the value function for the current policy.
             self._phase = PIPhases.VALUE_F_OPT
-            state_updates = self.optimize_value_function()
+            self.optimize_value_function()
 
-            if self._shutdown:
+            if self.shutdown:
                 break
 
-            vis = PIStep(self, self._gui, PIPhases.VALUE_F_OPT, info={'state_updates': state_updates})
-            self._maybe_pause('pi-round', vis)
+            # vis = PIStep(self, self._gui, PIPhases.VALUE_F_OPT, info={'state_updates': state_updates})
+            # self.maybe_pause('pi-round', vis)
 
-            if self._shutdown:
+            if self.shutdown:
                 break
 
             # 2. Update policy & check for convergence:
             self._phase = PIPhases.POLICY_OPT
+            #import pickle
+            #with open('value_func.pkl', 'wb') as f:
+            #    pickle.dump(self._v, f)
+
+            import ipdb
+            ipdb.set_trace()
             new_policy, self._converged = self.optimize_policy()
 
-            if self._shutdown:
+            if self.shutdown:
                 break
 
-            vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self._pi, 'new': new_policy})
-            self._maybe_pause('pi-round', vis)
+            vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self.pi, 'new': new_policy})
+            self.maybe_pause('pi-round', vis)
 
             self._iter += 1
 
@@ -240,38 +252,9 @@ class PolicyImprovementDemo(ABC):
                 TODO: if the same action(s) have highest probability in all states.
         returns: True if converged
         """
-
-        pi_new = ValueFuncPolicy(self._v,self._env, gamma=self._gamma, player=self._player)
-        converged = pi_new.equals(self._pi)
+        pi_new = ValueFuncPolicy(self, self._v, self._env, gamma=self._gamma, player=self._player)
+        converged = pi_new.equals(self.pi)
         return pi_new, converged
-
-        # Check for policy stability (recommended action list has same distribution)
-
-        def action_dist_eq(actions_1, actions_2, tolerance=1e-6):
-            """
-            Check if two action distributions are equal.
-            :param actions_1: list of (action, probability) tuples.
-            :param actions_2: list of (action, probability) tuples.
-            :return: True if equal, False otherwise.
-            """
-            if len(actions_1) != len(actions_2):
-                return False
-            for a1, a2 in zip(actions_1, actions_2):
-                if (a1[0] != a2[0]):
-                    raise Exception("distribution lists should be in same order...")
-                if np.abs(a1[1] - a2[1]) > tolerance:
-                    return False
-            return True
-
-        n_diff = 0
-        for state in self.updatable_states:
-            actions_old = self._pi.recommend_action(state)
-            actions_new = pi_new.recommend_action(state)
-            if not action_dist_eq(actions_old, actions_new):
-                n_diff += 1
-                self._pi.update_policy(state, actions_new)
-        logging.info(f"Policy Estimation, iteration {self._iter} updated {n_diff} states .")
-        return n_diff == 0  # True if no updates were made.
 
     def _init_gui(self):
         speed_options = self._get_speed_options()
@@ -311,7 +294,7 @@ class PolicyImprovementDemo(ABC):
 
         logging.info("GUI closed, waiting for learning thread to finish...")
         # set shutdown flag to stop the learning loop
-        self._shutdown = True
+        self.shutdown = True
 
         # set event signal in case gui is waiting for user to click a button:
         print("###################### SET RESUME EVENT ")
@@ -331,7 +314,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
     """
     _EXTRA_PAUSE_POINTS = ['epoch']  # Pause after every epoch of Policy Evaluation updates (all states updated once).
 
-    def __init__(self, seed_policy, opponent_policy, player=Mark.X, gamma =0.9):
+    def __init__(self, seed_policy, opponent_policy, player=Mark.X, gamma=0.9):
         self._gui = None
         self._epoch = 0  # passes through all states
 
@@ -339,8 +322,8 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         self._delta_v_max = 0  # running max for each epoch (epoch ends if it's < delta_v_tol)
         self.v_converged = False  # True if the value function converged (i.e. no changes).
 
-        super().__init__(seed_policy, opponent_policy, player,gamma=gamma)
-        
+        super().__init__(seed_policy, opponent_policy, player, gamma=gamma)
+
         self._state_update_order = None
 
     def _set_state_update_order(self):
@@ -370,21 +353,22 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         return options
 
     @LPT.time_function
-    def _maybe_pause(self, stage, vis_update, cont_update=True):
-        if super()._maybe_pause(stage, vis_update, cont_update=False):
+    def maybe_pause(self, stage, vis_update, cont_update=True):
+        if super().maybe_pause(stage, vis_update, cont_update=False):
             return True
 
-        elif stage == 'epoch-update':     
-            
+        elif stage == 'epoch-update':
+
             if self._gui.cur_speed_option == 'epoch-update':
                 logging.info("Pausing for epoch update...")
                 self._pause(vis_update)
-                
+
         if cont_update:
             self._didnt_pause()
 
         return False
-
+    def get_gui(self):
+        return self._gui
     def get_values(self):
         return self._v, self._v_new
 
@@ -393,14 +377,14 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
         status['title'] = "Policy Improvement Demo"
         status['PI Phase'] = "Policy Evaluation" if self._phase == PIPhases.VALUE_F_OPT else "Policy Optimization"
-        status['PI Iteration'] = self._iter +1
+        status['PI Iteration'] = self._iter + 1
         status['PI Convergence'] = "YES (%i iter)" % (self._convergence_iter,) if self._converged else "no"
-        status['PE Epoch'] = self._epoch +1
+        status['PE Epoch'] = self._epoch + 1
         status['States processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))
         status['Max delta V(s)'] = "%.3f (max %.1e)." % (self._delta_v_max, self._delta_v_tol)
         status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self.v_converged else ""
         return status
-    
+
     def _init_empty_v(self):
         v_empty = self._v_terminal.copy()
         return v_empty
@@ -416,20 +400,20 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         if self._state_update_order is None:
             self._set_state_update_order()
 
-        self._v_new =self._init_empty_v()
+        self._v_new = self._init_empty_v()
         verbose = False
 
         LPT.reset(enable=False, burn_in=100, display_after=30, save_filename=None)
 
-
-        while not self._shutdown and not self.v_converged:
+        while not self.shutdown and not self.v_converged:
             logging.info("Starting epoch %i" % self._epoch)
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
 
             for iter, state in enumerate(self._state_update_order):
+
                 LPT.mark_loop_start()
                 # logging.info("Updating state:\n%s" % state)
-                #if state == Game.from_strs(["XOX", "O  ", "   "]):
+                #if state == Game.from_strs(["XOO", "X  ", "   "]):
                 #    verbose=True
                 #    import ipdb; ipdb.set_trace()
 
@@ -438,6 +422,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                     The reward term is the bracketed expression in V_{pi'}(s) update eqn. on page 79 of Sutton & Barto, the 
                       reward for taking the action plus the discounted value of the next state.
                     """
+
                     next_state = state.clone_and_move(action, self._player)
                     next_result = next_state.check_endstate()
                     if next_result in [self._env.winning_result, self._env.losing_result, self._env.draw_result]:
@@ -445,7 +430,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                         return TERMINAL_REWARDS[next_result], [(next_state, 1.0)]
                     else:
                         # opponent's turn, get the probability distribution of next states s'
-                        opp_move_dist = self._env.pi_opp.recommend_action(next_state)
+                        opp_move_dist = self._env.opp_move_dist(state, action)
                         # take the weighted sum over every action the opponent might make of v(s')
                         reward_term = 0.0
                         next_states = []
@@ -462,17 +447,19 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                                 reward_term += prob * self._v[next_next_state] * self._gamma
                     return reward_term, next_states
 
-                actions = state.get_actions()
+                actions = self.pi.recommend_action(state)
                 reward_terms, next_states = [], []
 
-                for action in actions:
+                bare_actions = [action for action, act_prob in actions]
+                for action, act_prob in actions:
                     reward_term, next_state_dist = get_reward_term_and_next_states(action)
+                    reward_term *= act_prob  # scale by the probability of taking this action.
                     if verbose:
                         print("Action: ", action, "Reward term: ", reward_term)
                         for next_state, prob in next_state_dist:
-                            print("\tNext state:\n", next_state, "\nProbability: ", prob,"\n")
+                            print("\tNext state:\n", next_state, "\nProbability: ", prob, "\n")
 
-                    reward_terms.append(reward_term)
+                    reward_terms.append(reward_term*act_prob)
                     next_states.append(next_state_dist)
 
                 self._v_new[state] = np.max(reward_terms)
@@ -481,46 +468,45 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                 self._delta_v_max = max(self._delta_v_max, delta_v)
 
                 # Handle visualizer updates
-                vis = StateUpdateStep(self, self._gui, state, actions, next_states, reward_terms,
+                vis = StateUpdateStep(self, self._gui, state, bare_actions, next_states, reward_terms,
                                       self._v, self._v_new[state])
 
                 self._n_updated = iter + 1
-                self._maybe_pause('state-update', vis)
-                if self._shutdown:
+                self.maybe_pause('state-update', vis)
+                if self.shutdown:
                     return
-                verbose=False
+                verbose = False
 
             self._epoch += 1
 
             # check for convergence:
             if self._delta_v_max < self._delta_v_tol:
                 self.v_converged = True
-            #import ipdb; ipdb.set_trace()
+                self._phase = PIPhases.POLICY_OPT  # change this now so the status msg is correct.
 
+            # import ipdb; ipdb.set_trace()
 
             # now swap the new and old value functions:
             v_old = self._v
             self._v = self._v_new
             self._v_new = self._init_empty_v()
 
-            # and update the gui            
-            vis = EpochStep(self, self._gui, v_old,self._v, self._epoch, self._states_by_layer)
-            self._maybe_pause('epoch-update', vis)
+            # and update the gui
+            vis = EpochStep(self, self._gui, v_old, self._v, self._epoch, self._states_by_layer)
+            self.maybe_pause('epoch-update', vis)
             self._gui.build_images()
             self._gui.refresh_text_labels()
             self._gui.refresh_images()
-
 
             # and clear the action signal so we don't block the next action:
             if self._action_signal.is_set():
                 self._action_signal.clear()
 
 
-
 def run_app():
     # Example usage:
     seed_policy = HeuristicPlayer(n_rules=2, mark=Mark.X)  # Replace with your seed policy
-    opponent_policy = HeuristicPlayer(n_rules=6, mark=Mark.X)  # Replace with your opponent policy
+    opponent_policy = HeuristicPlayer(n_rules=6, mark=Mark.O)  # Replace with your opponent policy
     player = Mark.X  # Replace with your player mark
 
     demo = PolicyEvaluationPIDemo(seed_policy, opponent_policy, player)

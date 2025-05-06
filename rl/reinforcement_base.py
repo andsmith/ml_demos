@@ -12,6 +12,7 @@ class PIPhases(IntEnum):
     VALUE_F_OPT = 0
     POLICY_OPT = 1
 
+
 class Environment(object):
     """
     The Environment class encapsulates the rules of Tic Tac Toe as well as the 
@@ -38,11 +39,32 @@ class Environment(object):
         self.losing_result = Result.O_WIN if player_mark == Mark.X else Result.X_WIN
         self.draw_result = Result.DRAW
 
-
-
         self.pi_opp = opponent_policy
         self.tree = get_game_tree_cached(player=player_mark, verbose=True)
         self.terminal, self.children, self.parents, self.initial = self.tree.get_game_tree()
+
+    def opp_move_dist(self, state, action):
+        """
+        Given player taking the action from the state, return the distribution of next states. 
+        THis is found by evaluating the opponents policy on the state after the action is taken.
+        :param state: The current state of the game.
+        :param action: The action taken by the player.
+        :returns: a list of (opp_action, prob) tuples, from the opponent's policy, or
+            None if player's action results in a terminal state.
+        """
+        # Get the next state after the player takes the action.
+        next_state = state.clone_and_move(action, self.player)
+
+        # Check if the game is over.  If so, return a terminal state with no next states.
+        result = next_state.check_endstate()
+        if result is not None:
+            return None
+
+        # Get the distribution of next states from the opponent's policy.
+        opp_moves = self.pi_opp.recommend_action(next_state)
+
+        # Filter out zero probability moves
+        return opp_moves
 
     def _state_valid(self, state):
         """
