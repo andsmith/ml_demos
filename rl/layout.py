@@ -25,7 +25,6 @@ LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
                     'flag': ('Helvetica', 13, 'bold')}}
 
 
-FRAME_TITLES = {'selection': 'Select Algorithm',
-                'control': 'Status / Controls', }  # Algorithms set other frames' titles.
+FRAME_TITLES = {'control': 'Status / Controls', }  # Algorithms set other frames' titles.
 
 WIN_SIZE = (1920, 990)

@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import logging
+import os
 
 
 def tk_color_from_rgb(rgb):
@@ -10,6 +11,18 @@ def tk_color_from_rgb(rgb):
     r, g, b = rgb
     return f'#{r:02x}{g:02x}{b:02x}'
 
+def get_clobber_free_filename(filename, clobber = False):
+    """
+    Append _1, _2, etc. to the filename if it already exists, before the extension.
+    """
+    if clobber:
+        return filename
+    base, ext = os.path.splitext(filename)
+    i = 1
+    while os.path.exists(filename):
+        filename = f"{base}_{i}{ext}"
+        i += 1
+    return filename
 
 def get_annulus_polyline(r_outer, r_inner, n_points=50):
     """

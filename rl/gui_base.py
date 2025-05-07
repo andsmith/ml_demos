@@ -30,7 +30,7 @@ class Panel(ABC):
         self._initialized = False
 
     @abstractmethod
-    def init(self):
+    def _init_widgets(self):
         """
         Initialize the panel. This method should be overridden by subclasses.
         """

@@ -17,6 +17,19 @@ class DynamicProgDemoAlg(DemoAlg):
     def _init_frames(self):
         pass
 
+    def load_state(self, state_file):
+        pass
+
+    def save_state(self, state_file):
+        pass
+
+    def reset(self):
+        pass
+
+    @staticmethod
+    def is_stub():
+        return True
+
 
 class InPlaceDPDemoAlg(DynamicProgDemoAlg):
     @staticmethod
@@ -29,3 +42,7 @@ class InPlaceDPDemoAlg(DynamicProgDemoAlg):
 
     def _init_frames(self):
         pass
+
+    @staticmethod
+    def is_stub():
+        return True
