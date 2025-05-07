@@ -8,7 +8,7 @@ import tkinter as tk
 import numpy as np
 from gui_base import Panel
 from layout import LAYOUT, FRAME_TITLES
-from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
+from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT, COLOR_URGENT
 from util import tk_color_from_rgb
 
 
@@ -36,11 +36,12 @@ class SelectionPanel(Panel):
         self._color_lines = tk_color_from_rgb(COLOR_LINES)
         self._color_bg = tk_color_from_rgb(COLOR_BG)
         self._color_text = tk_color_from_rgb(COLOR_TEXT)
+        self._color_urgent = tk_color_from_rgb(COLOR_URGENT)
 
     def init(self):
         self._init_title()
         self._init_selection_buttons()
-        # self._init_demo_buttons()
+        self._init_demo_buttons()
 
     def _init_title(self):
         """
@@ -72,6 +73,50 @@ class SelectionPanel(Panel):
                                                                )
             self._selection_buttons[alg_name].pack(anchor=tk.W, padx=25)
 
+    
+            
+
+    def _init_demo_buttons(self):
+        """
+        Create the demo buttons for saving, loading, and resetting the state.
+        """
+        # Add dark line below the radio buttons:
+        button_line = tk.Frame(self._frame, height=2, width=150, bg=self._color_lines)
+        button_line.pack(side=tk.TOP, pady=8)
+        #self._add_spacer()
+
+        # Add the reset button directly below the radio buttons:
+        self._reset_button = tk.Button(self._frame, text="Reset State", command=self.app.toggle_fullscreen,
+                                       font=LAYOUT['fonts']['buttons'],
+                                       bg=self._color_bg, fg=self._color_text)
+        self._reset_button.pack(side=tk.TOP, pady=5, padx=25)
+
+        # Add message below the button but hide it
+        self._reset_msg = tk.Label(self._frame, text="[reset to switch algorithms]",
+                                   font=LAYOUT['fonts']['default'],    
+                                      bg=self._color_bg, fg=self._color_urgent)
+        self._reset_msg.pack(side=tk.TOP, pady=5, padx=25)
+        self._reset_msg.lower()  # hide the message
+
+        bottom_frame = tk.Frame(self._frame, bg=self._color_bg)
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.Y, padx=5, pady=5)
+        
+        # put the save load, fullscreen buttons centered in the bottom frame:
+        self._save_button = tk.Button(bottom_frame, text="Save State", command=self.app.save_state,
+                                      font=LAYOUT['fonts']['buttons'],
+                                      bg=self._color_bg, fg=self._color_text)
+        self._save_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self._load_button = tk.Button(bottom_frame, text="Load State", command=self.app.load_state,
+                                        font=LAYOUT['fonts']['buttons'],
+                                        bg=self._color_bg, fg=self._color_text)
+        self._load_button.pack(side=tk.LEFT, padx=5, pady=5)
+
+        self._fullscreen_button = tk.Button(bottom_frame, text="Fullscreen", command=self.app.toggle_fullscreen,
+                                        font=LAYOUT['fonts']['buttons'],
+                                        bg=self._color_bg, fg=self._color_text)
+        self._fullscreen_button.pack(side=tk.LEFT, padx=5, pady=5)
+
     def set_selection(self, name):
         """
         Set the selected algorithm by name.
@@ -84,6 +129,7 @@ class SelectionPanel(Panel):
 
     def _on_selection_change(self, new_selection):
         """
+        Button callback. 
         if the pending algorithm is different, change the reset button color.
         Otherwise set it back to normal.
         """
@@ -117,6 +163,15 @@ class TestApp(object):
 
     def run(self):
         self.root.mainloop()
+
+    def save_state(self):
+        logging.info("Save state button pressed.")
+    def load_state(self):
+        logging.info("Load state button pressed.")
+    def reset_state(self):
+        logging.info("Reset state button pressed.")
+    def toggle_fullscreen(self):
+        logging.info("Toggle fullscreen button pressed.")
 
 
 if __name__ == "__main__":

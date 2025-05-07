@@ -43,3 +43,19 @@ class Panel(ABC):
         :param event: The resize event.
         """
         pass
+    
+    def _add_spacer(self, height=5):
+        """
+        Add a spacer label to the given frame.
+        :param frame:  The frame to add the spacer to.
+        :param height:  Height of the spacer in pixels.
+        """
+        label = tk.Label(self._frame, text="", bg=self._bg_color, font=('Helvetica', height))
+        label.pack(side=tk.TOP, fill=tk.X, pady=0)
+
+    def get_size(self):
+        """
+        Get the size of the panel.
+        :return: The size of the panel as a tuple (width, height).
+        """
+        return self._frame.winfo_width(), self._frame.winfo_height()    

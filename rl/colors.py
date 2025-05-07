@@ -3,6 +3,7 @@ MPL_ORANGE_RGB = 255, 127, 14  # O
 MPL_GREEN_RGB = 44, 160, 44    # Draw
 OFF_WHITE_RGB = 246, 238, 227  # Background
 DARK_NAVY_RGB = 0, 4, 51       # Lines
+DARK_RED_RGB = 179, 25, 66
 GREEN = 0, 255, 0
 RED = 255, 0, 0
 DARK_GRAY = 100,100,100 # background against state value images
@@ -16,6 +17,7 @@ import numpy as np
 COLOR_BG = OFF_WHITE_RGB
 COLOR_LINES = DARK_NAVY_RGB
 COLOR_TEXT = DARK_NAVY_RGB
+COLOR_URGENT = DARK_RED_RGB 
 
 # UI colors
 UI_COLORS = {'selected': NEON_RED,
