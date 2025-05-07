@@ -6,10 +6,8 @@ Sublcasses manage 3 panels:
     - state/value/update visualization.
 """
 
-from abc import ABC, abstractmethod, abstractstaticmethod
+from abc import ABC, abstractmethod
 import pickle
-import os
-import logging
 
 
 class DemoAlg(ABC):
@@ -22,10 +20,12 @@ class DemoAlg(ABC):
     """
 
     def __init__(self, app):
+        """
+        :param app: The main app object.
+        """
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
         self.app = app
-        self._init_frames()  # initialize the algorithm-specific panels
 
     @staticmethod
     def is_stub():
@@ -48,14 +48,7 @@ class DemoAlg(ABC):
         pass
 
     @abstractmethod
-    def _init_frames(self):
-        """
-        Initialize the algorithm-specific panels.
-        """
-        pass
-
-    @abstractmethod
-    def load_state( state_file):
+    def load_state(state_file):
         """
         Load the algorithm state from a file.
         :param app: The application object.
@@ -79,7 +72,15 @@ class DemoAlg(ABC):
         Reset the algorithm to its initial state.
         """
         pass
-    
+
+    @abstractmethod
+    def get_status(self):
+        """
+        Get the current status of the algorithm (for display in the status panel).
+        :return: list of (text, font) tuples to be displayed in the status panel.
+        """
+        pass
+
     def check_file_type(self, file):
         """
         Read the first pickled item, make sure it matches the algorithm name.
@@ -87,10 +88,10 @@ class DemoAlg(ABC):
         alg_name = pickle.load(file)
         if alg_name != self.get_name():
             raise ValueError(f"Load state name mismatch: expected {self.get_name()}, got {alg_name}")
-        
+
     def mark_file_type(self, file):
         """
         Write the algorithm name to the file.
         """
-        print("Marking file type: ", self.get_name())   
-        pickle.dump(self.get_name(), file)  
+        print("Marking file type: ", self.get_name())
+        pickle.dump(self.get_name(), file)

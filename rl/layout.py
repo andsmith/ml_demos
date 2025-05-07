@@ -20,6 +20,8 @@ LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
           'fonts': {'panel_title': ('Helvetica', 16),
                     'title': ('Helvetica', 14, 'bold'),
                     'default': ('Helvetica', 12),
+                    'status': ('Helvetica', 12),
+                    'status_bold': ('Helvetica', 12,'bold'),
                     'menu': ('Helvetica', 12, ),
                     'buttons': ('Helvetica', 11, 'bold'),
                     'flag': ('Helvetica', 13, 'bold')}}

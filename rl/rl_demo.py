@@ -20,11 +20,18 @@ from policy_grad import PolicyGradientsDemoAlg
 from layout import LAYOUT, WIN_SIZE
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
 from selection_panel import SelectionPanel
+from reinforcement_base import Environment
+from tic_tac_toe import Game
+from game_base import Mark, TERMINAL_REWARDS, get_reward
+from alg_panels import StatusControlPanel
 import pickle
+from baseline_players import HeuristicPlayer
 # Will display in this order:
 ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
-                      QLearningDemoAlg, PolicyGradientsDemoAlg]
+              QLearningDemoAlg, PolicyGradientsDemoAlg]
 
+AGENT_MARK = Mark.X  # The agent's mark in the game.
+OPPONENT_MARK = Mark.O  # The opponent's mark in the game.
 
 
 class RLDemoApp(object):
@@ -32,11 +39,13 @@ class RLDemoApp(object):
         self._init_tk()
         self._init_selection()  # This function will also set the current algorithm.
         alg_ind = self._get_alg_ind(self._selector.cur_alg_name)
-        self._alg = ALGORITHMS[alg_ind](self)
         self._fullscreen = False
         self.shutdown = False  # set to True to signal the app to exit
-
+        self._env = Environment(self._opp_policy, AGENT_MARK)
         self._pending_clears = []  # call these functions when a button is pressed (clear status msgs, etc.)
+        self._alg = ALGORITHMS[alg_ind](self, self._env)
+
+        self._init_alg_panels()
 
     def _init_tk(self):
         self.root = Tk()
@@ -46,6 +55,11 @@ class RLDemoApp(object):
     def _init_selection(self):
         self._selector = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'])
         self._selector.set_selection(name=ALGORITHMS[0].get_name())
+        # Selection panel defines opponent player so we can make the enviornment now
+        self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=self._selector.opp_n_rules)
+
+    def _init_alg_panels(self):
+        self._status_control_panel = StatusControlPanel(self, self._alg, ALGORITHMS, LAYOUT['frames']['control'])
 
     def toggle_fullscreen(self):
 
@@ -93,16 +107,25 @@ class RLDemoApp(object):
             with open(filename, 'rb') as f:
                 alg_name = pickle.load(f)
             alg_ind = self._get_alg_ind(alg_name)
-            self._alg = ALGORITHMS[alg_ind](self)
+            self._alg = ALGORITHMS[alg_ind](self, self._env)
             self._alg.load_state(filename)
             logging.info(f"State loaded from {filename}")
             # new algorithm might be a different type, so inform the selection panel:
             print("Changing selector to loaded type: ", alg_name)
             self._selector.set_selection(name=alg_name)
 
-    def change_alg(self, alg_name):  
+    def change_alg(self, alg_name):
         alg_ind = self._get_alg_ind(alg_name)
-        self._alg = ALGORITHMS[alg_ind](self)
+        self._alg = ALGORITHMS[alg_ind](self, self._env)
+
+    def set_opponent(self, n_rules):
+        """
+        Set the opponent policy to a new heuristic player with the given number of rules.
+        NOTE: This only gets called as part of a the init or a reset.
+        :param n_rules: The number of rules for the opponent policy.
+        """
+        self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=n_rules)
+        self._env.set_opp_policy(self._opp_policy)
 
     def reset_state(self):
         logging.info("Resetting demo state.")

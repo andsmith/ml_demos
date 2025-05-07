@@ -14,8 +14,6 @@ class DynamicProgDemoAlg(DemoAlg):
     def get_str():
         return "(PI) Dynamic Programming"
 
-    def _init_frames(self):
-        pass
 
     def load_state(self, state_file):
         pass
@@ -40,8 +38,6 @@ class InPlaceDPDemoAlg(DynamicProgDemoAlg):
     def get_str():
         return "(PI) In-Place Dynamic Programming"
 
-    def _init_frames(self):
-        pass
 
     @staticmethod
     def is_stub():

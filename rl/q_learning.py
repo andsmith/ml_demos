@@ -10,9 +10,6 @@ class QLearningDemoAlg(DemoAlg):
     def get_str():
         return "Q-learning"
 
-    def _init_frames(self):
-        pass
-
     def load_state(self, state_file):
         pass
 

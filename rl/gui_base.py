@@ -21,6 +21,8 @@ class Panel(ABC):
         self.app = app
         self._bbox_rel = bbox_rel
         self._bg_color = tk_color_from_rgb(COLOR_BG)
+        self._text_color = tk_color_from_rgb(COLOR_TEXT)
+        self._line_color = tk_color_from_rgb(COLOR_LINES)
         self._frame = tk.Frame(master=self.app.root, bg=self._bg_color)
         self._frame.place(relx=self._bbox_rel['x_rel'][0], rely=self._bbox_rel['y_rel'][0],
                           relwidth=self._bbox_rel['x_rel'][1] - self._bbox_rel['x_rel'][0],
@@ -28,6 +30,7 @@ class Panel(ABC):
         # set resize callback:
         self._frame.bind("<Configure>", self._on_resize)
         self._initialized = False
+        self._init_widgets()
 
     @abstractmethod
     def _init_widgets(self):

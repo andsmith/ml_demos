@@ -26,7 +26,7 @@ class Environment(object):
     This class shoehorns the game into a Markov Decision Process (MDP) by assuming the opponent is a stochastic policy.
     """
 
-    def __init__(self, opponent_policy, player_mark=Mark.X):
+    def __init__(self, opponent_policy=None, player_mark=Mark.X):
         """
         :param opponent_policy:  policy of the opponent, Policy object initialized with the opposite player mark.  Will be 
             used to define the "environment" for the agent.
@@ -65,6 +65,13 @@ class Environment(object):
 
         # Filter out zero probability moves
         return opp_moves
+
+    def set_opp_policy(self, policy):
+        """
+        Set the opponent's policy to a new policy.
+        :param policy: The new opponent policy.
+        """
+        self.pi_opp = policy
 
     def _state_valid(self, state):
         """

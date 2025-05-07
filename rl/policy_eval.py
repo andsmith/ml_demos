@@ -3,6 +3,8 @@ from enum import IntEnum
 import pickle
 from util import get_clobber_free_filename
 import logging
+import layout
+from game_base import Mark, TERMINAL_REWARDS, get_reward
 
 
 class PolicyImprovementPhases(IntEnum):
@@ -12,7 +14,7 @@ class PolicyImprovementPhases(IntEnum):
 
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, gamma=0.9):
+    def __init__(self, app, env,  gamma=0.9):
         """
         Initialize the algorithm with the app, GUI, environment, and discount factor.
 
@@ -22,19 +24,61 @@ class PolicyEvalDemoAlg(DemoAlg):
         :param gamma: The discount factor (default is 0.9).
         """
         super().__init__(app=app)
+        self._env = env
+        self.updatable_states = self._env.get_nonterminal_states()
+        self.terminal_states = self._env.get_terminal_states()
+        self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        self._delta_v_tol = 1e-6
         self.pi_seed = None
         self.gamma = gamma
         self.reset_state()
+        logging.info("PolicyEvalDemoAlg initialized.")
 
     def reset_state(self):
+
+        # start by learning v(s) for this policy:
+        self.policy = self.pi_seed
+
+        # Policy Improvement (PI) state:
         self.pi_iter = 0
         self.pi_phase = PolicyImprovementPhases.POLICY_EVAL
-        self.pe_iter = 0  # epoch
-        self.next_state_ind = 0  # index of the next state to evaluate
+        self.pi_converged = False
 
+        # Policy evaluation state (part of a PI iteration):
+        self.pe_iter = 0  # epoch
+        self.pe_converged = False
+        self.next_state_ind = 0  # index of the next state to evaluate
+        self.max_delta_vs = 0.0
+
+        # Policy optimization state:
+        self.n_changes = 0
+
+        # tables to update:
         self.values = {}
         self.next_values = {}
-        self.policy = self.pi_seed
+
+    def get_status(self):
+        font_default = layout.LAYOUT['fonts']['status']
+        font_bold = layout.LAYOUT['fonts']['status_bold']
+
+        if self.pi_phase == PolicyImprovementPhases.POLICY_EVAL:
+            status = [("PI Phase: Policy Evaluation (PE)", font_bold),
+                      ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
+                      ("PE Epoch: {}".format(self.pe_iter), font_default),
+                      ("PE State: {} of {}".format(self.next_state_ind+1, len(self.updatable_states)), font_default),
+                      ("Max Delta Vs: %.3f (max %.1e)"%(self.max_delta_vs, self._delta_v_tol), font_default)]
+            if self.pe_converged:
+                status += [(" Converged in %i iterations" % (self._pe_iter+1,), font_bold)]
+            else:
+                status += [("", font_default),]
+        else:
+            status += [("PI Phase: Policy Optimization (PO)", font_bold),
+                       ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
+                       ("", font_default),
+                       ("PO State: {} of {}".format(self.next_state_ind+1, len(self.updatable_states)), font_default),
+                       ("N policy changes: {}".format(self.policy), font_default)]
+
+        return status
 
     @staticmethod
     def get_name():
@@ -43,9 +87,6 @@ class PolicyEvalDemoAlg(DemoAlg):
     @staticmethod
     def get_str():
         return "(PI) Policy Evaluation"
-
-    def _init_frames(self):
-        pass
 
     @staticmethod
     def is_stub():
@@ -85,7 +126,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
-    def __init__(self, app, gamma=0.9):
+    def __init__(self, app, env, gamma=0.9):
         """
         Initialize the algorithm with the app, GUI, environment, and discount factor.
 
@@ -94,7 +135,7 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
         :param env: The environment object.
         :param gamma: The discount factor (default is 0.9).
         """
-        super().__init__(app=app)
+        super().__init__(app=app, env=env)
         self.gamma = gamma
 
     @staticmethod

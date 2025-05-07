@@ -10,7 +10,6 @@ from gui_base import Panel
 from layout import LAYOUT, FRAME_TITLES
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT, COLOR_URGENT
 from util import tk_color_from_rgb
-from baseline_players import HeuristicPlayer
 
 
 class SelectionPanel(Panel):
@@ -28,10 +27,9 @@ class SelectionPanel(Panel):
         :param app: The main application object.
         :param alg_types: List of algorithm types to display.
         """
-        super().__init__(app=app, bbox_rel=bbox_rel)
         self._alg_types = alg_types
         self._bbox_rel = bbox_rel
-        self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}
+        self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}    
         self.cur_alg_name = alg_types[0].get_name()  # selected algorithm type
         self._pending_alg_name = None  # algorithm to be started after "RESET" button is pressed
 
@@ -42,7 +40,7 @@ class SelectionPanel(Panel):
         self.opp_n_rules = 2  # number of rules for heuristic opponent(0-6)
         self._pending_opp_n_rules = None
 
-        self._init_widgets()
+        super().__init__(app=app, bbox_rel=bbox_rel)
 
     def _init_widgets(self):
         self._init_title()
@@ -212,6 +210,7 @@ class SelectionPanel(Panel):
             self.opp_n_rules = self._pending_opp_n_rules
             self._pending_opp_n_rules = None
             self._reset_msg.pack_forget()
+            self.app.set_opponent(self.opp_n_rules)
 
     def _on_resize(self, event):
         return super()._on_resize(event)
