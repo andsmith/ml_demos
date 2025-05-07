@@ -7,7 +7,7 @@ import logging
 import tkinter as tk
 import numpy as np
 from gui_base import Panel
-from layout import LAYOUT, FRAME_TITLES
+from layout import LAYOUT
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT, COLOR_URGENT
 from util import tk_color_from_rgb
 
@@ -29,7 +29,7 @@ class SelectionPanel(Panel):
         """
         self._alg_types = alg_types
         self._bbox_rel = bbox_rel
-        self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}    
+        self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}
         self.cur_alg_name = alg_types[0].get_name()  # selected algorithm type
         self._pending_alg_name = None  # algorithm to be started after "RESET" button is pressed
 
@@ -55,10 +55,6 @@ class SelectionPanel(Panel):
                                font=LAYOUT['fonts']['panel_title'],
                                bg=self._color_bg, fg=self._color_text)
         self._title.pack(pady=5)
-
-        # Add dark line below the title:
-        self._title_line = tk.Frame(self._frame, height=2, width=100, bg=self._color_lines)
-        self._title_line.pack(side=tk.TOP)
         self._add_spacer()
 
     def _init_selection_buttons(self):
@@ -84,12 +80,6 @@ class SelectionPanel(Panel):
         """
         Create the demo buttons for saving, loading, and resetting the state.
         """
-        # Add dark line below the radio buttons:
-        # button_line = tk.Frame(self._frame, height=2, width=150, bg=self._color_lines)
-        # button_line.pack(side=tk.TOP, pady=8)
-        #self._add_spacer(10)
-
-
         bottom_frame = tk.Frame(self._frame, bg=self._color_bg)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=5, pady=5)
 
@@ -115,9 +105,8 @@ class SelectionPanel(Panel):
                                    bg=self._color_bg, fg=self._color_urgent)
         self._reset_msg.pack(side=tk.LEFT, padx=5, pady=5)
         self._reset_msg.pack_forget()  # hide the message
-        
 
-        self._opponent_slider = tk.Scale(bottom_frame, from_=0, to=6, orient=tk.HORIZONTAL,showvalue=0,
+        self._opponent_slider = tk.Scale(bottom_frame, from_=0, to=6, orient=tk.HORIZONTAL, showvalue=0,
                                          label="Opponent: Heuristic(%i)" % self.opp_n_rules,
                                          bg=self._color_bg, fg=self._color_text, command=self._update_opp_n_rules,
                                          font=LAYOUT['fonts']['menu'], length=250)
@@ -149,14 +138,14 @@ class SelectionPanel(Panel):
 
         if pending_opp_n_rules != self.opp_n_rules:
             self._pending_opp_n_rules = pending_opp_n_rules
-            # set message to show the new value 
+            # set message to show the new value
             self._reset_msg.config(text="RESET to apply")
             self._reset_msg.pack()
         else:
             self._pending_opp_n_rules = None
             self._reset_msg.pack_forget()
         self._opponent_slider.config(label="Opponent: HeuristicPlayer(%i)" % pending_opp_n_rules)
-        
+
     def set_selection(self, name):
         """
         Set the selected algorithm by name.
@@ -184,8 +173,8 @@ class SelectionPanel(Panel):
         else:
             self._reset_msg.pack_forget()
 
-    def refresh_title(self):        
-        self._title.config(text= (self._algs_by_name[self.cur_alg_name].get_str()))
+    def refresh_title(self):
+        self._title.config(text=(self._algs_by_name[self.cur_alg_name].get_str()))
 
     def _proc_reset(self):
         """
@@ -228,7 +217,7 @@ class TestApp(object):
         from q_learning import QLearningDemoAlg
         from policy_grad import PolicyGradientsDemoAlg
 
-        ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg ,
+        ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
                       QLearningDemoAlg, PolicyGradientsDemoAlg]
 
         self.win_size = WIN_SIZE

@@ -47,14 +47,15 @@ class Panel(ABC):
         """
         pass
     
-    def _add_spacer(self, height=5):
+    def _add_spacer(self, height=5, frame=None):
         """
         Add a spacer label to the given frame.
         :param frame:  The frame to add the spacer to.
         :param height:  Height of the spacer in pixels.
         """
-        label = tk.Label(self._frame, text="", bg=self._bg_color, font=('Helvetica', height))
-        label.pack(side=tk.TOP, fill=tk.X, pady=0)
+        frame = self._frame if frame is None else frame 
+        label = tk.Label(frame, text="", bg=self._bg_color, font=('Helvetica', height))
+        label.pack(side=tk.LEFT, fill=tk.X, pady=0)
 
     def get_size(self):
         """
@@ -62,3 +63,4 @@ class Panel(ABC):
         :return: The size of the panel as a tuple (width, height).
         """
         return self._frame.winfo_width(), self._frame.winfo_height()    
+    

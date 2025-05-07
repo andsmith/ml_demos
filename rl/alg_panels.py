@@ -8,9 +8,11 @@ import numpy as np
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
 from gui_base import Panel
 from util import tk_color_from_rgb, get_clobber_free_filename
-from layout import LAYOUT, FRAME_TITLES, WIN_SIZE
+from layout import LAYOUT, WIN_SIZE
 import logging
 
+TITLE_INDENT = 0
+ITEM_INDENT = 20
 class StatusControlPanel(Panel):
     """
     Status panel for displaying the current status of the algorithm and buttons for controlling it.
@@ -23,42 +25,47 @@ class StatusControlPanel(Panel):
         """
         self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}    
         self._alg = alg
+        self._run_control_options = []
         super().__init__(app, bbox_rel)
 
     def _init_widgets(self):
-        print("WDIDGETS")
-        self._init_title()
-        self._init_status_frame()  # top half of the panel
-        #self._init_run_control_frame() # bottom left half of the panel
-        #self._init_button_frame() # bottom right half of the panel
+
+        # init three frames:
+        self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=0.5)
+        self._run_control_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._run_control_frame.place(relx=0, rely=0.5, relwidth=0.5, relheight=0.5)
+        self._button_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._button_frame.place(relx=0.5, rely=0.5, relwidth=0.5, relheight=0.5)
+
+        self._init_status()  # top half of the panel
+        self._init_run_control() # bottom left half of the panel
+        self._init_buttons() # bottom right half of the panel
 
     def _init_title(self):
         """
         Create the title label for the selection panel.
         """
-        self._title = tk.Label(self._frame, text=FRAME_TITLES['control'],
-                               font=LAYOUT['fonts']['panel_title'],
-                               bg=self._bg_color, fg=self._text_color)
-        self._title.pack(pady=5)
-
         # Add dark line below the title:
-        self._title_line = tk.Frame(self._frame, height=2, width=100, bg=self._line_color)
-        self._title_line.pack(side=tk.TOP)
+        #self._title_line = tk.Frame(self._frame, height=2, width=100, bg=self._line_color)
+        #self._title_line.pack(side=tk.TOP)
         self._add_spacer()
     
-    def _init_status_frame(self):
+    def _init_status(self):
         """
         Goes at the top of the status panel, one line per status message.
         """
+        status_title = tk.Label(self._status_frame, text="Status",
+                               font=LAYOUT['fonts']['title'],
+                               bg=self._bg_color, fg=self._text_color, anchor="w", justify="left")
+        status_title.pack(side=tk.TOP,fill=tk.X, padx=TITLE_INDENT, pady=4)
+
         test_status = self._alg.get_status()
-        print(test_status)
-        self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
-        self._status_frame.pack(side=tk.TOP, fill=tk.X, padx=0, pady=0)
-        
+
         self._status_labels = []  # list of status labels, aligned on the left
         for i, (text, font) in enumerate(test_status):
             label = tk.Label(self._status_frame, text=text, bg=self._bg_color, font=font, anchor="w", justify="left")
-            label.pack(side=tk.TOP, fill=tk.X, padx=0, pady=0)
+            label.pack(side=tk.TOP, fill=tk.X, padx=ITEM_INDENT, pady=0)
             self._status_labels.append(label)
 
     def refresh_status(self):
@@ -70,15 +77,63 @@ class StatusControlPanel(Panel):
             self._status_labels[i].config(text=text, font=font)
         # TODO: Add/shrink labels as needed.
 
-    def set_text(self, text):
-        """
-        Set the text of the status label.
-        :param text: The text to set.
-        """
-        self._label.config(text=text)   
-
     def _on_resize(self, event):
         return super()._on_resize(event)
+    
+    def _init_run_control(self):
+        """
+        Below status, left half of the panel.
+        """
+        breakpoint_label = tk.Label(self._run_control_frame, text="Breakpoints", bg=self._bg_color, font=LAYOUT['fonts']['title'], anchor="w", justify="left")
+        breakpoint_label.pack(side=tk.TOP,fill=tk.X, padx=TITLE_INDENT, pady=4)
+
+        self._add_spacer(frame=self._run_control_frame)
+        self._run_control_frame.grid_rowconfigure(0, weight=1)  # make the bottom frame fill the remaining space
+        self._run_control_frame.grid_columnconfigure(0, weight=1)
+        self._reset_run_control_options()
+
+    def _reset_run_control_options(self):
+        """
+        Initializing or algorithm changed, look up options, will be ordered dict of (key, string) pairs.
+        The algorithm will send its updates labeled with the key.
+        The strings for the options will display with check boxes.
+        If there are currently the wrong number of options remove/add them. 
+        """
+        alg_options = self._alg.get_run_control_options()
+        # remove old options:
+        for option in self._run_control_options:
+            option[0].destroy()
+        self._run_control_options = []
+
+        # add new options:
+        for key, text in alg_options.items():
+            var = tk.IntVar()
+            check = tk.Checkbutton(self._run_control_frame, text=text, variable=var, bg=self._bg_color,
+                                    font=LAYOUT['fonts']['default'], anchor="w", justify="left")
+            check.pack(side=tk.TOP, fill=tk.X, padx=ITEM_INDENT, pady=0)
+            self._run_control_options.append((check, var, key))
+
+    def _init_buttons(self):
+        """
+        Below status, right half of the panel.
+        """
+        self._add_spacer(20,frame=self._button_frame)
+        # "Clear breakpoints" button:
+        self._clear_button = tk.Button(self._button_frame, text="Clear Breakpoints",
+                                    font=LAYOUT['fonts']['buttons'],bg=self._bg_color,
+                                    command=self._clear_breakpoints)
+        self._clear_button.pack(side=tk.TOP, fill=tk.X, padx=4, pady=10)
+
+        # "Go/Stop" button
+        self._go_button = tk.Button(self._button_frame, text="Go", 
+                                    font=LAYOUT['fonts']['buttons'],bg=self._bg_color,
+                                    command=self._go_stop, padx=10)
+        self._go_button.pack(side=tk.TOP, padx=4, pady=10)
+
+    def _clear_breakpoints(self):
+        pass
+    def _go_stop(self):
+        pass
 
 class TestApp(object):
     """

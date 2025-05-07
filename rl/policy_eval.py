@@ -5,7 +5,7 @@ from util import get_clobber_free_filename
 import logging
 import layout
 from game_base import Mark, TERMINAL_REWARDS, get_reward
-
+from collections import OrderedDict
 
 class PolicyImprovementPhases(IntEnum):
     POLICY_EVAL = 0
@@ -124,6 +124,16 @@ class PolicyEvalDemoAlg(DemoAlg):
             }, f)
         logging.info(f"Saved state to {state_filename}")
 
+    def get_run_control_options(self):
+        """
+        Get the run control options for the algorithm.
+        :return: A dictionary of run control options.
+        """
+        rco = OrderedDict()
+        rco['state-update'] = "state update"
+        rco['epoch-update'] = "epoch update"
+        rco['policy-update'] = "policy update"
+        return rco
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def __init__(self, app, env, gamma=0.9):

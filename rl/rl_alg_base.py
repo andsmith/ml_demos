@@ -41,6 +41,16 @@ class DemoAlg(ABC):
 
     @staticmethod
     @abstractmethod
+    def get_run_control_options():
+        """
+        Return a list of options to be used in the run-control panel.
+        :returns: list of (option-key, option-string tuples).  Keys are for 
+        references w/the gui, strings are for displaying in checkboxes.
+        """
+        pass
+
+    @staticmethod
+    @abstractmethod
     def get_str():
         """
         Return a string to be used to display this algorithm in the selection frame.

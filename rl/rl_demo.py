@@ -44,6 +44,7 @@ class RLDemoApp(object):
         self._env = Environment(self._opp_policy, AGENT_MARK)
         self._pending_clears = []  # call these functions when a button is pressed (clear status msgs, etc.)
         self._alg = ALGORITHMS[alg_ind](self, self._env)
+        self.paused=True
 
         self._init_alg_panels()
 
