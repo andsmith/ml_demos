@@ -55,6 +55,7 @@ class SelectionPanel(Panel):
         # Add dark line below the title:
         self._title_line = tk.Frame(self._frame, height=2, width=100, bg=self._color_lines)
         self._title_line.pack(side=tk.TOP)
+        self._add_spacer()
 
     def _init_selection_buttons(self):
         """
@@ -63,11 +64,13 @@ class SelectionPanel(Panel):
         self._selection_buttons = {}
         for alg_ind, alg_type in enumerate(self._alg_types):
             alg_name, alg_str = alg_type.get_name(), alg_type.get_str()
+            avail =not alg_type.is_stub()
+            print("Algorithm %s available: %s"%( alg_name, avail)    )
             self._selection_buttons[alg_name] = tk.Radiobutton(self._frame, text=alg_str,
                                                                variable=self._cur_alg_name,
                                                                value=alg_name,
                                                                command=lambda m=alg_name: self._on_selection_change(m),
-                                                               state=tk.NORMAL,  # set to disabled if unimplemented
+                                                               state=tk.NORMAL  if avail else tk.DISABLED,
                                                                font=LAYOUT['fonts']['menu'],
                                                                bg=self._color_bg,
                                                                )
@@ -81,12 +84,12 @@ class SelectionPanel(Panel):
         Create the demo buttons for saving, loading, and resetting the state.
         """
         # Add dark line below the radio buttons:
-        button_line = tk.Frame(self._frame, height=2, width=150, bg=self._color_lines)
-        button_line.pack(side=tk.TOP, pady=8)
-        #self._add_spacer()
+        #button_line = tk.Frame(self._frame, height=2, width=150, bg=self._color_lines)
+        #button_line.pack(side=tk.TOP, pady=8)
+        self._add_spacer(10)
 
         # Add the reset button directly below the radio buttons:
-        self._reset_button = tk.Button(self._frame, text="Reset State", command=self.app.toggle_fullscreen,
+        self._reset_button = tk.Button(self._frame, text="Reset State", command=self._proc_reset,
                                        font=LAYOUT['fonts']['buttons'],
                                        bg=self._color_bg, fg=self._color_text)
         self._reset_button.pack(side=tk.TOP, pady=5, padx=25)
@@ -96,7 +99,7 @@ class SelectionPanel(Panel):
                                    font=LAYOUT['fonts']['default'],    
                                       bg=self._color_bg, fg=self._color_urgent)
         self._reset_msg.pack(side=tk.TOP, pady=5, padx=25)
-        self._reset_msg.lower()  # hide the message
+        self._reset_msg.pack_forget()  # hide the message
 
         bottom_frame = tk.Frame(self._frame, bg=self._color_bg)
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.Y, padx=5, pady=5)
@@ -134,7 +137,26 @@ class SelectionPanel(Panel):
         Otherwise set it back to normal.
         """
         self._pending_alg_name = new_selection if new_selection != self._cur_alg_name else None
-        print(f"New pending selection: {self._pending_alg_name}.")
+        print(f"New pending selected algorithm: {self._pending_alg_name}.")
+        if self._pending_alg_name is not None:
+            self._reset_msg.pack() # show the message
+        else:
+            self._reset_msg.pack_forget()
+
+
+    def _proc_reset(self):
+        """
+        Process the reset button click.
+        If the pending algorithm is different from the current one, set it to the current one.
+        Otherwise, do nothing.
+        """
+        if self._pending_alg_name is not None:
+            logging.info("Resetting selected demo to %s", self._pending_alg_name)
+            self._cur_alg_name = self._pending_alg_name
+            self._pending_alg_name = None
+            self._reset_msg.pack_forget()  # hide the message
+            self.app.reset_state()
+
 
     def _on_resize(self, event):
         return super()._on_resize(event)
@@ -153,6 +175,7 @@ class TestApp(object):
         ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg]
 
         self.win_size = WIN_SIZE
+        self._fullscreen = False
         self.root = tk.Tk()
         self.root.geometry(f"{self.win_size[0]}x{self.win_size[1]}")
         self.root.title("Selection Panel Test")
@@ -174,6 +197,22 @@ class TestApp(object):
         logging.info("Toggle fullscreen button pressed.")
 
 
+    def toggle_fullscreen(self):
+
+        self._fullscreen = not self._fullscreen
+        global geom
+        if self._fullscreen:
+            geom = self.root.geometry()
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            self.root.overrideredirect(True)
+            self.root.geometry('%dx%d+0+0' % (w, h))
+
+        else:
+            self.root.overrideredirect(False)
+            self.root.geometry(geom)
+
+            
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     app = TestApp()

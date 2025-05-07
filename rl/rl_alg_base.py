@@ -19,11 +19,14 @@ class DemoAlg(ABC):
     """
 
     def __init__(self, app):
-        self.app = app
-        self.is_stub=True  # will be grayed out in algorithm selection frame
-        
+        if self.is_stub():
+            raise RuntimeError("This is a stub class. It should not be instantiated directly.")
+        self.app = app        
         self._init_frames()  # initialize the algorithm-specific panels
-        
+
+    @staticmethod
+    def is_stub():
+        return True  # Override and return False in subclasses to indicate that this can be run in the demo app.
             
     @staticmethod
     @abstractmethod

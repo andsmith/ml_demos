@@ -29,6 +29,7 @@ class RLDemoApp(object):
         self._init_selection()  # This function will also set the current algorithm.
         self._init_algorithm()  # And this starts its frames.
         self._alg = None # current DemoAlg object
+        self._fullscreen = False
 
     def _init_tk(self):
         self.root = Tk()
@@ -38,6 +39,21 @@ class RLDemoApp(object):
     def _init_selection(self):
         self._selector = SelectionPanel(self, ALGORITHMS)
         self._selector.set_selection(name=ALGORITHMS[0].name)
+
+    def toggle_fullscreen(self):
+
+        self._fullscreen = not self._fullscreen
+        global geom
+        if self._fullscreen:
+            geom = self.root.geometry()
+            w = self.root.winfo_screenwidth()
+            h = self.root.winfo_screenheight()
+            self.root.overrideredirect(True)
+            self.root.geometry('%dx%d+0+0' % (w, h))
+
+        else:
+            self.root.overrideredirect(False)
+            self.root.geometry(geom)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
