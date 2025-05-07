@@ -84,7 +84,7 @@ class StatusControlPanel(Panel):
         """
         Below status, left half of the panel.
         """
-        breakpoint_label = tk.Label(self._run_control_frame, text="Breakpoints", bg=self._bg_color, font=LAYOUT['fonts']['title'], anchor="w", justify="left")
+        breakpoint_label = tk.Label(self._run_control_frame, text="Checkpoints", bg=self._bg_color, font=LAYOUT['fonts']['title'], anchor="w", justify="left")
         breakpoint_label.pack(side=tk.TOP,fill=tk.X, padx=TITLE_INDENT, pady=4)
 
         self._add_spacer(frame=self._run_control_frame)
@@ -110,8 +110,10 @@ class StatusControlPanel(Panel):
             var = tk.IntVar()
             check = tk.Checkbutton(self._run_control_frame, text=text, variable=var, bg=self._bg_color,
                                     font=LAYOUT['fonts']['default'], anchor="w", justify="left")
-            check.pack(side=tk.TOP, fill=tk.X, padx=ITEM_INDENT, pady=0)
+            check.pack(side=tk.TOP, fill=tk.X, padx=10, pady=0)
             self._run_control_options.append((check, var, key))
+            # select all stops
+            var.set(1)
 
     def _init_buttons(self):
         """
@@ -119,16 +121,16 @@ class StatusControlPanel(Panel):
         """
         self._add_spacer(20,frame=self._button_frame)
         # "Clear breakpoints" button:
-        self._clear_button = tk.Button(self._button_frame, text="Clear Breakpoints",
+        self._clear_button = tk.Button(self._button_frame, text="Clear Stops",
                                     font=LAYOUT['fonts']['buttons'],bg=self._bg_color,
-                                    command=self._clear_breakpoints)
-        self._clear_button.pack(side=tk.TOP, fill=tk.X, padx=4, pady=10)
+                                    command=self._clear_breakpoints, padx=7, pady=5)
+        self._clear_button.pack(side=tk.TOP, pady=10)
 
         # "Go/Stop" button
         self._go_button = tk.Button(self._button_frame, text="Go", 
                                     font=LAYOUT['fonts']['buttons'],bg=self._bg_color,
-                                    command=self._go_stop, padx=10)
-        self._go_button.pack(side=tk.TOP, padx=4, pady=10)
+                                    command=self._go_stop, padx=7, pady=5)
+        self._go_button.pack(side=tk.TOP, pady=10)
 
     def _clear_breakpoints(self):
         pass

@@ -1,8 +1,8 @@
 
 
-MID_X = 0.4  # "state-tabs" frame (sate/value/update images) to the right of this point
+MID_X = 0.35  # "state-tabs" frame (sate/value/update images) to the right of this point
 MID_Y = 0.4  # "step-visualization" frame below this point
-HALF_MID_X = 0.19
+HALF_MID_X = 0.18
 
 LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
                                    'y_rel': (0.0, MID_Y)},
@@ -17,16 +17,15 @@ LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
 
           'margin_px': 5,
 
-          'fonts': {'panel_title': ('Helvetica', 16),
-                    'title': ('Helvetica', 14, 'bold'),
+          'fonts': {'panel_title': ('Helvetica', 16,'underline'),
+                    'title': ('Helvetica', 16,'underline'),
                     'default': ('Helvetica', 12),
-                    'status': ('Helvetica', 12),
-                    'status_bold': ('Helvetica', 12,'bold'),
+                    'status': ('Helvetica', 13),
+                    'status_bold': ('Helvetica', 13,'bold'),
                     'menu': ('Helvetica', 12, ),
                     'buttons': ('Helvetica', 11, 'bold'),
+                    'big_button': ('Helvetica', 14, 'bold'),
                     'flag': ('Helvetica', 13, 'bold')}}
 
-
-FRAME_TITLES = {'control': 'Status / Controls', }  # Algorithms set other frames' titles.
 
 WIN_SIZE = (1920, 990)
