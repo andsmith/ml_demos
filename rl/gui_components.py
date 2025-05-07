@@ -58,14 +58,8 @@ from color_scaler import ColorScaler
 
 from threading import Lock, get_ident
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
+from util import tk_color_from_rgb
 
-
-def tk_color_from_rgb(rgb):
-    """translates an rgb tuple of int to a tkinter friendly color code
-       https://stackoverflow.com/questions/51591456/can-i-use-rgb-in-tkinter
-    """
-    r, g, b = rgb
-    return f'#{r:02x}{g:02x}{b:02x}'
 
 
 STATUS_W = 0.17  # Horizontal placement of first column.

@@ -2,6 +2,15 @@ import cv2
 import numpy as np
 import logging
 
+
+def tk_color_from_rgb(rgb):
+    """translates an rgb tuple of int to a tkinter friendly color code
+       https://stackoverflow.com/questions/51591456/can-i-use-rgb-in-tkinter
+    """
+    r, g, b = rgb
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
 def get_annulus_polyline(r_outer, r_inner, n_points=50):
     """
     Return a list of points that form a polyline of an annulus.
@@ -11,34 +20,47 @@ def get_annulus_polyline(r_outer, r_inner, n_points=50):
     :return: list of (x, y) points
     """
     # left-right symmetry w/even number of points:
-    n_points = n_points +1 if (n_points % 2) == 1 else n_points  
+    n_points = n_points + 1 if (n_points % 2) == 1 else n_points
 
     angles = np.linspace(0, 2*np.pi, n_points+1)
     x_outer = r_outer*np.cos(angles)
     y_outer = r_outer*np.sin(angles)
     x_inner = r_inner*np.cos(angles[::-1])
     y_inner = r_inner*np.sin(angles[::-1])
-    
+
     ring_x = np.concatenate([x_outer, x_inner[::-1]])
     ring_y = np.concatenate([y_outer, y_inner[::-1]])
     return list(zip(ring_x, ring_y))
 
-                
+
+def frame_bbox_from_rel(window_size, rel_bbox):
+    """
+    Convert a relative bounding box to an absolute one.
+    :param window_size: tuple (width, height) of the window
+    :param rel_bbox: dict(x=(x0, x1), y=(y0, y1)) with relative coordinates (0-1)
+    :return: dict(x=(x0, x1), y=(y0, y1)) with absolute coordinates (ints)
+    """
+    abs_bbox = {}
+    abs_bbox['x'] = (int(rel_bbox['x'][0] * window_size[0]), int(rel_bbox['x'][1] * window_size[0]))
+    abs_bbox['y'] = (int(rel_bbox['y'][0] * window_size[1]), int(rel_bbox['y'][1] * window_size[1]))
+    return abs_bbox
+
+
 def show_annulus():
     SHIFT = 6
     SHIFT_M = 1 << SHIFT
     points = get_annulus_polyline(20, 15, 100)
     img = np.zeros((50, 50, 3), dtype=np.uint8) + 255
     offset = np.array([25, 25])
-    points = np.array((points + offset.T) *SHIFT_M , dtype=np.int32).reshape((-1, 1, 2))
+    points = np.array((points + offset.T) * SHIFT_M, dtype=np.int32).reshape((-1, 1, 2))
     cv2.fillPoly(img, [points], color=(255, 0, 0), lineType=cv2.LINE_AA, shift=SHIFT)
 
     img_r = img.copy()
-    img_r[img[:,:,0] == 255] = [0, 0, 255]
+    img_r[img[:, :, 0] == 255] = [0, 0, 255]
 
-    img_both = (img + img_r[:,::-1,:]) // 2
+    img_both = (img + img_r[:, ::-1, :]) // 2
     cv2.imshow('Annulus w/mirror image.', img_both)
-    cv2.waitKey (0)
+    cv2.waitKey(0)
 
     cv2.imshow('Annulus', img)
     cv2.waitKey(0)
@@ -82,4 +104,3 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, max_f
 
 if __name__ == '__main__':
     show_annulus()
-
