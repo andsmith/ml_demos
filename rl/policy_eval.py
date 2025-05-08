@@ -23,7 +23,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         :param env: The environment object.
         :param gamma: The discount factor (default is 0.9).
         """
-        super().__init__(app=app)
+        super().__init__(app=app, state_panel=None)
         self._env = env
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
@@ -135,6 +135,13 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['policy-update'] = "policy update"
         return rco
     
+    def get_state_image_kinds(self):
+        tabs =OrderedDict()
+        tabs['states-image']= 'States '
+        tabs['values-image'] = 'Values:  V(s) '
+        tabs['updates-image'] = "Updates: V'(s) "
+        return tabs
+        
     def _start(self):
         pass
     
@@ -191,3 +198,9 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
                 'policy': self.policy
             }, f)
         logging.info(f"Saved state to {state_filename}")
+
+    def get_state_image_kinds(self):
+        tabs =OrderedDict()
+        tabs['states-image']= 'States '
+        tabs['values-image'] = 'Values:  V(s) '
+        return tabs

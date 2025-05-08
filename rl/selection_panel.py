@@ -227,7 +227,9 @@ class TestApp(object):
         self.root.title("Selection Panel Test")
 
         self.selection_panel = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'])
-        self.selection_panel.set_selection(name=ALGORITHMS[0].get_name())
+        first_alg_name = ALGORITHMS[0].get_name()
+        print("$$$$$$$$$$$$$$$$$$$First algorithm name: ", first_alg_name)
+        self.selection_panel.set_selection(first_alg_name)
 
     def run(self):
         self.root.mainloop()

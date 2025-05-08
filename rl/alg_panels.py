@@ -7,6 +7,7 @@ from policy_eval import PolicyEvalDemoAlg
 from collections import OrderedDict
 import tkinter as tk
 import tkinter.ttk as ttk
+from PIL import Image, ImageTk
 import numpy as np
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
 from gui_base import Panel
@@ -110,6 +111,12 @@ class StatusControlPanel(Panel):
         """
         options = {key: (var.get() == 1) for _, var, key in self._run_control_options}
         return options
+    
+    
+    def change_run_control_settings(self, run_control):
+        for _, var, key in self._run_control_options:
+            var.set(1 if run_control[key] else 0)
+
 
     def _reset_run_control_options(self):
         """
@@ -171,23 +178,32 @@ class StatePanel(Panel):
     Tabbed interface, queries algorithm for details.
     """
 
-    def __init__(self, app, bbox_rel, tab_info=None, resize_callback=None):
+    def __init__(self, app, bbox_rel, alg=None):
         """
         :param app: The application object.
         :param bbox_rel: The bounding box for the panel, relative to the parent frame.
-        :param tab_info:  dict with one key/value pair per tab:
-            * key:  name of tab
-            * value:    display name of tab
-
-        :param resize_callback:  function to call to resize the panel when the tab changes.
-            Whoever makes the tab images needs to know the new size, etc.
+        :param alg: DemoAlg subclass
         """
         self._state_tabs = {}
+        self._blank = np.zeros((10, 10, 3), dtype=np.uint8)  # blank image for the tabs
+        self._blank[:] = COLOR_BG  # set the color to the background color
+
         super().__init__(app, bbox_rel)
-        if tab_info is not None:
-            if resize_callback is None:
-                raise ValueError("resize_callback must be provided if tab_info is provided.")
-            self.set_tabs(tab_info, resize_callback)
+        if alg is not None:
+            self.set_algorithm(alg)
+
+    def _on_resize(self, event):
+        super()._on_resize(event)
+        # Get a new frame for the current tab and force a redraw which will get the new size:
+        #self.refresh_image(is_paused=False)
+
+    def set_algorithm(self, alg):
+        """
+        User changed the algorithm, might need new tab lables, etc.
+        """
+        self._alg = alg
+        self._set_tabs()
+        self._alg.set_state_panel(self)  # probaly already set
 
     def _init_widgets(self):
         """
@@ -205,22 +221,20 @@ class StatePanel(Panel):
         self._notebook.place(relx=0, rely=0, relwidth=1, relheight=1)
         # Set the default tab to the first one:
         self.cur_tab = None
-        self._resize_callback = None
 
-    def set_tabs(self, tab_info, resize_callback):
+    def _set_tabs(self):
         """
         Set the tabs for the state panel.
         :param tab_info: (see __init__)
-        :param resize_callback: function to call to resize the panel when the tab changes.
-           Whoever makes the tab imges needs to know the new size, etc.
         """
+        tab_info = self._alg.get_state_image_kinds()
         self._tabs_by_text = {tab_txt: tab_name for tab_name, tab_txt in tab_info.items()}
         # Clear old tabs:
         for tab, img_label in self._state_tabs.values():
             tab.destroy()
             img_label.destroy()
         self._state_tabs = {}
-        self._resize_callback = resize_callback
+
         # Add new tabs:
         for tab_name, tab_str in tab_info.items():
             # Create a new frame for the tab:
@@ -229,6 +243,10 @@ class StatePanel(Panel):
             # Create a label for the tab to hold the image (filling the whole tab frame):
             img_label = tk.Label(tab_frame, bg=self._bg_color)
             img_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+            # Set the image to self._blank:
+            img_copy = ImageTk.PhotoImage(Image.fromarray(self._blank.copy()))
+            img_label.config(image=img_copy)
+            img_label.image = img_copy
             # Add the tab to the notebook:
             self._notebook.add(tab_frame, text=tab_str)
             # Add the tab to the state tabs dictionary:
@@ -237,26 +255,37 @@ class StatePanel(Panel):
         # get the current tab:
         self.cur_tab = self._tabs_by_text[self._notebook.tab(self._notebook.select(), "text")]
 
-    def get_frame_size(self):
-        frame_size = self._frame.winfo_width(), self._frame.winfo_height()
-        return frame_size
+    def get_image_size(self):
+        time.sleep(3)
+        # use the w/h of the image label in the current tab:
+        tab_frame, label = self._state_tabs[self.cur_tab]
+        w, h = label.winfo_width(), label.winfo_height()
+        if w in [1, 0] or h in [1, 0]:
+            # use the frame dimensions instead:
 
-    def _on_resize(self, event):
-        if self._resize_callback is not None:
-            self._resize_callback(event)
-        return super()._on_resize(event)
+            w, h = tab_frame.winfo_width(), tab_frame.winfo_height()
+            logging.info("StatePanel: image label size is 0, using tab frame size instead.")
+            if w in [1, 0] or h in [1, 0]:
+                # use the default size:
+                raise Exception("StatePanel: no size available for image label or tab frame, called too early?")
+        return w, h
 
-    def set_image(self, which, img):
+    def refresh_image(self, is_paused=False):
         """
-        Update the image in the current tab.
-        :param which:  'states', 'values', or 'updates'
-        :param img:  The image to display.
+        Ask the algorithm for a new image and put it in the current tab.
         """
-        if which not in self._state_tabs:
-            raise ValueError("Invalid tab name: %s" % which)
-        tab, label = self._state_tabs[which]
-        label.config(image=img)
-        label.image = img   # keep a reference to the image to prevent garbage collection
+        img_size=self.get_image_size()
+        image = self._alg.get_state_image(size=img_size,
+                                          which=self.cur_tab,
+                                          is_paused=is_paused)
+        # Get the current tab:
+        tab_frame, img_label = self._state_tabs[self.cur_tab]
+        # Create a new image from the numpy array:
+        img_copy = ImageTk.PhotoImage(Image.fromarray(image))
+        # Set the image to the label:
+        img_label.config(image=img_copy)
+        img_label.image = img_copy
+        
 
     def _on_tab_changed(self, event):
         """
@@ -265,6 +294,7 @@ class StatePanel(Panel):
 
         # get the current tab:
         self.cur_tab = self._tabs_by_text[self._notebook.tab(self._notebook.select(), "text")]
+        #self.refresh_image(is_paused=self._alg.paused)
 
 
 class TestDemoAlg(PolicyEvalDemoAlg):
@@ -275,6 +305,11 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         self._bkg_color_rgb = COLOR_BG
         self._text_color_rgb = COLOR_TEXT
         self._line_color_rgb = COLOR_LINES
+
+        # Update these as the algorithm runs
+        self._img_size = None
+        self._paused_images = {key: None for key in self.get_state_image_kinds().keys()}
+        self._running_images = {key: None for key in self.get_state_image_kinds().keys()}
 
         super().__init__(*args, **kwargs)
 
@@ -288,6 +323,53 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         rco['frame-update'] = "Frame update"
         return rco
 
+    def get_state_image_kinds(self):
+        return OrderedDict([
+            ('hollow', 'Hollow Circles'),
+            ('filled', 'Filled Circles'),
+        ])
+
+    def get_state_image(self,  size, which, is_paused=False):
+        if self._state_panel is None:
+            print("Refresh but no state panel")
+            return
+        started_up = False
+
+        while not started_up:
+            try:
+                img_size = self._state_panel.get_image_size()
+                started_up = True
+            except Exception as e:
+                #  Too early to draw images
+                pass
+            time.sleep(0.1)
+            print("Waiting for image size...")
+        
+        re_draw = False
+        if self._img_size is None or size != self._img_size:
+            # Force re-draw.
+            re_draw = True
+            self._img_size = size
+
+        if is_paused:
+            if re_draw or self._paused_images[which] is None:
+                # Get a new image:
+                img = self._get_state_image(img_size, which, is_paused=is_paused)
+                self._paused_images[which] = img
+            return self._paused_images[which]
+        else:
+            if re_draw or self._running_images[which] is None:
+                # Get a new image:
+                img = self._get_state_image(img_size, which, is_paused=is_paused)
+                self._running_images[which] = img
+            return self._running_images[which]
+
+
+    def _get_state_image(self, img_size, which, is_paused=False):
+        blank = np.zeros((img_size[1], img_size[0], 3), dtype=np.uint8)
+        blank[:] = self._bkg_color_rgb  # set the color to the background color
+        return blank
+
     def draw_image_data(self, img, connect=False):
         PREC_BITS = 5
         PREC_MULT = 2**PREC_BITS
@@ -296,9 +378,6 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         circle_coords = circle_coords.astype(int)
         circle_radii = int(self._image_data[2] * w/20) * PREC_MULT
         thicknesses = int(self._image_data[3] * 20)
-        for i, ((x, y), r) in enumerate(zip(circle_coords, circle_radii)):
-            color = self._line_color_rgb
-            cv2.circle(img, (x, y), r, color, thickness=thicknesses[i], lineType=cv2.LINE_AA, shift=PREC_BITS)
         if connect:
             # draw lines from every circle center to every other circle center:
             for i in range(len(circle_coords)):
@@ -306,6 +385,9 @@ class TestDemoAlg(PolicyEvalDemoAlg):
                     color = self._line_color_rgb
                     cv2.line(img, tuple(circle_coords[i]), tuple(circle_coords[j]),
                              color, thickness=1, lineType=cv2.LINE_AA)
+        for i, ((x, y), r) in enumerate(zip(circle_coords, circle_radii)):
+            color = self._line_color_rgb
+            cv2.circle(img, (x, y), r, color, thickness=thicknesses[i], lineType=cv2.LINE_AA, shift=PREC_BITS)
         # draw the circles:
         return img
 
@@ -314,43 +396,107 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         Pause the algorithm if the run control indicates to do so.
         :param control_point: The control point to check.
         """
-        #print("TestDemoAlg: maybe_pause %s" % control_point)
         if self._run_control[control_point]:
-            self._update_image(control_point,is_paused=True)
+            self.paused=True
+            self._state_panel.refresh_image(is_paused=True)
             self._go_signal.wait()
             self._go_signal.clear()
+            self.paused=False
         else:
-            self._update_image(control_point, is_paused=False)
-
-    def _update_image(self, control_point, is_paused=False):
-        logging.info("TestDemoAlg: update_image %s, paused=%s" % (control_point, is_paused))
+            self.paused=False
+            self._state_panel.refresh_image(is_paused=False)
 
 
-    def _start(self):
+    def start(self):
+        
         def run_thread():
             """
             If running, move the circles XYZ randomly every frame (FPS times per second).
             """
             n_frames = 0
+
+            print("Tick")
+
             while True:
+                print("Beginnning iteration: %i" % n_frames)
                 n_frames += 1
                 if n_frames % 30 == 0:
                     print("TestDemoAlg: frame %i" % n_frames)
                 for ind in range(self._image_data.shape[0]):
-
+                    print("Beginning sample %i" % ind)
                     # move the circles randomly:
                     self._image_data[ind, :2] += np.random.rand(2) * 0.1 - 0.05
                     self._image_data[ind, :2] = np.clip(self._image_data[ind, :2], 0, 1)
 
                     self._maybe_pause('circle-update')  # check if we should pause here.
 
-                time.sleep(1/FPS)
-
                 self._maybe_pause('frame-update')  # check if we should pause here.
 
         self._loop_thread = Thread(target=run_thread, daemon=True)
         self._loop_thread.start()
         logging.info("TestDemoAlg: started loop thread.")
+
+    @staticmethod
+    def get_name():
+        return 'test-circles'
+
+    @staticmethod
+    def get_str():
+        return "Test with circles"
+
+
+class TestDemoAlg2(TestDemoAlg):
+    """
+    Similar but squares and only two state tabs
+    """
+
+    def get_state_image_kinds(self):
+        return OrderedDict([
+            ('hollow', 'Hollow Squares'),
+            ('filled', 'Filled Squares'),
+        ])
+
+    def draw_image_data(self, img, connect=False):
+        PREC_BITS = 5
+        PREC_MULT = 2**PREC_BITS
+        w, h = img.shape[1], img.shape[0]
+        circle_coords = self._image_data[:2] * np.array([w, h]) * PREC_MULT
+        circle_coords = circle_coords.astype(int)
+        circle_radii = int(self._image_data[2] * w/20) * PREC_MULT
+        thicknesses = int(self._image_data[3] * 20)
+        if connect:
+            # draw lines from every circle center to every other circle center:
+            for i in range(len(circle_coords)):
+                for j in range(i + 1, len(circle_coords)):
+                    color = self._line_color_rgb
+                    cv2.line(img, tuple(circle_coords[i]), tuple(circle_coords[j]),
+                             color, thickness=1, lineType=cv2.LINE_AA)
+        for i, ((x, y), r) in enumerate(zip(circle_coords, circle_radii)):
+            color = self._line_color_rgb
+            x_left, y_top = x - r, y - r
+            x_right, y_bottom = x + r, y + r
+            cv2.rectangle(img, (x_left, y_top), (x_right, y_bottom), color,
+                          thickness=thicknesses[i], lineType=cv2.LINE_AA, shift=PREC_BITS)
+        # draw the circles:
+        return img
+
+    def get_run_control_options(self):
+        """
+        Get the run control options for the algorithm.
+        :return: A dictionary of run control options.
+        """
+        rco = OrderedDict()
+        rco['square-update'] = "Squares update"
+        rco['frame-update'] = "Frame update"
+        return rco
+
+    @staticmethod
+    def get_name():
+        return 'test-squares'
+
+    @staticmethod
+    def get_str():
+        return "Test with squres"
 
 
 class TestApp(object):
@@ -375,40 +521,31 @@ class TestApp(object):
         self.root.geometry(f"{self.win_size[0]}x{self.win_size[1]}")
         self.root.title("Selection Panel Test")
         self._env = Environment(opponent_policy=HeuristicPlayer(mark=Mark.O, n_rules=2))
+        
+
         self._alg = TestDemoAlg(self, self._env)
         self.status_control_panel = StatusControlPanel(
             self, self._alg, bbox_rel=LAYOUT['frames']['control'])
-        self.selection_panel = SelectionPanel(self, [TestDemoAlg], bbox_rel=LAYOUT['frames']['selection'])
-
+        self._algorithms = [TestDemoAlg, TestDemoAlg2]
+        self.selection_panel = SelectionPanel(self, self._algorithms, bbox_rel=LAYOUT['frames']['selection'])
         # test state tabs:
         self._state_img_size = None
-        state_tab_info = {'states': 'States:  s',
-                          'values': 'Values:  V(s)',
-                          'updates': "Updates:  V'(s)"}
-        self.state_panel = StatePanel(self, bbox_rel=LAYOUT['frames']['state-tabs'], tab_info=state_tab_info,
-                                      resize_callback=lambda new_size: self._set_state_img_size(new_size))
 
-    def _set_state_img_size(self, new_size):
-        print("TestApp: set_state_img_size %s" % new_size)
-        self._state_img_size = new_size
+        self.state_panel = StatePanel(self, bbox_rel=LAYOUT['frames']['state-tabs'])
 
-    def get_state_img(self, which, mode):
-        """
-        Get the state image for the current state.
-        :param which:  'states' or 'values'
-        :param mode:  'running' or 'paused'
-        :return:  image of the current state.
-        """
-        frame = np.zeros((self._state_img_size[1], self._state_img_size[0], 3), dtype=np.uint8)
-        frame[:] += self._bkg_color_rgb if which == 'states' else self._line_color_rgb
+        self._set_alg()
 
-        self._draw_image_data(frame, connect=(mode == 'paused'),
-                              color=self._line_color_rgb if which == 'states' else self._bkg_color_rgb)
+    def _set_alg(self):
+        # selection panel
+        first_alg_name = self._alg.get_name()
+        self.selection_panel.set_selection(first_alg_name)
 
-        cv2.putText(frame, "%s, %s" % (which, mode), (30, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        # state panel
+        self.state_panel.set_algorithm(self._alg)
 
     def run(self):
         # Start the run thread:
+        self._alg.start()
         self.root.mainloop()
 
     def save_state(self):
