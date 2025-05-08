@@ -34,7 +34,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.reset_state()
         logging.info("PolicyEvalDemoAlg initialized.")
 
-    def reset_state(self):
+    def _reset_state(self):
 
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
@@ -134,6 +134,10 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['epoch-update'] = "epoch update"
         rco['policy-update'] = "policy update"
         return rco
+    
+    def _start(self):
+        pass
+    
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def __init__(self, app, env, gamma=0.9):
@@ -155,6 +159,9 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     @staticmethod
     def get_str():
         return "(PI) In-Place Policy Evaluation"
+    
+    def _reset_state(self):
+        pass
 
     def load_state(self, filename):
         """

@@ -21,7 +21,7 @@ class DynamicProgDemoAlg(DemoAlg):
     def save_state(self, state_file):
         pass
 
-    def reset(self):
+    def _reset_state(self):
         pass
 
     @staticmethod

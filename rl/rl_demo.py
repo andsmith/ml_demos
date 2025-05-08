@@ -60,7 +60,7 @@ class RLDemoApp(object):
         self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=self._selector.opp_n_rules)
 
     def _init_alg_panels(self):
-        self._status_control_panel = StatusControlPanel(self, self._alg, ALGORITHMS, LAYOUT['frames']['control'])
+        self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'])
 
     def toggle_fullscreen(self):
 

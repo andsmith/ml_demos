@@ -27,7 +27,7 @@ from threading import Thread, Lock, Event
 from enum import IntEnum
 import time
 from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
-from value_panel import sort_states_into_layers
+from game_util import sort_states_into_layers
 WIN_SIZE = (1920, 990)
 
 FPS = 0.50

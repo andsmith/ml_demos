@@ -9,9 +9,12 @@ from node_placement import FixedCellBoxOrganizer  # for 2d embedding and vertica
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from reinforcement_base import Environment, GameTree, get_game_tree_cached
+from reinforcement_base import  get_game_tree_cached
 from drawing import GameStateArtist
 
+
+BOX_SIZES = [22, 12, 12, 12, 12, 15]  # good for single value function
+# BOX_SIZES =  [20, 11, 7, 7, 8, 14] # good for 2-value function windows.
 
 def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
 
@@ -24,9 +27,6 @@ def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
         layers.append(layer)
         print("Layer %i had %i states." % (n_marks, len(layer)))
     return layers
-
-BOX_SIZES = [22, 12, 12, 12, 12, 15]  # good for single value function
-# BOX_SIZES =  [20, 11, 7, 7, 8, 14] # good for 2-value function windows.
 
 def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
                        layer_bar_w=1, player=Mark.X):

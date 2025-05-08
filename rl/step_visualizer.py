@@ -10,7 +10,7 @@ from color_scaler import ColorScaler
 from tiny_histogram import MultiHistogram
 from baseline_players import HeuristicPlayer
 from reinforcement_base import Environment
-from value_panel import get_box_placer
+from game_util import get_box_placer
 class PEStep(ABC):
     """
     Some computation just completed, two things should happen:

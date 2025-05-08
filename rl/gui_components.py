@@ -44,7 +44,7 @@ from abc import ABC, abstractmethod
 from collections import OrderedDict
 import logging
 import numpy as np
-from value_panel import get_box_placer, get_state_icons
+from game_util import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
 from colors import COLOR_BG, COLOR_LINES, SKY_BLUE as DARK_GRAY, UI_COLORS

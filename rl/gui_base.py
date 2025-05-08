@@ -35,14 +35,14 @@ class Panel(ABC):
     @abstractmethod
     def _init_widgets(self):
         """
-        Initialize the panel. This method should be overridden by subclasses.
+        Initialize the panel.
         """
         pass
 
     @abstractmethod
     def _on_resize(self, event):
         """
-        Handle the resize event. This method should be overridden by subclasses.
+        Handle the resize event.
         :param event: The resize event.
         """
         pass

@@ -8,6 +8,8 @@ Sublcasses manage 3 panels:
 
 from abc import ABC, abstractmethod
 import pickle
+from threading import Event
+import logging
 
 
 class DemoAlg(ABC):
@@ -23,9 +25,34 @@ class DemoAlg(ABC):
         """
         :param app: The main app object.
         """
+        self._go_signal = Event()  # Used to signal the algorithm to advance/continue.
+        self._go_signal.clear()  # Initially, the algorithm is not running.
+        self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
+
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
         self.app = app
+
+    @abstractmethod
+    def _start(self):
+        """
+        Start the algorithm running in a separate thread.
+        At every point it can be paused (the control points), call self._maybe_pause(control_point)
+        """
+        pass
+
+    def advance(self):
+        """
+        Run 1 step (depending on the run control options), or continuously, etc.
+        """
+        self._go_signal.set()  # Signal the algorithm to continue running.
+
+    def update_run_control(self, new_rcs):
+        """
+        Update the run control options.
+        :param run_control: The run control options dict(option: bool) (see alg_panels.StatusControlPanel)
+        """
+        self._run_control=new_rcs
 
     @staticmethod
     def is_stub():
@@ -76,8 +103,12 @@ class DemoAlg(ABC):
         """
         pass
 
-    @abstractmethod
     def reset_state(self):
+        self._start()
+        self._reset_state()
+
+    @abstractmethod
+    def _reset_state(self):
         """
         Reset the algorithm to its initial state.
         """
