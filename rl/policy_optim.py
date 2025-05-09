@@ -2,6 +2,8 @@ from policies import Policy
 from game_base import get_reward, Mark, TERMINAL_REWARDS
 import numpy as np
 from step_visualizer import PIStateStep
+import logging
+from tic_tac_toe import Game
 
 
 class ValueFuncPolicy(Policy):
@@ -22,7 +24,7 @@ class ValueFuncPolicy(Policy):
     uniform probability, or one is selected arbitrarily if deterministic.
     """
 
-    def __init__(self, learn_app,  v, environment, gamma=1.0, player=Mark.X):
+    def __init__(self,  v, environment, old_policy, gamma=1.0, player=Mark.X):
         """
         :param v: dict, hash of Game (state) to value.  The value function.
         :param environment:  The environment for the agent.  This is used to calculate the next state distribution.
@@ -30,18 +32,17 @@ class ValueFuncPolicy(Policy):
         :return: None
         """
         super().__init__(player=player)  # default player is X
-        self._app = learn_app  # game_learn.PolicyImprovementDemo object
-        self._gui = learn_app.get_gui()
+        #self._app = learn_app  # game_learn.PolicyImprovementDemo object
+        #self._gui = learn_app.get_gui() if learn_app is not None else None
         self._v = v  # hash of Game (state) to value
         self._env = environment
         self._gamma = gamma
+        self._pi_old = old_policy  #
         self._pi = self._optimize()
 
     def equals(self, other):
-        """
-        For all updatable states, is the distribution of recommended actions the same?
-        """
-        return False
+        states = self._env.get_nonterminal_states()
+        return super().compare(other, states, count=False, deterministic=True)
 
     def _optimize(self):
         """
@@ -53,23 +54,30 @@ class ValueFuncPolicy(Policy):
         :returns: dict, hash of Game (state) to [(action, prob), ...] 
         """
         pi = {}
+        
+        for s_ind,state in enumerate(self._env.get_nonterminal_states()):
+            if s_ind % 100 == 0:
+                logging.info("Optimizing policy for state %i of %i" % (s_ind, len(self._env.get_nonterminal_states())))
 
-        for state in self._env.get_nonterminal_states():
-            print("State:\n", state)
+            # if state == Game.from_strs(["XOO", "X  ", "   "]):
+            #    import ipdb
+            #    ipdb.set_trace()
+
+            old_action_dist = self._pi_old.recommend_action(state)
 
             def get_reward_term_and_next_states(action):
                 next_state = state.clone_and_move(action, self.player)
                 next_result = next_state.check_endstate()
+                next_states = []
                 if next_result is not None:
                     # Terminal states have zero value so just use the reward.
                     reward_term = TERMINAL_REWARDS[next_result]
                 else:
                     # Nonterminal means opponent's turn, get the probability distribution of next states:
-                    opp_moves = self._env.opp_move_dist(next_state)
+                    opp_moves = self._env.opp_move_dist(state, action)
                     # Filter out zero probability moves
                     # Take the expected value over opponent moves of v(s')
                     reward_term = 0.0
-                    next_states = []
                     for opp_action, prob in opp_moves:
                         if prob == 0:
                             # TODO: Don't include zero probability actions in the next state distribution.
@@ -101,20 +109,20 @@ class ValueFuncPolicy(Policy):
 
             # now determine if there's a winner or distribution of actions
             if len(actions) == 1:
-                pi[state] = [(best_action, 1.0)]
+                pi[state] = [(actions[0], 1.0)]  # only one action available
             else:
                 num_best = np.sum(np.array(reward_terms) == best_reward)
                 best_actions = [act for i, act in enumerate(actions) if reward_terms[i] == best_reward]
                 prob = 1.0 / num_best
                 pi[state] = [(best_action, prob) for best_action in best_actions]
 
-            if self._app is not None:
+            #if self._app is not None:
                 #    PIStateStep(demo, gui, state, actions, next_states, rewards, old_action, new_action):
 
-                vis = PIStateStep(self._app, self._gui, state, actions, next_states, reward_terms, old_actions=actions,
-                                  new_actions=pi[state])
+            #    vis = PIStateStep(self._app, self._gui, state, actions, next_states, reward_terms, old_actions=old_action_dist,
+             #                     new_actions=pi[state])
 
-            self._app.maybe_pause('state-update', vis)
+            #self._app.maybe_pause('state-update', vis)
 
         return pi
 
@@ -143,7 +151,7 @@ def test_value_func_policy():
     v = {state: np.random.rand() for state in env.get_nonterminal_states()}
 
     # Create a ValueFuncPolicy instance
-    policy = ValueFuncPolicy(learn_app=None, v=v, environment=env, player=Mark.X)
+    policy = ValueFuncPolicy(v=v, environment=env, player=Mark.X)
 
     # Test the recommend_action method
     state = env.get_nonterminal_states()[0]

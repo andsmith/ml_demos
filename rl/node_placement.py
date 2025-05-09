@@ -113,7 +113,8 @@ class BoxOrganizer(ABC):
                     else:
                         if box['id'] not in colors:
                             print(box['id'], "not in colors")
-                        img[y[0]:y[1], x[0]:x[1]] = colors[box['id']]
+                        if colors[box['id']] is not None:
+                            img[y[0]:y[1], x[0]:x[1]] = colors[box['id']]
                 else:
                     tile = images[box['id']]
                     img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile

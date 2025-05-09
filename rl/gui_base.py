@@ -21,6 +21,7 @@ class Panel(ABC):
         self.app = app
         self._bbox_rel = bbox_rel
         self._bg_color = tk_color_from_rgb(COLOR_BG)
+        self._bg_color_rgb = COLOR_BG
         self._text_color = tk_color_from_rgb(COLOR_TEXT)
         self._line_color = tk_color_from_rgb(COLOR_LINES)
         self._frame = tk.Frame(master=self.app.root, bg=self._bg_color)

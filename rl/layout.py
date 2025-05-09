@@ -25,7 +25,7 @@ LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
                     'menu': ('Helvetica', 12, ),
                     'buttons': ('Helvetica', 11, 'bold'),
                     'big_button': ('Helvetica', 14, 'bold'),
-                    'tabs': ('Helvetica', 12),
+                    'tabs': ('Helvetica', 12, 'bold'),
                     'flag': ('Helvetica', 13, 'bold')}}
 
 

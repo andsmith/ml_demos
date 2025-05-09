@@ -9,7 +9,7 @@ from colors import SKY_BLUE
 
 class ColorScaler(object):
 
-    def __init__(self, values, cmap_name='gray', undef_val_color=SKY_BLUE):
+    def __init__(self, values, cmap_name='gray', undef_val_color=SKY_BLUE, as_delta=False):
         """
         Balance colors so a range of values spans the whole range of the colormap.
 
@@ -18,7 +18,15 @@ class ColorScaler(object):
         :param initial values: array of all initial values to be colored.
         :param cmap_name:  The name of the colormap to use.
         """
-        logging.info("Initializing ColorScaler with %i values." % len(values))
+        self._as_delta = as_delta
+        distinct_values = np.unique(values) 
+        #logging.info("Initializing ColorScaler with %i values." % len(distinct_values))
+        # logging.info("ColorScaler values: %s" % str(distinct_values))
+
+        #if len(distinct_values)==1:
+        #    import ipdb; ipdb.set_trace()
+        #if len(distinct_values) < 2:
+        #    raise ValueError("ColorScaler requires at least two distinct values.")
         self._cmap = plt.get_cmap(cmap_name)
         values = np.array(values)
         self._min = values.min()
@@ -41,20 +49,28 @@ class ColorScaler(object):
             remapped = True
         if remapped:
             self._range = self._max - self._min
+            raise Exception("ColorScaler range updated: min=%f, max=%f" % (self._min, self._max))
             logging.info("ColorScaler updated: min=%f, max=%f" % (self._min, self._max))
         return self.scale_color(new_value)
 
-    def scale_value(self, value):
+    def scale_value(self, value,alpha=1.0):
         """
         Scale a value to unit interval.
         """
-        return (value - self._min) / self._range
+        if self._as_delta and value == 0.0:
+            #import ipdb; ipdb.set_trace()
+            return None
+        scaled= (value - self._min) / self._range
+        scaled = np.clip(scaled, 0.0, 1.0)
+        return scaled ** alpha
 
     def scale_color(self, value):
         """
         Scale a value to a color in the colormap.
         """
         v_scaled = self.scale_value(value)
+        if v_scaled is None:
+            return None
         c_float = np.array(self._cmap(v_scaled)).reshape(-1)[:3]
         return int(255*c_float[0]), int(255*c_float[1]), int(255*c_float[2])
 

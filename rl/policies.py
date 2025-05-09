@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from tic_tac_toe import Game
 from game_base import Mark, Result, TERMINAL_REWARDS, get_reward
 
+
 class Policy(ABC):
     """
     Abstract class for a policy function, anything that can play the game,
@@ -37,6 +38,37 @@ class Policy(ABC):
         """
         pass
 
+    def compare(self, other, states, count=False, deterministic=True, prob_rel_tol=1e-5):
+        """
+        For all updatable states, is the distribution of recommended actions the same?
+        """
+        n_diff=0
+        for state in states:
+            
+            a_dist_1 = self.recommend_action(state)
+            a_dist_2 = other.recommend_action(state)
+            if not deterministic and len(a_dist_1) != len(a_dist_2):
+                n_diff +=1
+                if not count:
+                    return False
+            best_ind_1 = np.argmax([a[1] for a in a_dist_1])
+            best_ind_2 = np.argmax([a[1] for a in a_dist_2])
+            if a_dist_1[best_ind_1][0] != a_dist_2[best_ind_2][0]:
+                n_diff +=1
+                if not count:
+                    return False
+            prob_1 = a_dist_1[best_ind_1][1]
+            prob_2 = a_dist_2[best_ind_2][1]
+            different_max_probs = (prob_1==0.0 and prob_2 != 0.0) or (prob_1 != 0.0 and prob_2 == 0.0)\
+                or (abs(prob_1 - prob_2) > prob_rel_tol * max(prob_1, prob_2))
+            if not deterministic and different_max_probs:
+                n_diff += 1
+                if not count:
+                    return False
+                
+        if not count:
+            return True
+        return n_diff
 
     def take_action(self, game_state, epsilon=0):
         recommendations = self.recommend_action(game_state)
@@ -49,4 +81,3 @@ class Policy(ABC):
 
     def __str__(self):
         return self.__class__.__name__ + "(%s)" % self.player.name
-

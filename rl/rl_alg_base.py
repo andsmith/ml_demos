@@ -28,7 +28,9 @@ class DemoAlg(ABC):
         self._go_signal = Event()  # Used to signal the algorithm to advance/continue.
         self._go_signal.clear()  # Initially, the algorithm is not running.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
-
+        self.state_image_size = None
+        self.state_images = {'running': {},
+                             'paused': {}}
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
         self.app = app
@@ -102,13 +104,16 @@ class DemoAlg(ABC):
         :param state_file: The file to save the state to.
         """
         pass
-
-    def reset_state(self):
-        self._start()
-        self._reset_state()
+    @abstractmethod
+    def start(self):
+        """
+        Start the algorithm running in a separate thread.
+        At every point it can be paused (the control points), call self._maybe_pause(control_point)
+        """
+        pass
 
     @abstractmethod
-    def _reset_state(self):
+    def reset_state(self):
         """
         Reset the algorithm to its initial state.
         """

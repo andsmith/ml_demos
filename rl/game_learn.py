@@ -30,7 +30,7 @@ from step_visualizer import StateUpdateStep, EpochStep, PIStep, ContinuousStep
 from game_util import sort_states_into_layers
 WIN_SIZE = (1920, 990)
 
-FPS = 0.50
+FPS = 3
 
 
 class PolicyImprovementDemo(ABC):
@@ -87,7 +87,6 @@ class PolicyImprovementDemo(ABC):
         self._v_new.update(self._v_terminal)
 
         # App state:
-        self._convergence_iter = None
         self._n_updated = 0  # states updated this epoch
         self._iter = 0  # of policy imporovement (PE/PO) cycles
         self._max_iter = 100  # of policy improvement.
@@ -210,37 +209,47 @@ class PolicyImprovementDemo(ABC):
 
         self._init_layers()
         while not self.shutdown:
-
+            
             # 1. Update the value function for the current policy.
             self._phase = PIPhases.VALUE_F_OPT
             self.optimize_value_function()
-
-            if self.shutdown:
-                break
-
-            # vis = PIStep(self, self._gui, PIPhases.VALUE_F_OPT, info={'state_updates': state_updates})
-            # self.maybe_pause('pi-round', vis)
+            self._gui.build_images()
+            self._gui.refresh_images()
+            self._gui.refresh_text_labels()
 
             if self.shutdown:
                 break
 
             # 2. Update policy & check for convergence:
             self._phase = PIPhases.POLICY_OPT
-            #import pickle
-            #with open('value_func.pkl', 'wb') as f:
-            #    pickle.dump(self._v, f)
-
-            import ipdb
-            ipdb.set_trace()
             new_policy, self._converged = self.optimize_policy()
+            if self._converged:
+                self._convergence_iter = self._iter + 1
+                logging.info("Policy converged after %i iterations." % self._convergence_iter)
+                self._gui.refresh_text_labels()
+                
+            self._gui.refresh_text_labels()
+            self._gui.build_images()
+            self._gui.refresh_images()
+
+            # Save
+            
+            filename="value_function_iter_%i.pkl" %( self._iter+1)
+            with open(filename, 'wb') as f:
+                pickle.dump([self._v_new, self.pi], f)
+            print("Saved value function to file: %s" % filename)
+
+
 
             if self.shutdown:
                 break
 
-            vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self.pi, 'new': new_policy})
-            self.maybe_pause('pi-round', vis)
+            #vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self.pi, 'new': new_policy})
+            self.pi = new_policy
+            self.maybe_pause('pi-round', None)
 
             self._iter += 1
+            first = False
 
     def optimize_policy(self):
         """
@@ -252,7 +261,7 @@ class PolicyImprovementDemo(ABC):
                 TODO: if the same action(s) have highest probability in all states.
         returns: True if converged
         """
-        pi_new = ValueFuncPolicy(self, self._v, self._env, gamma=self._gamma, player=self._player)
+        pi_new = ValueFuncPolicy(self._v, self._env, old_policy=self.pi, gamma=self._gamma, player=self._player)
         converged = pi_new.equals(self.pi)
         return pi_new, converged
 
@@ -274,7 +283,7 @@ class PolicyImprovementDemo(ABC):
         options['pi-round'] = [{'text': 'Step PI: V(s)', 'callback':  self._resume},
                                {'text': 'Step PI: pi(s)', 'callback':  self._resume},]
         options['continuous'] = [{'text': 'Start continuous', 'callback':  self._resume},
-                                 {'text': 'Pause continuous', 'callback': lambda: self._pause},]
+                                 {'text': 'Pause continuous', 'callback': self._pause},]
         return options
 
     def toggle_tournament(self):
@@ -367,8 +376,10 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             self._didnt_pause()
 
         return False
+
     def get_gui(self):
         return self._gui
+
     def get_values(self):
         return self._v, self._v_new
 
@@ -381,7 +392,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         status['PI Convergence'] = "YES (%i iter)" % (self._convergence_iter,) if self._converged else "no"
         status['PE Epoch'] = self._epoch + 1
         status['States processed'] = "%i of %i" % (self._n_updated, len(self.updatable_states))
-        status['Max delta V(s)'] = "%.3f (max %.1e)." % (self._delta_v_max, self._delta_v_tol)
+        status['Max delta V(s)'] = "%.6f (max %.1e)." % (self._delta_v_max, self._delta_v_tol)
         status['flag'] = "V(s) Converged after %i epochs!" % self._epoch if self.v_converged else ""
         return status
 
@@ -404,72 +415,104 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         verbose = False
 
         LPT.reset(enable=False, burn_in=100, display_after=30, save_filename=None)
-
+        self.v_converged = False
         while not self.shutdown and not self.v_converged:
             logging.info("Starting epoch %i" % self._epoch)
             self._delta_v_max = 0.0  # max delta v(s) for this epoch
 
             for iter, state in enumerate(self._state_update_order):
 
-                LPT.mark_loop_start()
+                # LPT.mark_loop_start()
                 # logging.info("Updating state:\n%s" % state)
-                #if state == Game.from_strs(["XOO", "X  ", "   "]):
-                #    verbose=True
-                #    import ipdb; ipdb.set_trace()
+                # if state == Game.from_strs(["XOO", "X  ", "   "]):
+                # verbose = True
+                #    import ipdb
+                #   ipdb.set_trace()
 
-                def get_reward_term_and_next_states(action):
-                    """
-                    The reward term is the bracketed expression in V_{pi'}(s) update eqn. on page 79 of Sutton & Barto, the 
-                      reward for taking the action plus the discounted value of the next state.
-                    """
+                action_trees = {}  # keyed by action
 
-                    next_state = state.clone_and_move(action, self._player)
-                    next_result = next_state.check_endstate()
-                    if next_result in [self._env.winning_result, self._env.losing_result, self._env.draw_result]:
+                def get_action_tree(agent_action, action_prob):
+                    """
+                    Compute the inner sum of equation 4.9, the V_{pi'}(s) update eqn., on page 79 of Sutton & Barto.
+                    (expected goal/discounted reward)
+
+                    :returns: dict:
+                       {'action': agent action,
+                        'prob':  action prob,
+                        'expected_goal':  sum over (s', r),
+                        'next_state_dist':  (list  of prob, reward (for terminal) or discounted value (nonterminal )for each term in the inner sum)
+                            [ {'prob': p(s'|s,a),
+                               'state': s' game state after agent move,
+                               'reward': float or None
+                               'discounted_value':  gamma * V(s') or None if terminal state
+                              }
+                            ]
+                        }
+                    """
+                    inter_state = state.clone_and_move(agent_action, self._player)
+                    r = {'action': agent_action,
+                         'prob': action_prob,
+                         'inter_state': inter_state,
+                         'expected_goal': 0.0,
+                         'next_state_dist': []}
+                    inter_result = r['inter_state'].check_endstate()
+                    if inter_result in [self._env.winning_result, self._env.draw_result]:
                         # if the next state is a terminal, we got a reward so just return that.
-                        return TERMINAL_REWARDS[next_result], [(next_state, 1.0)]
+                        reward = TERMINAL_REWARDS[inter_result]
+                        r['next_state_dist'] = [{'prob': 1.0,
+                                                'state': inter_state,
+                                                'reward': reward,
+                                                'discounted_value': None}]
+                        r['expected_goal'] = reward
+
+                        return r  # is the only child state
                     else:
                         # opponent's turn, get the probability distribution of next states s'
                         opp_move_dist = self._env.opp_move_dist(state, action)
                         # take the weighted sum over every action the opponent might make of v(s')
-                        reward_term = 0.0
-                        next_states = []
+                        expected_goal = 0.0
+
                         for opp_action, prob in opp_move_dist:
+
                             if prob == 0:
                                 # TODO: Don't include zero probability actions in the next state distribution.
                                 continue
-                            next_next_state = next_state.clone_and_move(opp_action, self._env.opponent)
-                            next_states.append((next_next_state, prob))
-                            next_next_result = next_next_state.check_endstate()
-                            if next_next_result in [self._env.winning_result, self._env.losing_result, self._env.draw_result]:
-                                reward_term += prob * TERMINAL_REWARDS[next_next_result]
+
+                            next_state = inter_state.clone_and_move(opp_action, self._env.opponent)
+                            next_result = next_state.check_endstate()
+                            reward, discount = 0.0, 0.0
+                            if next_result in [self._env.losing_result, self._env.draw_result]:
+                                reward = TERMINAL_REWARDS[next_result]
                             else:
-                                reward_term += prob * self._v[next_next_state] * self._gamma
-                    return reward_term, next_states
+                                discount = self._v[next_state] * self._gamma
+                            expected_goal += prob * (reward + discount)
+                            r['next_state_dist'].append({'prob': prob,
+                                                         'state': next_state,
+                                                         'reward': reward,
+                                                         'discounted_value': discount})
+                        r['expected_goal'] = expected_goal
+                    return r
 
-                actions = self.pi.recommend_action(state)
-                reward_terms, next_states = [], []
+                action_dist = self.pi.recommend_action(state)
 
-                bare_actions = [action for action, act_prob in actions]
-                for action, act_prob in actions:
-                    reward_term, next_state_dist = get_reward_term_and_next_states(action)
-                    reward_term *= act_prob  # scale by the probability of taking this action.
-                    if verbose:
-                        print("Action: ", action, "Reward term: ", reward_term)
-                        for next_state, prob in next_state_dist:
-                            print("\tNext state:\n", next_state, "\nProbability: ", prob, "\n")
+                weighted_sum = 0.0
 
-                    reward_terms.append(reward_term*act_prob)
-                    next_states.append(next_state_dist)
+                for action, act_prob in action_dist:
+                    action_trees[action] = get_action_tree(action, act_prob)
+                    weighted_sum += action_trees[action]['expected_goal'] * act_prob
 
-                self._v_new[state] = np.max(reward_terms)
+                self._v_new[state] = weighted_sum
 
                 delta_v = np.abs(self._v_new[state] - self._v[state])
                 self._delta_v_max = max(self._delta_v_max, delta_v)
 
                 # Handle visualizer updates
-                vis = StateUpdateStep(self, self._gui, state, bare_actions, next_states, reward_terms,
-                                      self._v, self._v_new[state])
+                vis = StateUpdateStep(self, 
+                                      self._gui,
+                                      state=state,
+                                      action_trees=action_trees,
+                                      new_value=self._v_new[state],
+                                      old_values=self._v)
 
                 self._n_updated = iter + 1
                 self.maybe_pause('state-update', vis)
@@ -479,6 +522,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
             self._epoch += 1
 
+        
             # check for convergence:
             if self._delta_v_max < self._delta_v_tol:
                 self.v_converged = True
@@ -505,7 +549,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
 
 def run_app():
     # Example usage:
-    seed_policy = HeuristicPlayer(n_rules=2, mark=Mark.X)  # Replace with your seed policy
+    seed_policy = HeuristicPlayer(n_rules=0, mark=Mark.X)  # Replace with your seed policy
     opponent_policy = HeuristicPlayer(n_rules=6, mark=Mark.O)  # Replace with your opponent policy
     player = Mark.X  # Replace with your player mark
 

@@ -34,7 +34,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.reset_state()
         logging.info("PolicyEvalDemoAlg initialized.")
 
-    def _reset_state(self):
+    def reset_state(self):
 
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
@@ -135,7 +135,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['policy-update'] = "policy update"
         return rco
     
-    def _start(self):
+    def start(self):
         pass
     
 
@@ -160,7 +160,7 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def get_str():
         return "(PI) In-Place Policy Evaluation"
     
-    def _reset_state(self):
+    def reset_state(self):
         pass
 
     def load_state(self, filename):

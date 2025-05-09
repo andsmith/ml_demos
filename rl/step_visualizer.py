@@ -11,6 +11,8 @@ from tiny_histogram import MultiHistogram
 from baseline_players import HeuristicPlayer
 from reinforcement_base import Environment
 from game_util import get_box_placer
+
+
 class PEStep(ABC):
     """
     Some computation just completed, two things should happen:
@@ -75,14 +77,12 @@ class StateUpdateStep(PEStep):
     """
 
     @LPT.time_function
-    def __init__(self, demo, gui, state, actions, next_states, rewards, old_values, new_value, bg_color=OFF_WHITE_RGB):
+    def __init__(self, demo, gui, state, action_trees,new_value, old_values,bg_color=OFF_WHITE_RGB):
         self._state = state  # the state being updated
-        self._actions = actions  # possible actions for the state
-        self._next_states = next_states  # distribution of next states for each action
-        #print("Next states: %s" % str(self._next_states))
-        self._rewards = rewards  # reward for each action
+        self._action_trees = action_trees  # list of (action, prob) pairs, pi(s) for current policy
+        self._new_value = new_value
+
         self._old_value_LUT = old_values  # old value for the state
-        self._new_value = new_value  # new value for the state
         self._bg_color = bg_color  # background color for the images
 
         self._font = cv2.FONT_HERSHEY_SIMPLEX
@@ -94,8 +94,9 @@ class StateUpdateStep(PEStep):
         self._init_colors()
 
     def _init_colors(self):
-        n_actions = len(self._actions)
-        self._n_next_states = [len(self._next_states[a_ind]) for a_ind in range(n_actions)]
+        n_actions = len(self._action_trees)
+        # Number of next states for each action:
+        self._n_next_states = [len(act_tree['next_state_dist']) for action, act_tree in self._action_trees.items()]
         self._colors = get_n_colors(n_actions)
         self._shades = [shade_color(c, self._n_next_states[c_i]) for c_i, c in enumerate(self._colors)]
 
@@ -110,7 +111,6 @@ class StateUpdateStep(PEStep):
 
         Do this for all three images.        
         """
-        n_actions = len(self._actions)
 
         def add_box(state, color, thickness):
             # print("Adding state:\n%s\n" % str(state))
@@ -118,9 +118,9 @@ class StateUpdateStep(PEStep):
                 self._gui.box_placer.draw_box(img, state, color=color, thickness=thickness)
 
         add_box(self._state, NEON_GREEN, 1)
-        for a_ind, action in enumerate(self._actions):
-            for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
-                add_box(next_state, self._shades[a_ind][s_ind], 1)
+        #for a_ind, (action, action_tree) in enumerate(self._action_trees.items()):
+        #    for s_ind, (next_state_info) in enumerate(self._action_trees[action]['next_state_dist']):
+        #        add_box(next_state_info['state'], self._shades[a_ind][s_ind], 1)
 
     @LPT.time_function
     def update_images(self):
@@ -181,8 +181,8 @@ class StateUpdateStep(PEStep):
         :returns:  dict with keys 'state', 'next_states', and 'leaf_states' with their positions and sizes.
         """
         # 1. determine how many rows we need to see how big we can make the icons.
-        n_action_rows = len(self._actions)
-        n_next_state_rows = [np.ceil(len(self._next_states[a_ind])/2) for a_ind in range(n_action_rows)]
+        n_action_rows = len(self._action_trees)
+        n_next_state_rows = [np.ceil(len(act_tree['next_state_dist'])/2) for action, act_tree in self._action_trees.items()]
         # print("Nnumber of next states per action: %s" % str(self._n_next_states))
         # print("Number of next state rows per action: %s" % str(n_next_state_rows))
 
@@ -209,10 +209,13 @@ class StateUpdateStep(PEStep):
 
         row_pad = (9-n_action_rows) * 10 + 10
 
-        for a_ind, action in enumerate(self._actions):
+        for a_ind, (action, act_tree) in enumerate(self._action_trees.items()):
+            act_prob = act_tree['prob']
             inter_state = {'pos': (inter_x_left, y), 'size': box_sizes['inter_states'],
-                           'text1_pos': (inter_x_left + box_sizes['inter_states']+9, y+14),
+                           'text1_pos': (inter_x_left + box_sizes['inter_states']+9, y+8),
+                           'text2_pos': (inter_x_left + box_sizes['inter_states']+9, y+25),
                            'action': action,
+                           'action_prob': act_prob,
                            'artist': artists['inter_states'],
                            'font_scale': self._font_scale}
             dims['inter_states'].append(inter_state)
@@ -222,12 +225,18 @@ class StateUpdateStep(PEStep):
             next_h = box_sizes['next_states'] + text_h + pad
             dims['next_states'].append([])
 
-            n_next_states = len(self._next_states[a_ind])
+            next_state_list = act_tree['next_state_dist']
+
+            n_next_states = len(next_state_list)
             next_cols_centers_x = np.linspace(0, w, n_next_states+2)[1:-1]  # center of the next state boxes
             nex_col_x_lefts = (next_cols_centers_x - box_sizes['next_states'] / 2).astype(int)
-
-            for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
-
+            # print("Next state centers: %s" % str(next_cols_centers_x)
+            for s_ind, next_state_info in enumerate(next_state_list):
+                #print(type(next_state_info))
+                #if isinstance(next_state_info, str):
+                #    print(next_state_info)
+                #    import ipdb; ipdb.set_trace()
+                next_state, prob = next_state_info['state'], next_state_info['prob']
                 x = nex_col_x_lefts[s_ind % n_next_states]  # left edge of the next state box
                 next_state = {'pos': (x, y), 'size': box_sizes['inter_states'],
                               'text1_pos': (x-8, y+box_sizes['next_states'] + 18),
@@ -236,7 +245,7 @@ class StateUpdateStep(PEStep):
                               'artist': artists['next_states'],
                               'font_scale': self._tiny_scale}
                 dims['next_states'][-1].append(next_state)
-                if s_ind % n_next_states == n_next_states-1 and s_ind < len(self._next_states[a_ind]) - 1:
+                if s_ind % n_next_states == n_next_states-1 and s_ind < len(next_state_list) - 1:
                     y += next_h
 
             y += next_h + row_pad  # add padding between rows of next states
@@ -268,7 +277,7 @@ class StateUpdateStep(PEStep):
                                         1 + n_actions*interm_ratio + n_next_state_rows * next_ratio
         :returns: artists for each box kind
         """
-        box_sizes = {'state': 50, 'inter_states': 40, 'next_states': 30}
+        box_sizes = {'state': 50, 'inter_states': 45, 'next_states': 40}
         space_sizes = {kind: GameStateArtist.get_space_size(box_size) for kind, box_size in box_sizes.items()}
         artists = {kind: GameStateArtist(space_size=sp_size, bar_w_frac=0) for kind, sp_size in space_sizes.items()}
         return artists
@@ -338,24 +347,31 @@ class StateUpdateStep(PEStep):
                           y+state_img.shape[0]+m), box_color, thickness, cv2.LINE_AA)
             # add the reward value under the intermediate state: (skip for now)
         # In the top right, draw the updating state in a green box.
-        add_gamestate(self._state, dims['state'], NEON_GREEN, text_1="V(s)=%.3f" % self._old_value_LUT[self._state],
-                      text_2="V'(s)=%.4f" % self._new_value, thickness=3)
+        add_gamestate(self._state, dims['state'], NEON_GREEN,
+                      text_1="V(s)=%.4g" % self._old_value_LUT[self._state],
+                      text_2="V'(s)=%.4g" % self._new_value, thickness=3)
 
         # show each following state under each action in the appropriate color.
-        for a_ind, action in enumerate(self._actions):
-            inter_state = self._state.clone_and_move(action, self._gui.player)
+        for a_ind, (action, act_tree) in enumerate(self._action_trees.items()):
+            inter_state = act_tree['inter_state']
+            act_prob = act_tree['prob']
+            exp_goal = act_tree['expected_goal']
             add_gamestate(inter_state, dims['inter_states'][a_ind], self._colors[a_ind],
-                          text_1="E G(a): %.3f" % self._rewards[a_ind], thickness=2)
+                          text_1="P(a|s): %.3f" % act_prob, 
+                          text_2="E G(a): %.4g" % exp_goal,
+                          thickness=2)
 
             # Show the final states under each intermediate:
-            for s_ind, (next_state, prob) in enumerate(self._next_states[a_ind]):
+            next_state_list = act_tree['next_state_dist']
+            for s_ind, next_info in enumerate(next_state_list):
 
                 # if next_state not in self._old_value_LUT:
                 #    print("State not in LUT: %s" % str(next_state))
-
+                next_state = next_info['state']
+                prob = next_info['prob']
                 add_gamestate(next_state, dims['next_states'][a_ind][s_ind], self._shades[a_ind][s_ind],
-                              text_1="P: %.2f" % prob,
-                              text_2="V: %.2f" % self._old_value_LUT[next_state],
+                              text_1="P: %.3f" % prob,
+                              text_2="V: %.4g" % self._old_value_LUT[next_state],
                               thickness=2)
 
         # for y in dims['y_lines']:
@@ -370,11 +386,11 @@ class EpochStep(PEStep):
         self._epoch_ind = epoch_ind  # epoch being updated
         self._delta_v = {state: v_new[state] - v_old[state] for state in v_old.keys()}
         all_deltas = np.array(list(self._delta_v.values()))
-        #print(np.sum(np.isnan(all_deltas)), np.sum(np.isinf(all_deltas)), np.sum(np.isfinite(all_deltas)))
-        #print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
+        # print(np.sum(np.isnan(all_deltas)), np.sum(np.isinf(all_deltas)), np.sum(np.isfinite(all_deltas)))
+        # print(np.max(all_deltas), np.min(all_deltas), np.mean(all_deltas), np.std(all_deltas))
         self._states_by_layer = states_by_layer  # states by layer
 
-        self._color_scaler = ColorScaler(self._delta_v.values())
+        self._color_scaler = ColorScaler(self._delta_v.values(), as_delta=True)
         super().__init__(demo, gui)
 
     def update_images(self):
@@ -436,7 +452,7 @@ class PIStateStep(StateUpdateStep):
 
     def update_images(self):
         pass  # dont' change value function images, just annotate them the same as v(s) updates.
-    
+
 
 class PIStep(PEStep):
     def __init__(self, demo, gui, phase, update_info):
@@ -473,12 +489,16 @@ class ContinuousStep(PEStep):
 
 
 class FakeGui(object):
-    def __init__(self, value_map):
+    def __init__(self):
 
         self._size = 413, 999
         self.player = Mark.X
         self.opponent = Mark.O
-        self._values = value_map
+
+        import pickle
+        with open('value_func.pkl', 'rb') as f:
+            self._values = pickle.load(f)
+
         self.color_scalers = {'values': ColorScaler(self._values), 'updates': ColorScaler(self._values)}
 
         opponent_policy = HeuristicPlayer(Mark.O, self._values)
@@ -493,26 +513,37 @@ class FakeGui(object):
         self.box_placer, self._box_sizes, self.states_by_layer = get_box_placer(
             self._size, all_states, player=self.player)
 
-        self.base_images = {'states': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8),  # representation of game state
-                            'values': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8),  # colors indicating value
-                            'updates': np.zeros((self._size[1], self._size[0], 3),dtype=np.uint8)}  # (same)
+        self.base_images = {'states': np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8),  # representation of game state
+                            # colors indicating value
+                            'values': np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8),
+                            'updates': np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)}  # (same)
 
         self.disp_images = {'states': None,  # annotate version of base_images
                             'values': None,
                             'updates': None}
-        
+
         self.disp_titles = {'states': "States",
                             'values': "Values",
                             'updates': "Updates"}
-        
+
     def get_step_viz_frame_size(self):
         return self._size
+
+
+class FakeDemo(object):
+    def __init__(self, gui):
+        self._gui = gui
+        self._v = self._gui._values
+
+    def get_values(self):
+        return self._v, self._v
 
 
 def test_state_update_vis():
     #     def __init__(self, demo, gui, state, actions, next_states, rewards, old_value, new_value, bg_color=(0, 0, 0)):
 
-    state = Game.from_strs(["  ", "   ", "   "])
+    state = Game.from_strs(["OXO", "OX ", "   "])
+    print("TEST State:\n%s" % str(state))
     actions = state.get_actions()
     print("TEST Actions: %s" % str(actions))
     intermediate_states = [state.clone_and_move(action, Mark.X) for action in actions]
@@ -520,13 +551,19 @@ def test_state_update_vis():
                     for act in inter_state.get_actions()] for inter_state in intermediate_states]
     rewards = [0.0 for _ in actions]
     all_states = [state] + [next_pair[0] for state_dist in next_states for next_pair in state_dist]
-    old_values = {state: np.random.rand(1) for state in all_states}
 
     new_value = 0.5
-    step = PIStateStep(None, FakeGui(old_values), state, actions, next_states, rewards, old_values, new_value)
+
+    # Test Policy Evaluation step:
+    gui = FakeGui()
+    demo = FakeDemo(gui)
+    step = StateUpdateStep(None, gui, state, actions, next_states, rewards, old_values, new_value)
+
+    # Test policy optimization step:
+    #step = PIStateStep(demo, gui, state, actions, next_states, rewards, old_actions, new_action)
 
     img = step.draw_step_viz()
-    cv2.imshow("Step Visualization", img[:,:,::-1])
+    cv2.imshow("Step Visualization", img[:, :, ::-1])
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 

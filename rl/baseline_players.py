@@ -13,6 +13,7 @@ from tic_tac_toe import Game, Mark, Result
 from policies import Policy
 import logging
 
+
 class RandomPlayer(Policy):
     def __init__(self, mark):
         super(RandomPlayer, self).__init__(player=mark)
@@ -31,31 +32,15 @@ class HeuristicPlayer(Policy):
     1. If there is a winning move, take it.
     2. If the opponent has a winning move, block it.
     3. If the center is open, take it.
-    4. If the opponent is in a corner, take the opposite corner.
-    5. Take any open corner.
-    6. Take any open side.
-
-    Let a be the set of all possible actions for the agent given a game state.
-    Let r be the lowest-numbered rule that applies to an action.
-    let a_r be the set of actions that apply to rule r.
-    Let a_g be the complement, a - a_r.
-    let p_g be the probability of using an action not applying to any rules ("giving up") when there are rules to apply.
-
-    Then the probability for each action in a_r  is (1 - p_g)/|a_r|, and
-    the probability for each action in a_r is p_g/|a_g|.
-
-    I.e. the majority of probability mass (1-p_g) is given to the actions that apply to the rule and 
-    the rest goes to the actions that do not apply to the rule.
+    4. If there is a side-center, take it.
 
     """
 
-    def __init__(self, mark, n_rules=6, p_give_up=0):
+    def __init__(self, mark, n_rules=6):
         """
         :param mark:  one of Mark.X or Mark.O  Player optimizes actions for this player.
         :param n_rules:  number of rules to apply.  If n_rules=0, then just return  all actions with uniform probability.
-        :param p_give_up:  probability of giving up if no rules apply.  (default=1e-6)
         """
-        self._p_give_up = p_give_up
         self._n_rules = n_rules
         super(HeuristicPlayer, self).__init__(player=mark)
 
@@ -68,93 +53,71 @@ class HeuristicPlayer(Policy):
         :param game_state:  A Game object, it is the current player's turn.
         :returns: list of (action, probability) for all possible actions player can make.
         """
+
+        def _make_distribution(ret_actions):
+            # return uniform distribution over all actions
+            probs = np.ones(len(ret_actions)) / len(ret_actions)
+            return [ap for ap in zip(ret_actions, probs)]
+
         actions = game_state.get_actions()
 
-        def _give_up():
-            # return uniform distribution over all actions
-            return [ap for ap in zip(actions, np.ones(len(actions)) / len(actions))]
-
-        def _get_probs(good_action_inds):
-            n_good = len(good_action_inds)
-            n_bad = len(actions) - n_good
-            if n_good == 0 or n_bad == 0 or self._p_give_up == 0:
-                return [ap for ap in zip(actions, np.ones(len(actions)) / len(actions))]
-            
-            probs = np.zeros(len(actions)) + self._p_give_up / n_bad
-            probs[good_action_inds] = (1 - self._p_give_up) / n_good
-            return [ap for ap in zip(actions, probs / np.sum(probs))]
-
         if self._n_rules == 0:
-            return _give_up()
+            return _make_distribution(actions)  # give up, pick any action at random
 
         # Rule 1, any winning moves?
         player_next_states = [game_state.clone_and_move(action, self.player) for action in actions]
         endstates = [state.check_endstate() for state in player_next_states]
-        good_action_i = [action_i for action_i, term in enumerate( endstates) if term == self.winning_result]
-        if len(good_action_i) > 0:
-            return _get_probs(good_action_i)
+        good_action_inds = [action_i for action_i, term in enumerate(endstates) if term == self.winning_result]
+        if len(good_action_inds) > 0:
+            good_actions = [actions[i] for i in good_action_inds]
+            return _make_distribution(good_actions)
 
         if self._n_rules == 1:
-            return _give_up()
+            return _make_distribution(actions)
 
         # Rule 2, any blocking moves?
         opponent_next_states = [game_state.clone_and_move(action, self.opponent) for action in actions]
         opponent_endstates = [state.check_endstate() for state in opponent_next_states]
-        good_action_i = [action_i for action_i, term in enumerate(opponent_endstates) if term == self.losing_result]
-        if len(good_action_i) > 0:
-            return _get_probs(good_action_i)
+        good_action_inds = [action_i for action_i, term in enumerate(opponent_endstates) if term == self.losing_result]
+        if len(good_action_inds) > 0:
+            good_actions = [actions[i] for i in good_action_inds]
+            return _make_distribution(good_actions)
 
         if self._n_rules == 2:
-            return _give_up()
+            return _make_distribution(actions)
 
         # Rule 3, center
         if (1, 1) in actions:
-            ind = actions.index((1, 1))
-            return _get_probs([ind])
+            good_action_inds = [i for i, action in enumerate(actions) if action == (1, 1)]
+            good_actions = [actions[i] for i in good_action_inds]
+            return _make_distribution(good_actions)
 
         if self._n_rules == 3:
-            return _give_up()
+            return _make_distribution(actions)
 
-        # Rule 4, opposite corner
-        good_action_i = []
-        for act_i, action in enumerate(actions):
-            if action in [(0, 0), (0, 2), (2, 0), (2, 2)]:
-                opposite = (2 - action[0], 2 - action[1])
-                if game_state.state[opposite] == self.opponent:
-                    good_action_i.append(act_i)
+        # Rule 4: Set-up future winning move
+        #  TODO
 
-        if len(good_action_i) > 0:
-            return _get_probs(good_action_i)
-
-        if self._n_rules == 4:
-            return _give_up()
-
-        # Rule 5, any corner
-        good_action_i = []
-        for act_i, action in enumerate(actions):
-            if action in [(0, 0), (0, 2), (2, 0), (2, 2)]:
-                good_action_i.append(act_i)
-        if len(good_action_i) > 0:
-            return _get_probs(good_action_i)
-
-        # Rule 6, any side
-        good_action_i = []
+        # Rule 4, any side-center
+        good_action_inds = []
         for act_i, action in enumerate(actions):
             if action in [(0, 1), (1, 0), (1, 2), (2, 1)]:
-                good_action_i.append(act_i)
-        if len(good_action_i) > 0:
-            return _get_probs(good_action_i)
+                good_action_inds.append(act_i)
+        if len(good_action_inds) > 0:
+            good_actions = [actions[i] for i in good_action_inds]
+            return _make_distribution(good_actions)
 
-        return _give_up()
+        return _make_distribution(actions)
+
 
 def test_case():
     print("\n=====================================\n")
     case = Game.from_strs(["OXO", " XO", "XOX"])
-    p1 = HeuristicPlayer(Mark.X, n_rules=6)
+    p1 = HeuristicPlayer(Mark.X, n_rules=4)
 
     rec = p1.recommend_action(case)
     print("Game state:")
-    print(case) 
+    print(case)
     print("Player: %s\n" % p1.player.name)
     print("Recommended actions:")
     for action, prob in rec:
@@ -173,7 +136,7 @@ def test_baseline():
     def _check(game, player):
         term = game.check_endstate()
         if term is not None:
-            print("Game over with result: %s" % ( term.name,))
+            print("Game over with result: %s" % (term.name,))
             return True
         return False
 
@@ -193,8 +156,6 @@ def test_baseline():
         if _check(game, p2):
             break
 
-
-
     print(game)
     print("Game over")
 
@@ -202,4 +163,4 @@ def test_baseline():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
     test_baseline()
-    #test_case()
+    # test_case()
