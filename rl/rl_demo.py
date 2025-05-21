@@ -23,29 +23,44 @@ from selection_panel import SelectionPanel
 from reinforcement_base import Environment
 from tic_tac_toe import Game
 from game_base import Mark, TERMINAL_REWARDS, get_reward
-from alg_panels import StatusControlPanel
+from alg_panels import StatePanel, VisualizationPanel
+from status_ctrl_panel import StatusControlPanel
+import time
 import pickle
 from baseline_players import HeuristicPlayer
 # Will display in this order:
-ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
+from test_panels import TestDemoAlg
+
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
+
+ALGORITHMS = [TestDemoAlg, PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
               QLearningDemoAlg, PolicyGradientsDemoAlg]
 
 AGENT_MARK = Mark.X  # The agent's mark in the game.
 OPPONENT_MARK = Mark.O  # The opponent's mark in the game.
 
+FPS = 15
+
 
 class RLDemoApp(object):
     def __init__(self):
+
         self._init_tk()
-        self._init_selection()  # This function will also set the current algorithm.
-        alg_ind = self._get_alg_ind(self._selector.cur_alg_name)
+        self._init_selection()  # This function will also create the current algorithm.
+
+        # Selection panel defines opponent player so we can make the enviornment now
+
         self._fullscreen = False
         self.shutdown = False  # set to True to signal the app to exit
-        self._env = Environment(self._opp_policy, AGENT_MARK)
-        self._pending_clears = []  # call these functions when a button is pressed (clear status msgs, etc.)
-        self._alg = ALGORITHMS[alg_ind](self, self._env)
-        self.paused=True
-
+        self.paused = True
+        self._init_ctrl_point = None  # Start paused here.
+        # For running continuous modes:
+        self._timing_info = {'t_last_refresh': time.perf_counter(),  # for refreshing the window
+                             't_last_print': time.perf_counter(),  # for printing the FPS
+                             'print_interval_sec': 1.0,
+                             'n_frames': 0,
+                             'fps': 0.0}
+        self._ticks_skipped = 0
         self._init_alg_panels()
 
     def _init_tk(self):
@@ -54,13 +69,28 @@ class RLDemoApp(object):
         self.root.geometry(f"{WIN_SIZE[0]}x{WIN_SIZE[1]}")
 
     def _init_selection(self):
-        self._selector = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'])
-        self._selector.set_selection(name=ALGORITHMS[0].get_name())
-        # Selection panel defines opponent player so we can make the enviornment now
-        self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=self._selector.opp_n_rules)
+        self._selection_panel = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'])
+        self._selection_panel.set_selection(self._selection_panel.cur_alg_name)  # necessary?
 
     def _init_alg_panels(self):
+        self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=self._selection_panel.opp_n_rules)
+        self._env = Environment(self._opp_policy, AGENT_MARK)
+        
+        alg_ind = self._get_alg_ind(self._selection_panel.cur_alg_name)
+        self._alg = ALGORITHMS[alg_ind](self, self._env)
+        self._init_ctrl_point = self._alg.get_init_control()  # first control point
+
+        # Create panels that need to know about the algorithm:
         self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'])
+        self._state_panel = StatePanel(self, self._alg, LAYOUT['frames']['state-tabs'])
+        self._visualization_panel = VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'])
+
+
+    def change_alg(self, alg_name):
+        alg_ind = self._get_alg_ind(alg_name)
+        self._alg = ALGORITHMS[alg_ind](self, self._env)
+        self._status_control_panel.change_algorithm(self._alg)
+        self._init_ctrl_point = self._alg.get_init_control()  # first control point
 
     def toggle_fullscreen(self):
 
@@ -109,15 +139,12 @@ class RLDemoApp(object):
                 alg_name = pickle.load(f)
             alg_ind = self._get_alg_ind(alg_name)
             self._alg = ALGORITHMS[alg_ind](self, self._env)
+            self._init_ctrl_point = self._alg.get_init_control()  
             self._alg.load_state(filename)
             logging.info(f"State loaded from {filename}")
             # new algorithm might be a different type, so inform the selection panel:
             print("Changing selector to loaded type: ", alg_name)
-            self._selector.set_selection(name=alg_name)
-
-    def change_alg(self, alg_name):
-        alg_ind = self._get_alg_ind(alg_name)
-        self._alg = ALGORITHMS[alg_ind](self, self._env)
+            self._selection_panel.set_selection(name=alg_name)
 
     def set_opponent(self, n_rules):
         """
@@ -131,11 +158,50 @@ class RLDemoApp(object):
     def reset_state(self):
         logging.info("Resetting demo state.")
         self._alg.reset_state()
+        self._status_control_panel.refresh_status()
+        self._state_panel.refresh_images(is_paused=self.paused)
+        self._visualization_panel.refresh_images(is_paused=self.paused, control_point=self._init_ctrl_point)
 
     def start(self):
+        logging.info("Starting algorithm.")
+        self._alg.start()
         logging.info("Starting RL Demo App")
         self.root.mainloop()
         logging.info("Exiting RL Demo App")
+
+    @LPT.time_function
+    def tick(self, is_paused, control_point):
+        """
+        Called every tick to update the algorithm and the panels.
+        :param is_paused: Whether the algorithm is paused or not.
+        """
+        if is_paused:
+            self.paused = True
+            self._status_control_panel.refresh_status()
+            self._state_panel.refresh_images(is_paused=True)
+            self._visualization_panel.refresh_images(is_paused=True, control_point=control_point)
+        else:
+            self.paused = False
+            now = time.perf_counter()
+            elapsed = now - self._timing_info['t_last_refresh']
+
+            if elapsed > 1.0 / FPS:
+                self._status_control_panel.refresh_status()
+                self._state_panel.refresh_images(is_paused=False)
+                self._visualization_panel.refresh_images(is_paused=False, control_point=control_point)
+                self._timing_info['n_frames'] += 1
+                self._timing_info['t_last_refresh'] = now
+
+            else:
+                self._ticks_skipped += 1
+            elapsed = now - self._timing_info['t_last_print']
+            if elapsed >= self._timing_info['print_interval_sec']:
+                self._timing_info['fps'] = self._timing_info['n_frames'] / elapsed
+                logging.info(
+                    f"N-frames:  {self._timing_info['n_frames']}, FPS: {self._timing_info['fps']:.2f}, ticks skipped: {self._ticks_skipped}")
+                self._timing_info['n_frames'] = 0
+                self._ticks_skipped
+                self._timing_info['t_last_print'] = now
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ import pickle
 from threading import Event
 import logging
 
+from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 class DemoAlg(ABC):
     """
@@ -28,20 +29,11 @@ class DemoAlg(ABC):
         self._go_signal = Event()  # Used to signal the algorithm to advance/continue.
         self._go_signal.clear()  # Initially, the algorithm is not running.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
-        self.state_image_size = None
-        self.state_images = {'running': {},
-                             'paused': {}}
+        self.paused=False
+        self.current_ctrl_pt = self.get_init_control()  # The current control point for the algorithm.
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
         self.app = app
-
-    @abstractmethod
-    def _start(self):
-        """
-        Start the algorithm running in a separate thread.
-        At every point it can be paused (the control points), call self._maybe_pause(control_point)
-        """
-        pass
 
     def advance(self):
         """
@@ -54,7 +46,26 @@ class DemoAlg(ABC):
         Update the run control options.
         :param run_control: The run control options dict(option: bool) (see alg_panels.StatusControlPanel)
         """
-        self._run_control=new_rcs
+        self._run_control = new_rcs
+
+        
+    def _maybe_pause(self, control_point):
+        """
+        Pause the algorithm if the run control indicates to do so.
+        :param control_point: The control point to check.
+        """
+        self.current_ctrl_pt = control_point
+        
+        if self._run_control[control_point]:
+            self.paused = True
+
+            self.app.tick(is_paused=True, control_point=control_point)
+            self._go_signal.wait()
+            self._go_signal.clear()
+        else:
+            self.paused = False
+            self.app.tick(is_paused=False, control_point=control_point)
+
 
     @staticmethod
     def is_stub():
@@ -77,6 +88,15 @@ class DemoAlg(ABC):
         references w/the gui, strings are for displaying in checkboxes.
         """
         pass
+
+    def get_init_control(self):
+        """
+        Return the initial control point for the algorithm.
+        :return: The initial control point.
+        """
+        options = self.get_run_control_options()
+        names =[name for name in options]
+        return names[0]
 
     @staticmethod
     @abstractmethod
@@ -104,6 +124,7 @@ class DemoAlg(ABC):
         :param state_file: The file to save the state to.
         """
         pass
+
     @abstractmethod
     def start(self):
         """
@@ -124,6 +145,28 @@ class DemoAlg(ABC):
         """
         Get the current status of the algorithm (for display in the status panel).
         :return: list of (text, font) tuples to be displayed in the status panel.
+        """
+        pass
+
+    @abstractmethod
+    def get_state_image(self, size, tab_name, is_paused):
+        """
+        Get the state image for the given tab.
+        :param size: (width, height) tuple for the image size.
+        :param tab_name: The name of the tab.
+        :param is_paused: Whether the algorithm is paused or not.
+        :return: The state image for the given tab.
+        """
+        pass
+
+    @abstractmethod
+    def get_viz_image(self, size, control_point, is_paused):
+        """
+        Get the visualization image for the given tab.
+        :param size: (width, height) tuple for the image size.
+        :param control_point: String ('state', 'epoch', etc. what to visualize).
+        :param is_paused: Whether the algorithm is paused or not.
+        :return: The visualization image for the given tab.
         """
         pass
 

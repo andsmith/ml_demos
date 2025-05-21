@@ -7,6 +7,7 @@ import layout
 from game_base import Mark, TERMINAL_REWARDS, get_reward
 from collections import OrderedDict
 
+
 class PolicyImprovementPhases(IntEnum):
     POLICY_EVAL = 0
     POLICY_OPTIM = 1
@@ -35,7 +36,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         logging.info("PolicyEvalDemoAlg initialized.")
 
     def reset_state(self):
-
+        print("Class: %s resetting state" % self.__class__.__name__)
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
 
@@ -66,7 +67,7 @@ class PolicyEvalDemoAlg(DemoAlg):
                       ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
                       ("PE Epoch: {}".format(self.pe_iter), font_default),
                       ("PE State: {} of {}".format(self.next_state_ind+1, len(self.updatable_states)), font_default),
-                      ("Max Delta Vs: %.3f (max %.1e)"%(self.max_delta_vs, self._delta_v_tol), font_default)]
+                      ("Max Delta Vs: %.3f (max %.1e)" % (self.max_delta_vs, self._delta_v_tol), font_default)]
             if self.pe_converged:
                 status += [(" Converged in %i iterations" % (self._pe_iter+1,), font_bold)]
             else:
@@ -134,10 +135,10 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['epoch-update'] = "epoch update"
         rco['policy-update'] = "policy update"
         return rco
-    
+
     def start(self):
         pass
-    
+
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def __init__(self, app, env, gamma=0.9):
@@ -149,6 +150,7 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
         :param env: The environment object.
         :param gamma: The discount factor (default is 0.9).
         """
+
         super().__init__(app=app, env=env)
         self.gamma = gamma
 
@@ -156,12 +158,19 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def get_name():
         return 'pi-pe-inplace'
 
+    def get_status(self):
+        font_default = layout.LAYOUT['fonts']['status']
+        font_bold = layout.LAYOUT['fonts']['status_bold']
+
+        status = super().get_status()
+        status[0] = ("PI(In-Pl.) Phase: Policy Evaluation", font_bold)
+        status[0] = ("PI(In-Place) Phase: Policy Evaluation", font_bold)
+        return status
+
     @staticmethod
     def get_str():
         return "(PI) In-Place Policy Evaluation"
-    
-    def reset_state(self):
-        pass
+
 
     def load_state(self, filename):
         """
