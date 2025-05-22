@@ -195,7 +195,7 @@ class RansacImageData(RansacDataFeatures):
         return self._dataset
 
 
-def plot_pointset_overlap(axis, pts1, pts2, min_dist, label1=None, label2_in=None, label2_out=None):
+def plot_pointset_overlap(axis, pts1, pts2, min_dist, inlier_pairs, label1=None, label2_in=None, label2_out=None):
     """
     Plot pts1 in green dots, calculate which of pts2 are within min_dist of a point
     in pts1, and plot them in blue circles, plot the rest of pts2 in red circles.
@@ -205,15 +205,14 @@ def plot_pointset_overlap(axis, pts1, pts2, min_dist, label1=None, label2_in=Non
     axis.plot(pts1[:, 0], pts1[:, 1], '.', markersize=DOT_SIZE, color=NEON_GREEN, label=label1)
 
     # find points in pts2 that are within min_dist of any point in pts1
-    distances = cdist(pts1, pts2)
-    min_dists = distances.min(axis=0)
-    inliers = min_dists < min_dist
+    inlier_inds = list(set([f[1] for f in inlier_pairs]))
+    inliers = np.array([i in inlier_inds for i in range(len(pts2))])
     outliers = np.logical_not(inliers)
     axis.plot(pts2[inliers, 0], pts2[inliers, 1], 'o', markersize=BUBBLE_SIZE,
               color=NEON_BLUE, fillstyle='none', label=label2_in)
     axis.plot(pts2[outliers, 0], pts2[outliers, 1], 'o', markersize=BUBBLE_SIZE,
               color=NEON_RED, fillstyle='none', label=label2_out)
-    return inliers.sum()
+    return len(inlier_pairs)
 
 
 class RansacAffine(RansacModel):
@@ -250,11 +249,14 @@ class RansacAffine(RansacModel):
         self._model_params = Affine.from_point_pairs(src_pts, dst_pts)
 
     def _get_inliers(self):
+        #import ipdb; ipdb.set_trace()
         features = self.data.get_features()
         corners1_moved = self._model_params.apply(self.data.corners_1)
         c2c_distances = cdist(corners1_moved, self.data.corners_2)
         scores = [c2c_distances[f[0]][f[1]] for f in features]
-        return np.array(scores) < self.thresh
+        inliers = np.array(scores) < self.thresh
+        print("N inliers: %i / %i" % (inliers.sum(), len(inliers)))
+        return inliers
 
     @staticmethod
     def _animation_setup():
@@ -279,7 +281,7 @@ class RansacAffine(RansacModel):
                                          'img1': current_fig.add_subplot(current_gs[1, 0]),
                                          'img2': current_fig.add_subplot(current_gs[1, 1])}}
 
-    def plot_nesting_bboxes(self, axis, img, c1, c2, back_transf, which='gray'):
+    def plot_nesting_bboxes(self, axis, img, c1, c2, back_transf, inlier_pairs, which='gray'):
         """
         Show the image, plot detected corners as green dots, plot back-transformed corners
         as circles, blue if within threshold of a green dot, else red.
@@ -289,14 +291,17 @@ class RansacAffine(RansacModel):
         :param img: TestImage object
         :param c1: corners in img
         :param c2: corners in the other image
+
         :param back_transf: Affine object, mapping 2->1
+        :param inlier_pairs: list of pairs of indices into c1 and c2, indicating which corners are inliers
         """
         img.plot(axis, which=which)
 
         # Plot the image 1 detected corners and corners 2 transformed to image 1 space
         c2_back = back_transf.apply(c2)
         n_match = plot_pointset_overlap(axis, c1, c2_back, 10.0, label1='Image 1 corners',
-                                        label2_in='Img2C-match', label2_out='Img2C-no match')
+                                        label2_in='Img2C-match', label2_out='Img2C-no match',
+                                        inlier_pairs=inlier_pairs)
 
         # add legend
         # axis.legend(fontsize=LEGEND_FONTSIZE, loc='lower left')
@@ -377,10 +382,12 @@ class RansacAffine(RansacModel):
         transf = model._model_params
         inv_tr = model._model_params.invert()
 
+        inliers = model.inlier_mask
+        inlier_pairs = data.get_features(indices=np.where(inliers)[0])
+        inlier_pairs_swapped = [(f[1], f[0]) for f in inlier_pairs]
         # plot the images, transformed corners, and bounding boxes:
-        model.plot_nesting_bboxes(axes['img1'], img1, model.data.corners_1, model.data.corners_2, inv_tr, which=which)
-        model.plot_nesting_bboxes(axes['img2'], img2, model.data.corners_2, model.data.corners_1, transf, which=which)
-
+        model.plot_nesting_bboxes(axes['img1'], img1, model.data.corners_1, model.data.corners_2, inv_tr, which=which, inlier_pairs=inlier_pairs)
+        model.plot_nesting_bboxes(axes['img2'], img2, model.data.corners_2, model.data.corners_1, transf, which=which, inlier_pairs=inlier_pairs_swapped)
         axes['img1'].set_title('Image 1')
         axes['img2'].set_title('Image 2')
         axes['features'].set_title("%s %i inliers (%.2f %%)" % (title_prefix,
