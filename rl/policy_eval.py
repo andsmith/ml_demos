@@ -169,7 +169,7 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
 
     @staticmethod
     def get_str():
-        return "(PI) In-Place Policy Evaluation"
+        return "(PI) In-Place Policy Eval."
 
 
     def load_state(self, filename):

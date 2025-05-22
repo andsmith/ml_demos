@@ -36,7 +36,7 @@ class InPlaceDPDemoAlg(DynamicProgDemoAlg):
 
     @staticmethod
     def get_str():
-        return "(PI) In-Place Dynamic Programming"
+        return "(PI) In-Place Dynamic Prog."
 
 
     @staticmethod

@@ -1,21 +1,22 @@
 
 
-MID_X = 0.35  # "state-tabs" frame (sate/value/update images) to the right of this point
+MID_X = 0.38  # "state-tabs" frame (sate/value/update images) to the right of this point
 MID_Y = 0.4  # "step-visualization" frame below this point
-HALF_MID_X = 0.18
+LOW_Y = 0.84
+HALF_MID_X = 0.15
 
-LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
+LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                                    'y_rel': (0.0, MID_Y)},
 
-                     'control': {'x_rel': (HALF_MID_X, MID_X),
-                                 'y_rel': (0.0, MID_Y)},
-                     'step-visualization': {'x_rel': (0.0, MID_X),
-                                            'y_rel': (MID_Y, 1.0)},
+                     'selection': {'x_rel': (0.0, HALF_MID_X),
+                                 'y_rel': (MID_Y, LOW_Y)},
+                     'step-visualization': {'x_rel': (HALF_MID_X, MID_X),
+                                            'y_rel': (0.0, 1.0)},
                      'state-tabs': {'x_rel': (MID_X, 1.0),
                                     'y_rel': (0.0, 1.0)}
                      },
 
-          'margin_px': 5,
+          'margin_rel': .0025,  # margin between frames in relative coordinates
 
           'fonts': {'panel_title': ('Helvetica', 16, 'underline'),
                     'title': ('Helvetica', 16, 'underline'),
@@ -27,6 +28,7 @@ LAYOUT = {'frames': {'selection': {'x_rel': (0.0, HALF_MID_X),
                     'big_button': ('Helvetica', 14, 'bold'),
                     'tabs': ('Helvetica', 12, 'bold'),
                     'flag': ('Helvetica', 13, 'bold')}}
+TITLE_INDENT = 5
 
 
 WIN_SIZE = (1920, 990)

@@ -45,6 +45,7 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         super().__init__(*args, **kwargs)
 
     def reset_state(self):
+        print("TEST_ALG RESET_STATE")
         self.pe_iter = 0
         self.next_state_ind = 0
         n_circles = 50
@@ -133,13 +134,11 @@ class TestDemoAlg(PolicyEvalDemoAlg):
             """
             If running, move the circles XYZ randomly every frame (FPS times per second).
             """
-            n_frames = 0
             print("---------------> STARTING TEST DEMO ALGORITHM")
             LPT.reset(enable=False, burn_in=4, display_after=5)
 
             while True:
-                n_frames += 1
-                self.pe_iter = n_frames
+                self.pe_iter +=1
                 #if n_frames % 30 == 0:
                 #    print("TestDemoAlg: frame %i" % n_frames)
                 LPT.mark_loop_start()
@@ -170,7 +169,7 @@ class TestDemoAlg(PolicyEvalDemoAlg):
 
     @staticmethod
     def get_str():
-        return "Test Algorithm (Bouncing Circles)"
+        return "Test Algorithm (Circles)"
 
 
 '''

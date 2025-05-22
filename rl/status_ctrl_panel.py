@@ -19,7 +19,7 @@ from threading import Thread, Event, get_ident
 import cv2
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
-TITLE_INDENT = 0
+TITLE_INDENT = 5
 ITEM_INDENT = 20
 
 
@@ -28,24 +28,27 @@ class StatusControlPanel(Panel):
     Status panel for displaying the current status of the algorithm and buttons for controlling it.
     """
 
-    def __init__(self, app, alg, bbox_rel):
+    def __init__(self, app, alg, bbox_rel,margin_rel=0.0):
         """
         :param app: The application object.
         :param alg: a DemoAlg object (RL state)
         """
         self._alg = alg
         self._run_control_options = []
-        super().__init__(app, bbox_rel)
+        super().__init__(app, bbox_rel, margin_rel=margin_rel)
 
     def _init_widgets(self):
 
         # init three frames:
+        y1=.45
+        y2=.8
         self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
-        self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=0.5)
+        self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=y1)
         self._run_control_frame = tk.Frame(self._frame, bg=self._bg_color)
-        self._run_control_frame.place(relx=0, rely=0.5, relwidth=0.5, relheight=0.5)
+        self._run_control_frame.place(relx=0, rely=y1, relwidth=1., relheight=y2-y1)
         self._button_frame = tk.Frame(self._frame, bg=self._bg_color)
-        self._button_frame.place(relx=0.5, rely=0.5, relwidth=0.5, relheight=0.5)
+        self._button_frame.place(relx=0.0, rely=y2, relwidth=1., relheight=1-y2)
+        self._frame.bind("<Configure>", self._on_resize)
 
         self._run_control_vars = {}
 
@@ -149,13 +152,13 @@ class StatusControlPanel(Panel):
         self._clear_button = tk.Button(self._button_frame, text="Clear Stops",
                                        font=LAYOUT['fonts']['buttons'], bg=self._bg_color,
                                        command=self._clear_breakpoints, padx=7, pady=5)
-        self._clear_button.pack(side=tk.TOP, pady=10)
+        self._clear_button.pack(side=tk.LEFT, pady=10,padx=5)
 
         # "Go/Stop" button
         self._go_button = tk.Button(self._button_frame, text="Go",
                                     font=LAYOUT['fonts']['buttons'], bg=self._bg_color,
                                     command=self._go_stop, padx=7, pady=5)
-        self._go_button.pack(side=tk.TOP, pady=10)
+        self._go_button.pack(side=tk.LEFT, pady=10, padx=5)
 
     def _clear_breakpoints(self):
         pass

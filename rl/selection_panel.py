@@ -7,7 +7,7 @@ import logging
 import tkinter as tk
 import numpy as np
 from gui_base import Panel
-from layout import LAYOUT
+from layout import LAYOUT, TITLE_INDENT
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT, COLOR_URGENT
 from util import tk_color_from_rgb
 
@@ -22,7 +22,7 @@ class SelectionPanel(Panel):
         * Fullscreen / Window (toggle button text)
     """
 
-    def __init__(self, app, alg_types, bbox_rel):
+    def __init__(self, app, alg_types, bbox_rel,margin_rel=0.0):
         """
         :param app: The main application object.
         :param alg_types: List of algorithm types to display.
@@ -40,7 +40,7 @@ class SelectionPanel(Panel):
         self.opp_n_rules = 2  # number of rules for heuristic opponent(0-6)
         self._pending_opp_n_rules = None
 
-        super().__init__(app=app, bbox_rel=bbox_rel)
+        super().__init__(app=app, bbox_rel=bbox_rel, margin_rel=margin_rel)
 
     def _init_widgets(self):
         self._init_title()
@@ -54,7 +54,7 @@ class SelectionPanel(Panel):
         self._title = tk.Label(self._frame, text=(self._algs_by_name[self.cur_alg_name].get_str()),
                                font=LAYOUT['fonts']['panel_title'],
                                bg=self._color_bg, fg=self._color_text)
-        self._title.pack(pady=5)
+        self._title.pack(pady=5, padx=TITLE_INDENT, anchor=tk.W)
         self._add_spacer()
 
     def _init_selection_buttons(self):
@@ -74,7 +74,7 @@ class SelectionPanel(Panel):
                                                                font=LAYOUT['fonts']['menu'],
                                                                bg=self._color_bg,
                                                                )
-            self._selection_buttons[alg_name].pack(anchor=tk.W, padx=25)
+            self._selection_buttons[alg_name].pack(anchor=tk.W, padx=15)
 
     def _init_demo_buttons(self):
         """
@@ -114,12 +114,12 @@ class SelectionPanel(Panel):
         self._opponent_slider.grid(row=1, column=0, columnspan=3, sticky=tk.W, padx=5, pady=10)
 
         # put the save load, fullscreen buttons centered in the bottom frame:
-        self._save_button = tk.Button(bottom_frame, text="Save State", command=self.app.save_state,
+        self._save_button = tk.Button(bottom_frame, text="Save", command=self.app.save_state,
                                       font=LAYOUT['fonts']['buttons'],
                                       bg=self._color_bg, fg=self._color_text)
         self._save_button.grid(row=2, column=0, padx=5, pady=5, sticky=tk.W + tk.E)
 
-        self._load_button = tk.Button(bottom_frame, text="Load State", command=self.app.load_state,
+        self._load_button = tk.Button(bottom_frame, text="Load", command=self.app.load_state,
                                       font=LAYOUT['fonts']['buttons'],
                                       bg=self._color_bg, fg=self._color_text)
         self._load_button.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W + tk.E)

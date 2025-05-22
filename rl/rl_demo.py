@@ -30,7 +30,7 @@ import pickle
 from baseline_players import HeuristicPlayer
 # Will display in this order:
 from test_panels import TestDemoAlg
-
+from util import tk_color_from_rgb
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 ALGORITHMS = [TestDemoAlg, PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
@@ -65,11 +65,14 @@ class RLDemoApp(object):
 
     def _init_tk(self):
         self.root = Tk()
+        self.root.configure(bg=tk_color_from_rgb(COLOR_LINES))
         self.root.title("Reinforcement Learning Demo")
         self.root.geometry(f"{WIN_SIZE[0]}x{WIN_SIZE[1]}")
+        # Set background color to black.
+
 
     def _init_selection(self):
-        self._selection_panel = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'])
+        self._selection_panel = SelectionPanel(self, ALGORITHMS, LAYOUT['frames']['selection'],margin_rel = LAYOUT['margin_rel'])
         self._selection_panel.set_selection(self._selection_panel.cur_alg_name)  # necessary?
 
     def _init_alg_panels(self):
@@ -81,9 +84,9 @@ class RLDemoApp(object):
         self._init_ctrl_point = self._alg.get_init_control()  # first control point
 
         # Create panels that need to know about the algorithm:
-        self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'])
-        self._state_panel = StatePanel(self, self._alg, LAYOUT['frames']['state-tabs'])
-        self._visualization_panel = VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'])
+        self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'],margin_rel = LAYOUT['margin_rel'])
+        self._state_panel = StatePanel(self, self._alg, LAYOUT['frames']['state-tabs'],margin_rel = LAYOUT['margin_rel'])
+        self._visualization_panel = VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'],margin_rel = LAYOUT['margin_rel'])
 
 
     def change_alg(self, alg_name):
@@ -168,6 +171,14 @@ class RLDemoApp(object):
         logging.info("Starting RL Demo App")
         self.root.mainloop()
         logging.info("Exiting RL Demo App")
+
+    def get_aspect(self):
+        """
+        Get the aspect ratio of the window.
+        :return: The aspect ratio of the window.
+        """
+        width, height = self.root.winfo_width(), self.root.winfo_height()
+        return width / height
 
     @LPT.time_function
     def tick(self, is_paused, control_point):

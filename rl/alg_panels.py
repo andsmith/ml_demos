@@ -12,14 +12,13 @@ import numpy as np
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT, NEON_BLUE, NEON_GREEN, NEON_RED
 from gui_base import Panel
 from util import tk_color_from_rgb, get_clobber_free_filename
-from layout import LAYOUT, WIN_SIZE
+from layout import LAYOUT, WIN_SIZE, TITLE_INDENT
 import logging
 import time
 from threading import Thread, Event, get_ident
 import cv2
 from abc import ABC, abstractmethod
 
-TITLE_INDENT = 0
 ITEM_INDENT = 20
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
@@ -29,8 +28,8 @@ class AlgDepPanel(Panel, ABC):
     Panels that require updating from the algorithm.
     """
 
-    def __init__(self, app, alg, bbox_rel):
-        super().__init__(app, bbox_rel)
+    def __init__(self, app, alg, bbox_rel, margin_rel=0.0):
+        super().__init__(app, bbox_rel, margin_rel=margin_rel)
         self.change_algorithm(alg)
 
     def change_algorithm(self, alg):
@@ -54,7 +53,7 @@ class StatePanel(AlgDepPanel):
     Tabbed interface, queries algorithm for details.
     """
 
-    def __init__(self, app, alg, bbox_rel):
+    def __init__(self, app, alg, bbox_rel,margin_rel=0.0):
         """
         :param app: The application object.
         :param bbox_rel: The bounding box for the panel, relative to the parent frame.
@@ -67,7 +66,7 @@ class StatePanel(AlgDepPanel):
         """
         self._state_tabs = {}
         self._state_image_size = None
-        super().__init__(app, alg, bbox_rel)
+        super().__init__(app, alg, bbox_rel, margin_rel=margin_rel)
 
     def change_algorithm(self, alg):
         """
@@ -181,10 +180,10 @@ class VisualizationPanel(AlgDepPanel):
     It will also display the current policy and the current value function.
     """
 
-    def __init__(self, app, alg,  bbox_rel):
+    def __init__(self, app, alg,  bbox_rel, margin_rel=0.0):
         self._state_image_size = None
         self._state_images = {}
-        super().__init__(app, alg, bbox_rel)
+        super().__init__(app, alg, bbox_rel, margin_rel=margin_rel)
 
     def _init_widgets(self):
         # no widgets, just a label for the viz image
