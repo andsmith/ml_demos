@@ -10,7 +10,7 @@ DARK_GRAY = 100,100,100 # background against state value images
 SKY_BLUE = 135, 206, 235
 NEON_GREEN = 57, 255, 20
 NEON_BLUE = (31, 81, 255)
-NEON_RED = (255, 20, 147)
+NEON_RED = (255, 20, 47)
 import numpy as np
 
 # background and line colors
