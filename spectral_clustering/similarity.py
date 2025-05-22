@@ -81,6 +81,7 @@ class EpsilonSimGraph(SimilarityGraph):
         weight 1 or 0.
         """
         dists = squareform(pdist(self._points))
+        np.fill_diagonal(dists, np.inf)
         sim_matrix = np.zeros(dists.shape)
         sim_matrix[dists <= self._epsilon] = 1
         return sim_matrix
