@@ -7,7 +7,7 @@ import layout
 from game_base import Mark, TERMINAL_REWARDS, get_reward
 from collections import OrderedDict
 
-
+from state_image_manager import StateImageManager
 class PolicyImprovementPhases(IntEnum):
     POLICY_EVAL = 0
     POLICY_OPTIM = 1
@@ -29,6 +29,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
         self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        #self._state_img_mgr = StateImageManager(self._env)
         self._delta_v_tol = 1e-6
         self.pi_seed = None
         self.gamma = gamma

@@ -25,7 +25,7 @@ def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
             if np.sum(state.state == player_mark) == n_marks:
                 layer.append({key: state})
         layers.append(layer)
-        print("Layer %i had %i states." % (n_marks, len(layer)))
+        print("Layer %i has %i states." % (n_marks, len(layer)))
     return layers
 
 def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
