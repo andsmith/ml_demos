@@ -8,10 +8,11 @@ Sublcasses manage 3 panels:
 
 from abc import ABC, abstractmethod
 import pickle
-from threading import Event
+from threading import Event, Thread,get_ident
 import logging
 
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
+# from loop_timing.loop_profiler import LoopPerfTimer as LPT
+
 
 class DemoAlg(ABC):
     """
@@ -25,11 +26,15 @@ class DemoAlg(ABC):
     def __init__(self, app):
         """
         :param app: The main app object.
+        :param advance_event: Event to signal when the algorithm should advance.
         """
-        self._go_signal = Event()  # Used to signal the algorithm to advance/continue.
-        self._go_signal.clear()  # Initially, the algorithm is not running.
+        self._go_signal = None  # Used to signal the algorithm to advance/continue.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
-        self.paused=False
+
+        self.paused = True
+        self._shutdown = False
+        self._learn_thread = None
+
         self.current_ctrl_pt = self.get_init_control()  # The current control point for the algorithm.
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
@@ -48,14 +53,14 @@ class DemoAlg(ABC):
         """
         self._run_control = new_rcs
 
-        
     def _maybe_pause(self, control_point):
         """
         Pause the algorithm if the run control indicates to do so.
         :param control_point: The control point to check.
         """
-        self.current_ctrl_pt = control_point
         
+        self.current_ctrl_pt = control_point
+
         if self._run_control[control_point]:
             self.paused = True
 
@@ -66,6 +71,7 @@ class DemoAlg(ABC):
             self.paused = False
             self.app.tick(is_paused=False, control_point=control_point)
 
+        return self._shutdown  # was this changed while paused?
 
     @staticmethod
     def is_stub():
@@ -89,13 +95,22 @@ class DemoAlg(ABC):
         """
         pass
 
+    @staticmethod
+    @abstractmethod
+    def get_state_tab_info():
+        """
+        ordered dict of {tab_name: display_name} for the state image panel.
+        :return: A dictionary of tab names and their display names.
+        """
+        pass
+
     def get_init_control(self):
         """
         Return the initial control point for the algorithm.
         :return: The initial control point.
         """
         options = self.get_run_control_options()
-        names =[name for name in options]
+        names = [name for name in options]
         return names[0]
 
     @staticmethod
@@ -126,13 +141,42 @@ class DemoAlg(ABC):
         pass
 
     @abstractmethod
-    def start(self):
+    def _learn_loop(self):
         """
         Start the algorithm running in a separate thread.
         At every point it can be paused (the control points), call self._maybe_pause(control_point)
+        Stop when self._shutdown is set to True.
+
         """
         pass
 
+
+    def start(self, advance_event):
+
+        self._go_signal = advance_event
+        self._go_signal.clear()
+
+        def _learn_proc():
+            self._learn_loop()
+            logging.info("Algorithm thread finished (%s)." % get_ident())   
+
+
+        self._learn_thread = Thread(target=_learn_proc, daemon=True)
+        self._learn_thread.start()
+        logging.info("Algorithm thread started from %s." %( get_ident(),))
+
+    def stop(self):
+        if self._go_signal is not None:
+            self._go_signal.set()  # Signal the algorithm to stop.
+
+        self._shutdown = True
+        if self._learn_thread is not None:
+            self._learn_thread.join()
+            logging.info("Algorithm thread stopped from %s." % get_ident())
+        else:
+            logging.info("Algorithm thread was not started in %s." % get_ident())
+        self._go_signal = None
+    
     @abstractmethod
     def reset_state(self):
         """

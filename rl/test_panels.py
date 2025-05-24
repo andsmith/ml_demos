@@ -25,7 +25,7 @@ import layout
 TITLE_INDENT = 0
 ITEM_INDENT = 20
 
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
+# from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 
 class TestDemoAlg(PolicyEvalDemoAlg):
@@ -50,7 +50,7 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         self.next_state_ind = 0
         n_circles = 50
         self._image_data = np.random.rand(4 * n_circles).reshape(n_circles, 4)  # plot these (x,y, rad,thickness)
-        self._circle_v = np.random.randn(n_circles* 2).reshape(n_circles, 2) * .0025
+        self._circle_v = np.random.randn(n_circles * 2).reshape(n_circles, 2) * .0025
 
     def get_run_control_options(self):
         """
@@ -101,7 +101,8 @@ class TestDemoAlg(PolicyEvalDemoAlg):
                              color, thickness=1, lineType=cv2.LINE_AA, shift=PREC_BITS)
         # draw the circles:
         return img
-    @LPT.time_function
+    # @LPT.time_function
+
     def get_viz_image(self, size, control_point, is_paused):
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
         img[:] = self._bkg_color_rgb
@@ -113,11 +114,11 @@ class TestDemoAlg(PolicyEvalDemoAlg):
             r = np.random.randint(5, 20)
             color = self._line_color_rgb if not special else NEON_BLUE
             cv2.circle(img, (x, y), r, color, thickness=-1 if (not is_paused) else 3, lineType=cv2.LINE_AA)
-            update_txt= "State updated:  %i" % self.next_state_ind
+            update_txt = "State updated:  %i" % self.next_state_ind
             cv2.putText(img, update_txt, (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, NEON_GREEN, 1, cv2.LINE_AA)
         return img
-    
-    @LPT.time_function
+
+    # @LPT.time_function
     def get_state_image(self, size, tab_name, is_paused):
         """
         """
@@ -128,41 +129,31 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         img = self._draw_image_data(img, connect=connect, fill=filled)
         return img
 
-    def start(self):
+    def _learn_loop(self):
+        """
+        If running, move the circles XYZ randomly every frame (FPS times per second).
+        """
+        print("---------------> STARTING TEST DEMO ALGORITHM")
+        # LPT.reset(enable=False, burn_in=4, display_after=5)
 
-        def run_thread():
-            """
-            If running, move the circles XYZ randomly every frame (FPS times per second).
-            """
-            print("---------------> STARTING TEST DEMO ALGORITHM")
-            LPT.reset(enable=False, burn_in=4, display_after=5)
+        while not self._shutdown:
+            print("Outer")
+            self.pe_iter += 1
+            time.sleep(.005)
+            for ind in range(self._image_data.shape[0]):
+                print("Inner")
+                self.next_state_ind = ind
+                self._image_data[ind, :2] += self._circle_v[ind, :]
+                if self._image_data[ind, 0] < 0 or self._image_data[ind, 0] > 1:
+                    self._circle_v[ind, 0] *= -1
+                if self._image_data[ind, 1] < 0 or self._image_data[ind, 1] > 1:
+                    self._circle_v[ind, 1] *= -1
 
-            while True:
-                self.pe_iter +=1
-                #if n_frames % 30 == 0:
-                #    print("TestDemoAlg: frame %i" % n_frames)
-                LPT.mark_loop_start()
-                time.sleep(.005)
-                for ind in range(self._image_data.shape[0]):       
-
-                    self.next_state_ind = ind
-
-                    self._image_data[ind, :2] += self._circle_v[ind, :] 
-                    if self._image_data[ind, 0] < 0 or self._image_data[ind, 0] > 1:
-                        self._circle_v[ind, 0] *= -1
-                    if self._image_data[ind, 1] < 0 or self._image_data[ind, 1] > 1:
-                        self._circle_v[ind, 1] *= -1
-
-
-                    self._maybe_pause('circle-update')  # check if we should pause here.
-
-                
-                self._maybe_pause('frame-update')  # check if we should pause here.
-
-        self._loop_thread = Thread(target=run_thread, daemon=True)
-        self._loop_thread.start()
-        logging.info("TestDemoAlg: started loop thread.")
-
+                if self._maybe_pause('circle-update'): 
+                    return
+            if self._maybe_pause('frame-update'): 
+                return
+            
     @staticmethod
     def get_name():
         return 'test_alg'
@@ -171,91 +162,3 @@ class TestDemoAlg(PolicyEvalDemoAlg):
     def get_str():
         return "Test Algorithm (Circles)"
 
-
-'''
-class TestApp(object):
-    """
-    Stand-in for demo app to test the SelectionPanel.
-    """
-
-    def __init__(self):
-        from layout import WIN_SIZE
-        from selection_panel import SelectionPanel
-        from game_base import Mark
-        from reinforcement_base import Environment
-        from baseline_players import HeuristicPlayer
-
-        self._bkg_color_rgb = COLOR_BG
-        self._text_color_rgb = COLOR_TEXT
-        self._line_color_rgb = COLOR_LINES
-        self.win_size = WIN_SIZE
-        self._fullscreen = False
-        self._running = False
-
-        self.root = tk.Tk()
-        self.root.geometry(f"{self.win_size[0]}x{self.win_size[1]}")
-        self.root.title("Selection Panel Test")
-        self._env = Environment(opponent_policy=HeuristicPlayer(mark=Mark.O, n_rules=2))
-        self._alg = TestDemoAlg(self, self._env)
-        self.status_control_panel = StatusControlPanel(
-            self, self._alg, bbox_rel=LAYOUT['frames']['control'])
-        self.selection_panel = SelectionPanel(self, [TestDemoAlg], bbox_rel=LAYOUT['frames']['selection'])
-
-        # test state tabs:
-        self._state_img_size = None
-        state_tab_info = self._alg.get_state_tab_info()
-        self.state_panel = StatePanel(self, bbox_rel=LAYOUT['frames']['state-tabs'])
-
-    def refresh_status(self):
-        self.status_control_panel.refresh_status()
-
-        """
-        Get the state image from the algorithm
-        """
-        print("^^^^^^^^^^^^^ App drawing image on blank with size %s" % str(frame_size))
-        return self._alg.get_state_img(frame_size, which=which, running=self._running)
-
-    def run(self):
-        # Start the run thread:
-        self._alg.start()
-        self.state_panel.change_algorithm(self._alg)
-
-        self.root.mainloop()
-
-    def save_state(self):
-        logging.info("Save state button pressed.")
-
-    def load_state(self):
-        logging.info("Load state button pressed.")
-
-    def reset_state(self):
-        logging.info("Reset state button pressed.")
-
-    def toggle_fullscreen(self):
-        logging.info("Toggle fullscreen button pressed.")
-
-    def toggle_fullscreen(self):
-
-        self._fullscreen = not self._fullscreen
-        global geom
-        if self._fullscreen:
-            geom = self.root.geometry()
-            w = self.root.winfo_screenwidth()
-            h = self.root.winfo_screenheight()
-            self.root.overrideredirect(True)
-            self.root.geometry('%dx%d+0+0' % (w, h))
-
-        else:
-            self.root.overrideredirect(False)
-            self.root.geometry(geom)
-
-    def set_opponent(self, n_rules):
-        logging.info(f"Setting opponent to {n_rules} rules.")
-
-
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    app = TestApp()
-    app.run()
-
-'''

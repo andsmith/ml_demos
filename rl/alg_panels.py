@@ -20,7 +20,7 @@ import cv2
 from abc import ABC, abstractmethod
 
 ITEM_INDENT = 20
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
+#from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 
 class AlgDepPanel(Panel, ABC):
@@ -32,12 +32,6 @@ class AlgDepPanel(Panel, ABC):
         super().__init__(app, bbox_rel, margin_rel=margin_rel)
         self.change_algorithm(alg)
 
-    def change_algorithm(self, alg):
-        """
-        Changing to a new algorithm, from a load or user change + reset.
-        Sublcasses should override & add whatever they need for new algorithms.
-        """
-        self._alg = alg
 
     @abstractmethod
     def refresh_images(self, is_paused):
@@ -144,7 +138,7 @@ class StatePanel(AlgDepPanel):
         # self._blank[:] = self._bg_color_rgb
         self.refresh_images(is_paused=self._alg.paused)
 
-    @LPT.time_function
+    #@LPT.time_function
     def refresh_images(self, is_paused):
         """
         Get new image from the app, set the image for the current tab.
@@ -195,7 +189,7 @@ class VisualizationPanel(AlgDepPanel):
         self.refresh_images(is_paused=self._alg.paused, control_point = self._alg.current_ctrl_pt)
 
 
-    @LPT.time_function
+    #@LPT.time_function
     def refresh_images(self, is_paused, control_point):
         """
         Get new image from the app, set the image for the current tab.

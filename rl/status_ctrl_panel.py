@@ -2,6 +2,7 @@
 Algorithm selection, state load/save/reset, fullscreen, start game.
 
 """
+import traceback
 
 from policy_eval import PolicyEvalDemoAlg
 from collections import OrderedDict
@@ -17,7 +18,7 @@ import logging
 import time
 from threading import Thread, Event, get_ident
 import cv2
-from loop_timing.loop_profiler import LoopPerfTimer as LPT
+# from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 TITLE_INDENT = 5
 ITEM_INDENT = 20
@@ -28,7 +29,7 @@ class StatusControlPanel(Panel):
     Status panel for displaying the current status of the algorithm and buttons for controlling it.
     """
 
-    def __init__(self, app, alg, bbox_rel,margin_rel=0.0):
+    def __init__(self, app, alg, bbox_rel, margin_rel=0.0):
         """
         :param app: The application object.
         :param alg: a DemoAlg object (RL state)
@@ -40,8 +41,9 @@ class StatusControlPanel(Panel):
     def _init_widgets(self):
 
         # init three frames:
-        y1=.45
-        y2=.8
+        self._n_status_lines = 6
+        y1 = .5
+        y2 = .85
         self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
         self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=y1)
         self._run_control_frame = tk.Frame(self._frame, bg=self._bg_color)
@@ -50,11 +52,21 @@ class StatusControlPanel(Panel):
         self._button_frame.place(relx=0.0, rely=y2, relwidth=1., relheight=1-y2)
         self._frame.bind("<Configure>", self._on_resize)
 
-        self._run_control_vars = {}
+        self._run_control_vars = {}  # state of checkboxes
+        self._run_control_options = []  # (name, display text) tuples
+
+        self._init_title()
 
         self._init_status()  # top half of the panel
         self._init_run_control()  # bottom left half of the panel
         self._init_buttons()  # bottom right half of the panel
+
+    def get_run_control_settings(self):
+        """
+        :returns: {option-name:  bool} dict of the current state of the run control options.
+        """
+        options = {key: (var.get() == 1) for _, var, key in self._run_control_options}
+        return options
 
     def _init_title(self):
         """
@@ -63,34 +75,44 @@ class StatusControlPanel(Panel):
         # Add dark line below the title:
         # self._title_line = tk.Frame(self._frame, height=2, width=100, bg=self._line_color)
         # self._title_line.pack(side=tk.TOP)
-        self._add_spacer()
 
-    def _init_status(self):
-        """
-        Goes at the top of the status panel, one line per status message.
-        """
+        # add new status labels:
         status_title = tk.Label(self._status_frame, text="Status",
                                 font=LAYOUT['fonts']['title'],
                                 bg=self._bg_color, fg=self._text_color, anchor="w", justify="left")
         status_title.pack(side=tk.TOP, fill=tk.X, padx=TITLE_INDENT, pady=4)
 
-        test_status = self._alg.get_status()
-
-        self._status_labels = []  # list of status labels, aligned on the left
-        for i, (text, font) in enumerate(test_status):
-            label = tk.Label(self._status_frame, text=text, bg=self._bg_color, font=font, anchor="w", justify="left")
+    def _init_status(self):
+        """
+        Goes at the top of the status panel, one line per status message.
+        """
+        self._status_labels = []
+        for i in range(self._n_status_lines):
+            label = tk.Label(self._status_frame, text="", bg=self._bg_color, anchor="w", justify="left")
             label.pack(side=tk.TOP, fill=tk.X, padx=ITEM_INDENT, pady=0)
             self._status_labels.append(label)
 
-    @LPT.time_function
+    # @LPT.time_function
     def refresh_status(self):
         """
         Refresh the status labels with the current status of the algorithm.
         """
-        test_status = self._alg.get_status()
-        for i, (text, font) in enumerate(test_status):
+
+        status_lines = self._alg.get_status()
+        if len(status_lines) > self._n_status_lines:
+            raise ValueError("Too many status lines: %i > %i" % (len(status_lines), self._n_status_lines))
+        
+        
+        print("\n(Obj %s, alg %s) status lines:\n\t%s\n\n"%(id(self), id(self._alg),"\n\t".join([t for t, _ in status_lines])))
+        traceback.print_stack()
+
+        for i in range(self._n_status_lines):
+            if i >= len(status_lines):
+                text = " "
+                font = LAYOUT['fonts']['status']
+            else:
+                text, font = status_lines[i]
             self._status_labels[i].config(text=text, font=font)
-        # TODO: Add/shrink labels as needed.
 
     def _on_resize(self, event):
         return super()._on_resize(event)
@@ -107,13 +129,6 @@ class StatusControlPanel(Panel):
         self._run_control_frame.grid_rowconfigure(0, weight=1)  # make the bottom frame fill the remaining space
         self._run_control_frame.grid_columnconfigure(0, weight=1)
         self._reset_run_control_options()
-
-    def get_run_control_settings(self):
-        """
-        :returns: {option-name:  bool} dict of the current state of the run control options.
-        """
-        options = {key: (var.get() == 1) for _, var, key in self._run_control_options}
-        return options
 
     def _reset_run_control_options(self):
         """
@@ -152,7 +167,7 @@ class StatusControlPanel(Panel):
         self._clear_button = tk.Button(self._button_frame, text="Clear Stops",
                                        font=LAYOUT['fonts']['buttons'], bg=self._bg_color,
                                        command=self._clear_breakpoints, padx=7, pady=5)
-        self._clear_button.pack(side=tk.LEFT, pady=10,padx=5)
+        self._clear_button.pack(side=tk.LEFT, pady=10, padx=5)
 
         # "Go/Stop" button
         self._go_button = tk.Button(self._button_frame, text="Go",
@@ -164,16 +179,17 @@ class StatusControlPanel(Panel):
         pass
 
     def _go_stop(self):
+        print("Go/Stop button pressed.")
+
         rcs = self.get_run_control_settings()
         self._alg.update_run_control(rcs)
         self._alg.advance()
-
 
     def change_algorithm(self, alg):
         """
         Change the algorithm for the panel.
         :param alg: The new algorithm.
         """
-        self._alg = alg
+        super().change_algorithm(alg)
         self._reset_run_control_options()
-        self.refresh_status()
+        #self.refresh_status()
