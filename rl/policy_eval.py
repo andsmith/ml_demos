@@ -49,7 +49,6 @@ class PolicyEvalDemoAlg(DemoAlg):
         return PolicyEvalSIM(self._env)
 
     def reset_state(self):
-        print("Class: %s resetting state" % self.__class__.__name__)
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
 
@@ -174,17 +173,17 @@ class PolicyEvalDemoAlg(DemoAlg):
             self.pi_phase = PIPhases.POLICY_EVAL
             if self._optimize_value_function():
                 logging.info("Policy Evaluation terminated early.")
-                return
+                break
 
             if self._maybe_pause('policy-update'):
-                return
+                break
 
             # optimize policy
             self.pi_phase = PIPhases.POLICY_OPTIM
             finished, self.n_changes = self._optimize_policy()
             if finished:
                 logging.info("Policy Optimization terminated early.")
-                return
+                break
 
             # check for convergence
             if self.n_changes == 0 or self.pi_iter > 2:  # For testing
@@ -194,7 +193,9 @@ class PolicyEvalDemoAlg(DemoAlg):
                 self.app.set_control_point('state-update')  # stop running
 
             if self._maybe_pause('policy-update'):
-                return
+                break
+
+        logging.info("Policy Evaluation loop finished (%s)." % self.pi_phase.name)
 
     def _optimize_value_function(self):
         """
@@ -237,7 +238,10 @@ class PolicyEvalDemoAlg(DemoAlg):
 
                 self.next_state_ind += 1
                 time.sleep(0.000001)
-            print(len(self.updatable_states), len(state_update_order))
+
+            if self._shutdown:
+                return True
+
             for state in state_update_order:
                 self._img_mgr.set_state_val(state, 'values', self.next_values[state])
 
@@ -314,12 +318,8 @@ class PolicyEvalDemoAlg(DemoAlg):
         return self._shutdown, self.n_changes
 
     def get_state_image(self, size, tab_name, is_paused):
-        # print("Getting state image for tab %s, paused = %s" % (tab_name, is_paused))
-
         self._img_mgr.set_size(size)
         img = self._img_mgr.get_tab_img(tab=tab_name, annotated=is_paused)
-        # print("\tMean color:", np.mean(img,axis=(0, 1)))
-
         return img
 
     def get_viz_image(self, size, control_point, is_paused):

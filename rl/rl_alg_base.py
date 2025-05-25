@@ -5,7 +5,7 @@ Sublcasses manage 3 panels:
     - step visualization, 
     - state/value/update visualization.
 """
-
+import time
 from abc import ABC, abstractmethod
 import pickle
 from threading import Event, Thread, get_ident
@@ -158,25 +158,19 @@ class DemoAlg(ABC):
     @abstractmethod
     def _learn_loop(self):
         """
-        Start the algorithm running in a separate thread.
-        At every point it can be paused (the control points), call self._maybe_pause(control_point)
-        Stop when self._shutdown is set to True.
+        This function runs the algorithm in a separate thread.
 
+        At every point it can be paused (the control points), call self._maybe_pause('control_point_name').
+        Stop when self._shutdown is set to True or if _maybe_pause returns True.
         """
         pass
 
     def start(self, advance_event):
-
         self._go_signal = advance_event
         self._go_signal.clear()
-
-        def _learn_proc():
-            self._learn_loop()
-            logging.info("Algorithm thread finished (%s)." % get_ident())
-
-        self._learn_thread = Thread(target=_learn_proc, daemon=True)
+        self._learn_thread = Thread(target=self._learn_loop, daemon=True)
         self._learn_thread.start()
-        logging.info("Algorithm thread started from %s." % (get_ident(),))
+        logging.info("Algorithm thread started.")
 
     def stop(self):
         if self._go_signal is not None:
@@ -184,10 +178,18 @@ class DemoAlg(ABC):
 
         self._shutdown = True
         if self._learn_thread is not None:
+            logging.info("Waiting for algorithm thread to stop...")
+            for _ in range(3):
+                self._learn_thread.join(timeout=1)
+                if self._go_signal is not None:
+                    self._go_signal.set()  # Signal the algorithm to stop.
+            time.sleep(1)
+
             self._learn_thread.join()
-            logging.info("Algorithm thread stopped from %s." % get_ident())
+
+            logging.info("Algorithm thread stopped.")
         else:
-            logging.info("Algorithm thread was not started in %s." % get_ident())
+            logging.info("Algorithm thread was not started.")
         self._go_signal = None
 
     @abstractmethod
