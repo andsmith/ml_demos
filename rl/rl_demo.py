@@ -34,13 +34,13 @@ from test_panels import TestDemoAlg
 from util import tk_color_from_rgb
 #from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
-ALGORITHMS = [TestDemoAlg,PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
+ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
               QLearningDemoAlg, PolicyGradientsDemoAlg]
 
 AGENT_MARK = Mark.X  # The agent's mark in the game.
 OPPONENT_MARK = Mark.O  # The opponent's mark in the game.
 
-FPS = 15
+FPS = 5
 
 
 class RLDemoApp(object):
@@ -106,7 +106,6 @@ class RLDemoApp(object):
         self._alg = ALGORITHMS[alg_ind](self, self._env)
 
         self.start_alg()
-        #import ipdb ; ipdb.set_trace()
         # Update the panels with the new algorithm.
         self._status_control_panel.change_algorithm(self._alg)  # checks all control points (all stops on)
         self._state_panel.change_algorithm(self._alg)
@@ -173,6 +172,9 @@ class RLDemoApp(object):
             print("Changing selector to loaded type: ", alg_name)
             self._selection_panel.set_selection(name=alg_name)
 
+    def set_control_point(self, control_point):
+        self._status_control_panel.set_run_control_setting(control_point)
+
     def set_opponent(self, n_rules):
         """
         Set the opponent policy to a new heuristic player with the given number of rules.
@@ -184,10 +186,14 @@ class RLDemoApp(object):
 
     def reset_state(self):
         logging.info("Resetting demo state.")
-        self._alg.reset_state()
-        self._status_control_panel.refresh_status()
-        self._state_panel.refresh_images(is_paused=self.paused)
-        self._visualization_panel.refresh_images(is_paused=self.paused, control_point=self._init_ctrl_point)
+        #self._alg.reset_state()
+
+
+        #self._status_control_panel.refresh_status()
+        #self._state_panel.refresh_images(is_paused=self.paused)
+        #self._visualization_panel.refresh_images(is_paused=self.paused, control_point=self._init_ctrl_point)
+
+        self.change_alg(self._selection_panel.cur_alg_name)  # reset the algorithm to the current selection
 
     def start(self):
         logging.info("Starting algorithm.")

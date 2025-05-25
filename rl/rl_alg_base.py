@@ -65,6 +65,7 @@ class DemoAlg(ABC):
             self.paused = True
 
             self.app.tick(is_paused=True, control_point=control_point)
+            logging.info("Algorithm paused at control point: %s" % control_point)
             self._go_signal.wait()
             self._go_signal.clear()
         else:

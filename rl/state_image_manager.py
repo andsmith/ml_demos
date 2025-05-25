@@ -5,7 +5,7 @@ import tkinter.ttk as ttk
 from PIL import Image, ImageTk, ImageDraw
 from colors import COLOR_BG, SKY_BLUE, NEON_GREEN, NEON_RED
 from layout import LAYOUT, WIN_SIZE
-from game_base import Mark, Result
+from game_base import Mark, Result, TERMINAL_REWARDS
 from game_util import get_box_placer, get_state_icons, sort_states_into_layers
 from layer_optimizer import SimpleTreeOptimizer
 import numpy as np
@@ -21,10 +21,24 @@ SPACE_SIZES = [7, 2, 2, 2, 2, 3]
 
 
 class StateImageManager(ABC):
+    """
+    Base class for images that go into the state panel tabs.
+    There is a tiny icon for each possible RL state, can used directly to make the image, or
+       a colored box can be drawn in its place to represent a value, etc.
+
+    This class also allows mouse interaction, selecting/unselecting/mouseovering states for
+    breakpoints in the algorithm loop.
+    """
     def __init__(self, env, tabs):
         self._size = None
         self.tabs = tabs
         self._env = env
+        
+        self._box_placer = None
+        self._box_centers = None
+        self._box_tree = None
+
+
         self.terminal_states = env.get_terminal_states()
         self.updatable_states = env.get_nonterminal_states()
         self.all_states = self.updatable_states + self.terminal_states
@@ -35,22 +49,39 @@ class StateImageManager(ABC):
         self.mouseovered = None
         self.selected = []
 
-        logging.info(f"StateImageManager initialized with {len(self.all_states)} states")
-        self.clear()
+        # Update the base images as the algorithm runs.
+        self._base_images = {tab: None for tab in tabs}  # base images for states/values
+        # Draw/annotate the base images for display
+        self._disp_images = {tab: None for tab in tabs}
 
-    def clear(self, disp_only=False):
+        self._size_cache = {}
+
+        logging.info(f"StateImageManager initialized with {len(self.all_states)} states")
+        self.clear_images()
+
+    def clear_images(self, tabs=None, disp_only=False):
         """
         Clear the images for the tabs.
         """
-        if not disp_only:
-            self._base_images = {tab: None for tab in self.tabs}  # state icons / values
-        self._disp_images = {tab: None for tab in self.tabs}  # base images + annotatations (selected/mouseovered boxes)
+        print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
+        tabs_to_clear = self.tabs if tabs is None else tabs
+        tabs_to_clear = (tabs_to_clear,) if isinstance(tabs_to_clear, str) else tabs_to_clear
 
+        for tab in tabs_to_clear:
+            if not disp_only:
+                self._base_images[tab]= None
+                self._disp_images[tab] = None
+                
     def set_size(self, new_size):
-        logging.info(f"StateImageManager resized to {new_size}")
-        self.clear()
-        self._size = new_size
-        self._box_placer, self._box_centers, self._box_tree = self._calc_dims()
+        if new_size != self._size or new_size not in self._size_cache:
+            logging.info(f"StateImageManager resized to {new_size}")
+            self.clear_images()
+            self._size = new_size
+            if new_size in self._size_cache:
+                self._box_placer, self._box_centers, self._box_tree = self._size_cache[new_size]
+            else:
+                self._box_placer, self._box_centers, self._box_tree = self._calc_dims()
+                self._size_cache[new_size] = (self._box_placer, self._box_centers, self._box_tree)
 
     def _get_state_at(self, x, y):
         pos = np.array([x, y])
@@ -70,9 +101,9 @@ class StateImageManager(ABC):
         If it changes, invalidate display images.
         """
         new_mo_state = self._get_state_at(x, y)
-        if not(self.mouseovered is new_mo_state):
+        if not (self.mouseovered is new_mo_state):
             self.mouseovered = new_mo_state
-            self.clear(disp_only=True)
+            self.clear_images(disp_only=True)
             return True
         return False
 
@@ -84,7 +115,7 @@ class StateImageManager(ABC):
             self.selected.append(new_click_state)
         else:
             self.selected.remove(new_click_state)
-        self.clear(disp_only=True)
+        self.clear_images(disp_only=True)
         return True
 
     def _calc_dims(self):
@@ -140,8 +171,9 @@ class StateImageManager(ABC):
         return True
 
     def get_tab_img(self, tab, annotated=True):
-        if not self._check_images_valid():
-            self.clear()
+        #if not self._check_images_valid():
+        #    self.clear_images()
+        print("Disp images tabs:", self._disp_images.keys())
         if annotated:
             if self._disp_images[tab] is None:
                 self._disp_images[tab] = self.draw_annotated(tab)
@@ -170,9 +202,12 @@ class StateImageManager(ABC):
         pass
 
 
-class ModelBasedSIM(StateImageManager):
+class ValueFunctionSIM(StateImageManager):
     """
-    State Image Manager for model-based RL algorithms.
+    State Image Manager for representing value funcitons / updates.
+    Assigns colors to values, linearly interpolating the range.
+    Does not plot anything for unassigned states.
+
     All states are initially visible, values are updated, etc.
     """
 
@@ -191,8 +226,39 @@ class ModelBasedSIM(StateImageManager):
         super().__init__(env, tabs)
         self._cmaps = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
         self._ranges = value_ranges
-        self._values = {tab: {state: np.nan for state in self.all_states} for tab in tabs if tab != 'states'}
         self._bg_colors = bg_colors
+        self._values = {}
+        self._base_images = {tab: None for tab in tabs}  # base images for states/values
+        self._disp_images = {tab: None for tab in tabs}
+        self.reset_values()
+
+    def set_range(self, tab, value_range):
+        """
+        Set the value range for a tab.
+        :param tab:  The tab to set the range for.
+        :param value_range:  The value range to set.
+        """
+        if tab not in self._ranges:
+            raise ValueError(f"Tab {tab} not found in {self._ranges.keys()}")
+        self._ranges[tab] = value_range
+        self.clear_images(tabs=[tab])
+
+    def reset_values(self, tabs=None):
+        #logging.info(f"Value Function Image Manager  -  Resetting values for tabs: {tabs}")
+        #print("Disp image keys before reset:", self._disp_images.keys())
+
+        tabs_to_reset = self.tabs if tabs is None else tabs
+        tabs_to_reset = (tabs_to_reset,) if isinstance(tabs_to_reset, str) else tabs_to_reset
+
+        for tab in tabs_to_reset:
+            if tab == 'states':
+                continue
+            self._values[tab] = {}
+
+        self.clear_images(tabs=tabs, disp_only=False)
+    
+    
+        #print("Disp image keys after reset:", self._disp_images.keys())
 
     def get_color(self, tab, value):
         """
@@ -201,6 +267,8 @@ class ModelBasedSIM(StateImageManager):
         :param value:  The value to get the color for.
         :return:  The color for the value in the tab.
         """
+        if value is None:
+            return None
         if tab not in self._cmaps:
             raise ValueError(f"Tab {tab} not found in {self._cmaps.keys()}")
         cmap = self._cmaps[tab]
@@ -214,19 +282,23 @@ class ModelBasedSIM(StateImageManager):
     def set_state_val(self, state, tab, value):
         """
         Set the value for a state in a tab.
+        Update the base image if it exists.
+
         :param state:  The state to set the value for.
         :param tab:  The tab to set the value for.
         :param value:  The value to set.
         """
-        if tab not in self._values:
-            raise ValueError(f"Tab {tab} not found in {self._values.keys()}")
+        if tab == 'states':
+            raise ValueError("Cannot set values for 'states' tab, use 'values' or 'updates' instead.")
         self._values[tab][state] = value
-        if self._disp_images[tab] is not None:
+        if self._base_images[tab] is not None and self._box_placer is not None:
             color = self.get_color(tab, value)
-            self._box_placer.draw_box(image=self._disp_images[tab],
+            self._box_placer.draw_box(image=self._base_images[tab],
                                       state_id=state,
                                       color=color,
                                       thickness=0)  # filled box
+            # invalidate display image since the base image has changed
+            self._disp_images[tab] = None
 
     def draw_base(self, tab):
         logging.info(f"Regenerating base image for {tab}")
@@ -236,11 +308,12 @@ class ModelBasedSIM(StateImageManager):
         if tab == 'states':
             img = self._box_placer.draw(images=self._state_icons, colors=None, show_bars=True, dest=img)
         else:
-            state_colors = {state: self.get_color(tab, self._values[tab][state]) for state in self.all_states}
-            img = self._box_placer.draw(images=None, colors=state_colors, show_bars=True, dest=img)
+            state_colors = {state: self.get_color(tab, self._values[tab].get(state, None)) for state in self.all_states}
+            img = self._box_placer.draw(images=None, colors=state_colors, show_bars=False, dest=img)
         return img
 
     def draw_annotated(self, tab):
+        logging.info(f"Regenerating ANNOTATED image for {tab}")
         if self._base_images[tab] is None:
             self._base_images[tab] = self.draw_base(tab)
         img = self._base_images[tab].copy()
@@ -249,7 +322,7 @@ class ModelBasedSIM(StateImageManager):
                                       state_id=state,
                                       color=NEON_RED,
                                       thickness=1)
-            
+
         if self.mouseovered is not None:
             self._box_placer.draw_box(image=img,
                                       state_id=self.mouseovered,
@@ -258,13 +331,17 @@ class ModelBasedSIM(StateImageManager):
         return img
 
 
-class PolicyEvalSIM(ModelBasedSIM):
+class PolicyEvalSIM(ValueFunctionSIM):
     def __init__(self, env):
         tabs = ['states', 'values', 'updates']
         colormap_names = {'values': 'gray', 'updates': 'coolwarm'}
         value_ranges = {'values': (-1, 1), 'updates': (-1, 1)}
-        bg_colors = {'states': COLOR_BG, 'values': SKY_BLUE, 'updates': (127, 127, 127)}
+        bg_colors = {'states': COLOR_BG, 'values': SKY_BLUE, 'updates': SKY_BLUE}
         super().__init__(env, tabs, value_ranges, colormap_names, bg_colors)
+
+    def get_state_update_order(self):
+        update_order = sorted(self.updatable_states, key=lambda s: self._box_placer.box_positions[s]['x'][0])
+        return update_order
 
 
 class SimTester(object):
@@ -274,11 +351,33 @@ class SimTester(object):
 
     def __init__(self, size, env):
         # args for Policy Eval tabs:
-        self._start_time= time.perf_counter()
+        self._start_time = time.perf_counter()
         self.current_tab_ind = 0
         self._init_tk(size)
-        self._init_images(env)
+        self._init_values(env)
         self._init_tabs()
+
+    def _init_values(self, env):
+
+        self._sim = PolicyEvalSIM(env)
+        self._tabs = self._sim.tabs
+        vals=[]
+
+        top_states = [state for state in self._sim.updatable_states if state.n_free()>7]
+
+        for state in self._sim.terminal_states:
+            value = TERMINAL_REWARDS[state.check_endstate()]
+            self._sim.set_state_val(state, 'values', value)
+            vals.append(value)
+
+        for state in self._sim.updatable_states:
+            self._sim.set_state_val(state, 'updates', 0.0)
+            self._sim.set_state_val(state, 'values', 0.0)
+
+        for i,state in enumerate(top_states):
+            self._sim.set_state_val(state, 'updates', (i-4.5)/4.5)
+            self._sim.set_state_val(state, 'values', (i-4.5)/4.5)
+
 
     def _on_resize(self, event):
         # check if is a resize event
@@ -323,12 +422,6 @@ class SimTester(object):
         current_tab = self._tabs[self.current_tab_ind]
         self._notebook.select(self._tab_images[current_tab][0])
 
-    def _init_images(self, env):
-        self._sim = PolicyEvalSIM(env)
-        for state in self._sim.all_states:
-            self._sim.set_state_val(state, 'values', np.random.rand()*2 - 1)
-            self._sim.set_state_val(state, 'updates', np.random.rand()*2 - 1)
-        self._tabs = self._sim.tabs
 
     def _on_tab_changed(self, event):
         new_tab = self._notebook.tab(self._notebook.select(), "text")
@@ -339,7 +432,7 @@ class SimTester(object):
             self.refresh_image()
 
     def refresh_image(self):
-        
+
         current_tab = self._tabs[self.current_tab_ind]
         img = self._sim.get_tab_img(current_tab)
         img = ImageTk.PhotoImage(image=Image.fromarray(img))

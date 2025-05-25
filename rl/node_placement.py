@@ -70,6 +70,8 @@ class BoxOrganizer(ABC):
         :param state_id: id of the box to draw.
         :param color: color of the box.
         """
+        if color is None:
+            return
         bos_pos = self.box_positions[state_id]
         x, y = bos_pos['x'], bos_pos['y']
         if thickness == 0:

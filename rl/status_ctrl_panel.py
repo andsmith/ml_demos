@@ -41,8 +41,8 @@ class StatusControlPanel(Panel):
     def _init_widgets(self):
 
         # init three frames:
-        self._n_status_lines = 6
-        y1 = .5
+        self._n_status_lines = 7
+        y1 = .53
         y2 = .85
         self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
         self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=y1)
@@ -60,6 +60,19 @@ class StatusControlPanel(Panel):
         self._init_status()  # top half of the panel
         self._init_run_control()  # bottom left half of the panel
         self._init_buttons()  # bottom right half of the panel
+
+    def set_run_control_setting(self, control_point, value=True):
+        """
+        Set the value of a run control setting.
+        :param control_point: The name of the control point to set.
+        :param value: The value to set it to (default: True).
+        """
+        for _, var, key in self._run_control_options:
+            if key == control_point:
+                var.set(1 if value else 0)
+                self._on_control_change()
+                return
+        raise ValueError("Control point '%s' not found in run control options." % control_point)
 
     def get_run_control_settings(self):
         """
@@ -103,8 +116,8 @@ class StatusControlPanel(Panel):
             raise ValueError("Too many status lines: %i > %i" % (len(status_lines), self._n_status_lines))
         
         
-        print("\n(Obj %s, alg %s) status lines:\n\t%s\n\n"%(id(self), id(self._alg),"\n\t".join([t for t, _ in status_lines])))
-        traceback.print_stack()
+        #print("\n(Obj %s, alg %s) status lines:\n\t%s\n\n"%(id(self), id(self._alg),"\n\t".join([t for t, _ in status_lines])))
+        #traceback.print_stack()
 
         for i in range(self._n_status_lines):
             if i >= len(status_lines):
@@ -179,7 +192,6 @@ class StatusControlPanel(Panel):
         pass
 
     def _go_stop(self):
-        print("Go/Stop button pressed.")
 
         rcs = self.get_run_control_settings()
         self._alg.update_run_control(rcs)

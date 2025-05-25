@@ -36,6 +36,14 @@ class Panel(ABC):
         self._initialized = False
         self._init_widgets()
 
+    def change_algorithm(self, alg):
+        """
+        Change the algorithm for this panel.
+        (subclass should override this method to update their specific algorithm-related data)
+        :param alg: The new algorithm to use.
+        """
+        self._alg = alg
+
     @abstractmethod
     def _init_widgets(self):
         """

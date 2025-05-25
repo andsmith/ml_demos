@@ -10,6 +10,8 @@ import numpy as np
 from state_image_manager import PolicyEvalSIM
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
 import cv2
+from drawing import GameStateArtist
+import time
 
 
 class PIPhases(IntEnum):
@@ -35,26 +37,20 @@ class PolicyEvalDemoAlg(DemoAlg):
         self._env = env
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
-        self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self._img_mgr = PolicyEvalSIM(self._env)
         self._delta_v_tol = 1e-6
         self.pi_seed = None
         self.gamma = gamma
         self.reset_state()
-        logging.info("PolicyEvalDemoAlg initialized.")
 
-    def _init_images(self, env):
-        self._img_mgr = PolicyEvalSIM(env)
-        for state in self._img_mgr.all_states:
-            self._img_mgr.set_state_val(state, 'values', np.random.rand()*2 - 1)
-            self._img_mgr.set_state_val(state, 'updates', np.random.rand()*2 - 1)
-        self._tabs = self._img_mgr.tabs
+        logging.info("PolicyEvalDemoAlg initialized.")
 
     def reset_state(self):
         print("Class: %s resetting state" % self.__class__.__name__)
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
 
+        self.state = None
         # Policy Improvement (PI) state:
         self.pi_iter = 0
         self.pi_phase = PIPhases.POLICY_EVAL
@@ -69,8 +65,18 @@ class PolicyEvalDemoAlg(DemoAlg):
         # Policy optimization state:
         self.n_changes = 0
 
-        # tables to update:
-        self.values = {}
+        # initial values for terminal states (should be zero, but we're using the terminal reward):
+        self.values = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        self.values.update({state: 0.0 for state in self.updatable_states})
+
+        # Reset the image manager with the initial values.
+        self._img_mgr.reset_values()
+
+        for state, value in self.values.items():
+            self._img_mgr.set_state_val(state, 'values', value)
+        for state in self.updatable_states:
+            self._img_mgr.set_state_val(state, 'updates', 0.0)
+
         self.next_values = {}
 
     def get_status(self):
@@ -78,21 +84,24 @@ class PolicyEvalDemoAlg(DemoAlg):
         font_bold = layout.LAYOUT['fonts']['status_bold']
 
         if self.pi_phase == PIPhases.POLICY_EVAL:
-            status = [("PI Phase: Policy Evaluation (PE)", font_bold),
+            status = [("PI Phase: Policy Evaluation", font_bold),
                       ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
                       ("PE Epoch: {}".format(self.pe_iter), font_default),
                       ("PE State: {} of {}".format(self.next_state_ind, len(self.updatable_states)), font_default),
-                      ("Max Delta Vs: %.3f (max %.1e)" % (self.max_delta_vs, self._delta_v_tol), font_default)]
+                      ("Max Delta Vs: %.6f " % (self.max_delta_vs, ), font_default)]
             if self.pe_converged:
-                status += [(" Converged in %i iterations" % (self._pe_iter+1,), font_bold)]
+                status += [("V(s) converged, iter %i" % (self.pe_iter,), font_bold)]
             else:
                 status += [("", font_default),]
         else:
-            status += [("PI Phase: Policy Optimization (PO)", font_bold),
-                       ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
-                       ("", font_default),
-                       ("PO State: {} of {}".format(self.next_state_ind+1, len(self.updatable_states)), font_default),
-                       ("N policy changes: {}".format(self.policy), font_default)]
+            status = [("PI Phase: Policy Optimization", font_bold),
+                      ("PI Iteration: {}".format(self.pi_iter) + ("(converged)"if self.pi_converged else ""), font_default),
+                      ("PO State: {} of {}".format(self.next_state_ind, len(self.updatable_states)), font_default),
+                      ("N policy changes: {}".format(self.n_changes), font_default)]
+        if self.pi_converged:
+            status += [("Pi(s) converged, iter %i" % (self.pi_convergence_iter,), font_bold)]
+        else:
+            status += [("", font_default),]
 
         return status
 
@@ -153,72 +162,179 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def _learn_loop(self):
         self.pi_convergence_iter = -1
-        self._maybe_pause('state-update')
-        
+        self._maybe_pause('state-update')  # start paused, before any learning
+
         while not self._shutdown:
 
-            self.pe_iter += 1
+            self.pi_iter += 1
             # optimize value function for given policy
             self.pi_phase = PIPhases.POLICY_EVAL
             if self._optimize_value_function():
+                logging.info("Policy Evaluation terminated early.")
                 return
-
-            # optimize policy & check for convergence
-            self._phase = PIPhases.POLICY_OPTIM
-            if self._optimize_policy():
-                return
-
-            if self.pi_converged:
-                self.pi_convergence_iter = self.pe_iter
-                logging.info("Policy converged after %i iterations." % self.pi_convergence_iter)
 
             if self._maybe_pause('policy-update'):
-                print("Paused by object %s, with type %s" % (self, type(self._pause_obj)))
+                return
+
+            # optimize policy
+            self.pi_phase = PIPhases.POLICY_OPTIM
+            finished, self.n_changes = self._optimize_policy()
+            if finished:
+                logging.info("Policy Optimization terminated early.")
+                return
+
+            # check for convergence
+            if self.n_changes == 0 or self.pi_iter > 2:  # For testing
+                self.pi_convergence_iter = self.pi_iter
+                self.pi_converged = True
+                logging.info("Policy converged after %i iterations." % self.pi_convergence_iter)
+                self.app.set_control_point('state-update')  # stop running
+
+            if self._maybe_pause('policy-update'):
                 return
 
     def _optimize_value_function(self):
-        self.pe_iter=0
+        """
+        :returns: shutdown status
+        """
+        self._img_mgr.set_range('updates', (-1.0, 1.0))
+        self._img_mgr.reset_values(tabs=('updates'))
 
-        # Don't use for loops, in case user clicks reset.
-        while not self._shutdown and self.pe_iter < 4:
+        def update(state, value):
+            old_val = self.values[state]
+            delta = value - old_val
+            self.next_values[state] = value
+            self._img_mgr.set_state_val(state, 'updates', delta)
+
+        state_update_order = self._img_mgr.get_state_update_order()
+
+        self.pe_iter = 0
+        self.pe_converged = False
+        self.pe_convergence_iter = None
+
+        # Don't use for-loops, in case user clicks reset pe_iter, next_state_ind need to start again at zero.
+        while not self._shutdown:
+
+            # reset epoch state
             self.next_state_ind = 0
-            while not self._shutdown and self.next_state_ind < len(self.updatable_states):
+            for state in self.updatable_states:
+                self._img_mgr.set_state_val(state, 'updates', 0.0)
+
+            while not self._shutdown and self.next_state_ind < len(state_update_order):
+
                 # TODO:  Fill in here.
+                self.state = state_update_order[self.next_state_ind]
+                delta = np.random.randn() * 0.1  # Simulate some value change
+                old_val = self.values[self.state]
+                new_val = old_val + delta
+                update(self.state, new_val)
 
-                self._maybe_pause('state-update') 
+                if self._maybe_pause('state-update'):
+                    return self._shutdown
+
                 self.next_state_ind += 1
+                time.sleep(0.000001)
+            print(len(self.updatable_states), len(state_update_order))
+            for state in state_update_order:
+                self._img_mgr.set_state_val(state, 'values', self.next_values[state])
 
-            self._maybe_pause('epoch-update')         
+            self.pe_converged = self._check_value_function_convergence()
+            if self.pe_converged:
+                logging.info("Value function converged after epoch %i." % (self.pe_iter,))
+                self.pe_convergence_iter = self.pi_iter
+                self.next_state_ind = 0
+
+                # self.pi_phase = PIPhases.POLICY_OPTIM # change now so it displays in status during epoch update
+
+            if self._maybe_pause('epoch-update'):
+                return self._shutdown
+
+            self._img_mgr.reset_values(tabs=('updates',))
+            self.values = self.next_values
+            self.next_values = {}
+
+            if self.pe_converged:
+                return self._shutdown
+
             self.pe_iter += 1
 
         return self._shutdown
 
+    def _check_value_function_convergence(self):
+        """
+        Check if the value function has converged.
+        :returns: True if converged, False otherwise.
+        """
+        if self.pe_iter == 1:
+            return True  # For testing
+        for state in self.updatable_states:
+            delta = abs(self.values[state] - self.next_values[state])
+            if delta > self.max_delta_vs:
+                self.max_delta_vs = delta
+            if delta > self._delta_v_tol:
+                return False
+        return True
+
     def _optimize_policy(self):
+        logging.info("Optimizing policy for iteration %i" % self.pi_iter)
         self.next_state_ind = 0
+
+        # binary, marking which states have a new best action
+        self._img_mgr.set_range('updates', (0.0, 1.0))
+        self._img_mgr.reset_values(tabs=('updates'))
+
+        def update(state, new_action):
+
+            changed = False if self.pi_iter > 2 else np.random.rand() < 0.333  # for testing, simulate some changes
+            if changed:
+                self.n_changes += 1
+                self._img_mgr.set_state_val(state, 'updates', 1.0)
+            else:
+                self._img_mgr.set_state_val(state, 'updates', 0.0)
+
+        state_update_order = self._img_mgr.get_state_update_order()
+
         while not self._shutdown and self.next_state_ind < len(self.updatable_states):
-            self.next_state_ind += 1
             # TODO:  Fill in here.
-            self._maybe_pause('state-update')
+            self.state = state_update_order[self.next_state_ind]
+
+            # Simulate some policy change
+            update(self.state, None)
+
+            if self._maybe_pause('state-update'):
+                logging.info("---------Policy optimization early shutdown.")
+                return self._shutdown, self.n_changes
+            
+            time.sleep(0.00001)
+            self.next_state_ind += 1
+
+        return self._shutdown, self.n_changes
 
     def get_state_image(self, size, tab_name, is_paused):
-        img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-        img[:] = self._colors['bg']
-        text = "Policy Evaluation State Image:  %s, paused = %s" % (tab_name, is_paused)
-        cv2.putText(img, text, (30, 100), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
-        text = "%f" % (np.random.randn(),)
-        cv2.putText(img, text, (30, 200), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
+        # print("Getting state image for tab %s, paused = %s" % (tab_name, is_paused))
+
+        self._img_mgr.set_size(size)
+        img = self._img_mgr.get_tab_img(tab=tab_name, annotated=is_paused)
+        # print("\tMean color:", np.mean(img,axis=(0, 1)))
+
         return img
 
     def get_viz_image(self, size, control_point, is_paused):
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-
         img[:] = self._colors['bg']
 
-        text = "Policy Eval step viz"
+        artist = GameStateArtist(40)
+        if self.state is not None:
+            icon = artist.get_image(self.state)
+            w, h = icon.shape[1], icon.shape[0]
+            x, y = 20, 600
+            img[y:y+h, x:x+w] = icon
+
+        text = "Phase: %s" % (self.pi_phase.name,)
         cv2.putText(img, text, (10, 100), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
-        text = "control point:  %s" % (control_point,)
+        text = "ctrl-pt: %s" % (control_point,)
         cv2.putText(img, text, (10, 200), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
-        text = "paused = %s" % (is_paused,)
+        text = "paused: %s" % (is_paused,)
         cv2.putText(img, text, (10, 300), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
         text = "%f" % (np.random.randn(),)
         cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
@@ -231,8 +347,8 @@ class PolicyEvalDemoAlg(DemoAlg):
         :return: A dictionary of run control options.
         """
         st = OrderedDict((('states', 'Game states  '),
-                         ('values', 'Values: V(s)'),
-                         ('updates', "Updates: delta V(s)"),))
+                          ('values', 'Values: V(s)'),
+                          ('updates', "Updates: delta V(s)"),))
         return st
 
 
