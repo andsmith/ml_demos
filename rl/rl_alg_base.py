@@ -8,7 +8,7 @@ Sublcasses manage 3 panels:
 
 from abc import ABC, abstractmethod
 import pickle
-from threading import Event, Thread,get_ident
+from threading import Event, Thread, get_ident
 import logging
 
 # from loop_timing.loop_profiler import LoopPerfTimer as LPT
@@ -23,11 +23,14 @@ class DemoAlg(ABC):
         - state/value/update visualization.
     """
 
-    def __init__(self, app):
+    def __init__(self, app, env):
         """
         :param app: The main app object.
         :param advance_event: Event to signal when the algorithm should advance.
         """
+        self._env = env
+        self._img_mgr = self._make_state_image_manager()  # Get the state/viz image manager for this algorithm.
+
         self._go_signal = None  # Used to signal the algorithm to advance/continue.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
 
@@ -39,6 +42,17 @@ class DemoAlg(ABC):
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
         self.app = app
+
+    def get_image_manager(self):
+        return self._img_mgr
+
+    @abstractmethod
+    def _make_state_image_manager(self):
+        """
+        Get the state image manager for this algorithm.
+        :return: Subclass of StateImageManager that manages the state images for this algorithm.
+        """
+        pass
 
     def advance(self):
         """
@@ -58,7 +72,7 @@ class DemoAlg(ABC):
         Pause the algorithm if the run control indicates to do so.
         :param control_point: The control point to check.
         """
-        
+
         self.current_ctrl_pt = control_point
 
         if self._run_control[control_point]:
@@ -151,7 +165,6 @@ class DemoAlg(ABC):
         """
         pass
 
-
     def start(self, advance_event):
 
         self._go_signal = advance_event
@@ -159,12 +172,11 @@ class DemoAlg(ABC):
 
         def _learn_proc():
             self._learn_loop()
-            logging.info("Algorithm thread finished (%s)." % get_ident())   
-
+            logging.info("Algorithm thread finished (%s)." % get_ident())
 
         self._learn_thread = Thread(target=_learn_proc, daemon=True)
         self._learn_thread.start()
-        logging.info("Algorithm thread started from %s." %( get_ident(),))
+        logging.info("Algorithm thread started from %s." % (get_ident(),))
 
     def stop(self):
         if self._go_signal is not None:
@@ -177,7 +189,7 @@ class DemoAlg(ABC):
         else:
             logging.info("Algorithm thread was not started in %s." % get_ident())
         self._go_signal = None
-    
+
     @abstractmethod
     def reset_state(self):
         """

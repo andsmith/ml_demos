@@ -88,7 +88,7 @@ class RLDemoApp(object):
         # Create panels that need to know about the algorithm:
         self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'],margin_rel = LAYOUT['margin_rel'])
         self._state_panel = StatePanel(self, self._alg, LAYOUT['frames']['state-tabs'],margin_rel = LAYOUT['margin_rel'])
-        self._visualization_panel = VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'],margin_rel = LAYOUT['margin_rel'])
+        self._visualization_panel =VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'],margin_rel = LAYOUT['margin_rel'])
 
     def start_alg(self):
         self._alg.start(self._advance_event)
@@ -219,8 +219,10 @@ class RLDemoApp(object):
         if is_paused:
             self.paused = True
             self._status_control_panel.refresh_status()
-            self._state_panel.refresh_images(is_paused=True)
-            self._visualization_panel.refresh_images(is_paused=True, control_point=control_point)
+            if self._state_panel is not None:
+                self._state_panel.refresh_images(is_paused=True)
+            if self._visualization_panel is not None:
+                self._visualization_panel.refresh_images(is_paused=True, control_point=control_point)
         else:
             self.paused = False
             now = time.perf_counter()
@@ -228,8 +230,10 @@ class RLDemoApp(object):
 
             if elapsed > 1.0 / FPS:
                 self._status_control_panel.refresh_status()
-                self._state_panel.refresh_images(is_paused=False)
-                self._visualization_panel.refresh_images(is_paused=False, control_point=control_point)
+                if self._state_panel is not None:
+                    self._state_panel.refresh_images(is_paused=False)
+                if self._visualization_panel is not None:
+                    self._visualization_panel.refresh_images(is_paused=False, control_point=control_point)
                 self._timing_info['n_frames'] += 1
                 self._timing_info['t_last_refresh'] = now
 

@@ -29,15 +29,15 @@ class StateImageManager(ABC):
     This class also allows mouse interaction, selecting/unselecting/mouseovering states for
     breakpoints in the algorithm loop.
     """
+
     def __init__(self, env, tabs):
         self._size = None
         self.tabs = tabs
         self._env = env
-        
+
         self._box_placer = None
         self._box_centers = None
         self._box_tree = None
-
 
         self.terminal_states = env.get_terminal_states()
         self.updatable_states = env.get_nonterminal_states()
@@ -49,9 +49,11 @@ class StateImageManager(ABC):
         self.mouseovered = None
         self.selected = []
 
-        # Update the base images as the algorithm runs.
-        self._base_images = {tab: None for tab in tabs}  # base images for states/values
-        # Draw/annotate the base images for display
+        # Base images for states/values, updated as algorithm runs.
+        self._base_images = {tab: None for tab in tabs} 
+        # Which states are selected/moused over, etc., drawn over base iamges
+        self._marked_images = {tab: None for tab in tabs}
+        # Images for displaying states with annotations of the learnining algorithm's step, drawn over marked images.
         self._disp_images = {tab: None for tab in tabs}
 
         self._size_cache = {}
@@ -59,19 +61,23 @@ class StateImageManager(ABC):
         logging.info(f"StateImageManager initialized with {len(self.all_states)} states")
         self.clear_images()
 
-    def clear_images(self, tabs=None, disp_only=False):
+    def clear_images(self, tabs=None, marked_only=False):
         """
         Clear the images for the tabs.
+        :param tabs:  list of tabs to clear, or None to clear all.
+        :param marked_only:  If True, only clear the marked/display images (e.g. if a mouse interaction occurs).
         """
-        print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
+        #print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
         tabs_to_clear = self.tabs if tabs is None else tabs
         tabs_to_clear = (tabs_to_clear,) if isinstance(tabs_to_clear, str) else tabs_to_clear
 
         for tab in tabs_to_clear:
-            if not disp_only:
-                self._base_images[tab]= None
-                self._disp_images[tab] = None
-                
+            if not marked_only:
+                self._base_images[tab] = None
+
+            self._marked_images[tab] = None
+            self._disp_images[tab] = None
+
     def set_size(self, new_size):
         if new_size != self._size or new_size not in self._size_cache:
             logging.info(f"StateImageManager resized to {new_size}")
@@ -95,7 +101,7 @@ class StateImageManager(ABC):
             return closest_state
         return None
 
-    def mouse_move(self, x, y):
+    def mouse_move(self, x, y, tab):
         """
         Update mouseovered state. 
         If it changes, invalidate display images.
@@ -103,11 +109,11 @@ class StateImageManager(ABC):
         new_mo_state = self._get_state_at(x, y)
         if not (self.mouseovered is new_mo_state):
             self.mouseovered = new_mo_state
-            self.clear_images(disp_only=True)
+            self.clear_images(marked_only=True)
             return True
         return False
 
-    def mouse_click(self, x, y):
+    def mouse_click(self, x, y, tab):
         new_click_state = self._get_state_at(x, y)
         if new_click_state is None:
             return False
@@ -115,7 +121,7 @@ class StateImageManager(ABC):
             self.selected.append(new_click_state)
         else:
             self.selected.remove(new_click_state)
-        self.clear_images(disp_only=True)
+        self.clear_images(marked_only=True)
         return True
 
     def _calc_dims(self):
@@ -153,35 +159,16 @@ class StateImageManager(ABC):
         box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
         return images, box_sizes
 
-    def _check_images_valid(self):
-        """
-        Make sure all images that are not None are the right size.
-        """
-        for tab in self.tabs:
-            if self._base_images[tab] is not None:
-                if self._base_images[tab].shape[:2] != self._size[::-1]:
-                    logging.info(
-                        f"Base image for {tab} is not the right size:  {self._base_images[tab].shape[:2]} != {self._size[::-1]}")
-                    return False
-            if self._disp_images[tab] is not None:
-                if self._disp_images[tab].shape[:2] != self._size[::-1]:
-                    logging.info(
-                        f"Display image for {tab} is not the right size:  {self._disp_images[tab].shape[:2]} != {self._size[::-1]}")
-                    return False
-        return True
 
     def get_tab_img(self, tab, annotated=True):
-        #if not self._check_images_valid():
-        #    self.clear_images()
-        print("Disp images tabs:", self._disp_images.keys())
         if annotated:
             if self._disp_images[tab] is None:
                 self._disp_images[tab] = self.draw_annotated(tab)
             return self._disp_images[tab]
         else:
-            if self._base_images[tab] is None:
-                self._base_images[tab] = self.draw_base(tab)
-            return self._base_images[tab]
+            if self._marked_images[tab] is None:
+                self._marked_images[tab] = self.draw_marked(tab)
+            return self._marked_images[tab]
 
     @abstractmethod
     def draw_base(self, tab):
@@ -193,9 +180,18 @@ class StateImageManager(ABC):
         pass
 
     @abstractmethod
+    def draw_marked(self, tab):
+        """
+        Draw the images with the selected/mouseovered states marked.
+        :param tab:  The tab to draw.
+        :return:  The annotated image for the tab.
+        """
+        pass
+
+    @abstractmethod
     def draw_annotated(self, tab):
         """
-        Draw the annotated image for a tab.
+        Draw the images with the selected/mouseovered states marked, and any additional annotations.
         :param tab:  The tab to draw.
         :return:  The annotated image for the tab.
         """
@@ -228,8 +224,6 @@ class ValueFunctionSIM(StateImageManager):
         self._ranges = value_ranges
         self._bg_colors = bg_colors
         self._values = {}
-        self._base_images = {tab: None for tab in tabs}  # base images for states/values
-        self._disp_images = {tab: None for tab in tabs}
         self.reset_values()
 
     def set_range(self, tab, value_range):
@@ -244,8 +238,8 @@ class ValueFunctionSIM(StateImageManager):
         self.clear_images(tabs=[tab])
 
     def reset_values(self, tabs=None):
-        #logging.info(f"Value Function Image Manager  -  Resetting values for tabs: {tabs}")
-        #print("Disp image keys before reset:", self._disp_images.keys())
+        # logging.info(f"Value Function Image Manager  -  Resetting values for tabs: {tabs}")
+        # print("Disp image keys before reset:", self._disp_images.keys())
 
         tabs_to_reset = self.tabs if tabs is None else tabs
         tabs_to_reset = (tabs_to_reset,) if isinstance(tabs_to_reset, str) else tabs_to_reset
@@ -255,10 +249,9 @@ class ValueFunctionSIM(StateImageManager):
                 continue
             self._values[tab] = {}
 
-        self.clear_images(tabs=tabs, disp_only=False)
-    
-    
-        #print("Disp image keys after reset:", self._disp_images.keys())
+        self.clear_images(tabs=tabs, marked_only=False)
+
+        # print("Disp image keys after reset:", self._disp_images.keys())
 
     def get_color(self, tab, value):
         """
@@ -299,6 +292,7 @@ class ValueFunctionSIM(StateImageManager):
                                       thickness=0)  # filled box
             # invalidate display image since the base image has changed
             self._disp_images[tab] = None
+            self._marked_images[tab] = None
 
     def draw_base(self, tab):
         logging.info(f"Regenerating base image for {tab}")
@@ -312,8 +306,7 @@ class ValueFunctionSIM(StateImageManager):
             img = self._box_placer.draw(images=None, colors=state_colors, show_bars=False, dest=img)
         return img
 
-    def draw_annotated(self, tab):
-        logging.info(f"Regenerating ANNOTATED image for {tab}")
+    def draw_marked(self, tab):
         if self._base_images[tab] is None:
             self._base_images[tab] = self.draw_base(tab)
         img = self._base_images[tab].copy()
@@ -329,6 +322,13 @@ class ValueFunctionSIM(StateImageManager):
                                       color=NEON_GREEN,
                                       thickness=1)
         return img
+    
+    def draw_annotated(self, tab):
+        # Stub, override for subclass
+        if self._marked_images[tab] is None:
+            self._marked_images[tab] = self.draw_marked(tab)
+        img = self._marked_images[tab].copy()
+        return img
 
 
 class PolicyEvalSIM(ValueFunctionSIM):
@@ -340,6 +340,9 @@ class PolicyEvalSIM(ValueFunctionSIM):
         super().__init__(env, tabs, value_ranges, colormap_names, bg_colors)
 
     def get_state_update_order(self):
+        if self._box_placer is None:
+            logging.info("Warning: Box placer not initialized, cannot get update order.")
+            return self.updatable_states
         update_order = sorted(self.updatable_states, key=lambda s: self._box_placer.box_positions[s]['x'][0])
         return update_order
 
@@ -361,9 +364,9 @@ class SimTester(object):
 
         self._sim = PolicyEvalSIM(env)
         self._tabs = self._sim.tabs
-        vals=[]
+        vals = []
 
-        top_states = [state for state in self._sim.updatable_states if state.n_free()>7]
+        top_states = [state for state in self._sim.updatable_states if state.n_free() > 7]
 
         for state in self._sim.terminal_states:
             value = TERMINAL_REWARDS[state.check_endstate()]
@@ -374,10 +377,17 @@ class SimTester(object):
             self._sim.set_state_val(state, 'updates', 0.0)
             self._sim.set_state_val(state, 'values', 0.0)
 
-        for i,state in enumerate(top_states):
+        for i, state in enumerate(top_states):
             self._sim.set_state_val(state, 'updates', (i-4.5)/4.5)
             self._sim.set_state_val(state, 'values', (i-4.5)/4.5)
 
+    def _init_tk(self, size):
+        self._size = size
+        self._root = tk.Tk()
+        self._root.title("State Image Manager")
+        self._root.geometry(f"{size[0]}x{size[1]}")
+        self._root.resizable(True, True)
+        self._root.bind("<Configure>", self._on_resize)
 
     def _on_resize(self, event):
         # check if is a resize event
@@ -389,22 +399,12 @@ class SimTester(object):
         self._size = new_size
         self.refresh_image()
 
-    def _init_tk(self, size):
-        self._size = size
-        self._root = tk.Tk()
-        self._root.title("State Image Manager")
-        self._root.geometry(f"{size[0]}x{size[1]}")
-        self._root.resizable(True, True)
-        self._root.bind("<Configure>", self._on_resize)
-        self._root.bind("<Button-1>", self._mouse_click)
-        self._root.bind("<Motion>", self._mouse_move)
-
-    def _mouse_click(self, event):
-        if self._sim.mouse_click(event.x, event.y):
+    def _mouse_click(self, event, tab):
+        if self._sim.mouse_click(event.x, event.y, tab):
             self.refresh_image()
 
-    def _mouse_move(self, event):
-        if self._sim.mouse_move(event.x, event.y):
+    def _mouse_move(self, event, tab):
+        if self._sim.mouse_move(event.x, event.y, tab):
             self.refresh_image()
 
     def _init_tabs(self):
@@ -416,12 +416,15 @@ class SimTester(object):
             tab_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             img_label = tk.Label(tab_frame)
             img_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            img_label.bind("<Button-1>", lambda event: self._mouse_click(event, name))
+            img_label.bind("<Motion>", lambda event: self._mouse_move(event, name))
+
             self._notebook.add(tab_frame, text=name)
             self._tab_images[name] = (tab_frame, img_label)
         self._notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         current_tab = self._tabs[self.current_tab_ind]
         self._notebook.select(self._tab_images[current_tab][0])
-
 
     def _on_tab_changed(self, event):
         new_tab = self._notebook.tab(self._notebook.select(), "text")
@@ -434,7 +437,8 @@ class SimTester(object):
     def refresh_image(self):
 
         current_tab = self._tabs[self.current_tab_ind]
-        img = self._sim.get_tab_img(current_tab)
+        self._sim.set_size(self._size)
+        img = self._sim.get_tab_img(current_tab, annotated=True)
         img = ImageTk.PhotoImage(image=Image.fromarray(img))
         label = self._tab_images[current_tab][1]
         label.config(image=img)

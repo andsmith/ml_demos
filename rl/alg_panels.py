@@ -20,7 +20,7 @@ import cv2
 from abc import ABC, abstractmethod
 
 ITEM_INDENT = 20
-#from loop_timing.loop_profiler import LoopPerfTimer as LPT
+# from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
 
 class AlgDepPanel(Panel, ABC):
@@ -31,7 +31,6 @@ class AlgDepPanel(Panel, ABC):
     def __init__(self, app, alg, bbox_rel, margin_rel=0.0):
         super().__init__(app, bbox_rel, margin_rel=margin_rel)
         self.change_algorithm(alg)
-
 
     @abstractmethod
     def refresh_images(self, is_paused):
@@ -47,7 +46,7 @@ class StatePanel(AlgDepPanel):
     Tabbed interface, queries algorithm for details.
     """
 
-    def __init__(self, app, alg, bbox_rel,margin_rel=0.0):
+    def __init__(self, app, alg, bbox_rel, margin_rel=0.0):
         """
         :param app: The application object.
         :param bbox_rel: The bounding box for the panel, relative to the parent frame.
@@ -68,7 +67,6 @@ class StatePanel(AlgDepPanel):
         Also need to: 
           1. clear the old tabs & set the new tabs.
           2. Refresh the stat
-
         """
         super().change_algorithm(alg)
         tab_info = alg.get_state_tab_info()
@@ -89,6 +87,7 @@ class StatePanel(AlgDepPanel):
         # Set callback for the tab:
         self._notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
         self._notebook.place(relx=0, rely=0, relwidth=1, relheight=1)
+
         # Set the default tab to the first one:
         self.cur_tab = None
 
@@ -113,6 +112,10 @@ class StatePanel(AlgDepPanel):
             # Create a label for the tab to hold the image (filling the whole tab frame):
             img_label = tk.Label(tab_frame, bg=self._bg_color)
             img_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+            img_label.bind("<Button-1>", lambda event: self._on_mouse_click(event, tab_name))
+            img_label.bind("<Motion>", lambda event: self._on_mouse_move(event, tab_name))
+
             # Add the tab to the notebook:
             self._notebook.add(tab_frame, text=tab_str)
             # Add the tab to the state tabs dictionary:
@@ -120,7 +123,7 @@ class StatePanel(AlgDepPanel):
 
         # get the current tab:
         self.cur_tab = self._tabs_by_text[self._notebook.tab(self._notebook.select(), "text")]
-        print("Setting current tab to %s" % self.cur_tab)
+        logging.info("StatePanel set initial tab to %s" % self.cur_tab)
 
     def get_frame_size(self):
         frame_size = self._frame.winfo_width(), self._frame.winfo_height()
@@ -138,7 +141,7 @@ class StatePanel(AlgDepPanel):
         # self._blank[:] = self._bg_color_rgb
         self.refresh_images(is_paused=self._alg.paused)
 
-    #@LPT.time_function
+    # @LPT.time_function
     def refresh_images(self, is_paused):
         """
         Get new image from the app, set the image for the current tab.
@@ -150,7 +153,7 @@ class StatePanel(AlgDepPanel):
         label = self._state_tabs[self.cur_tab][1]
         label.config(image=new_img)
         label.image = new_img
-        #label.update_idletasks()
+        # label.update_idletasks()
 
     def _on_tab_changed(self, event):
         """
@@ -159,6 +162,16 @@ class StatePanel(AlgDepPanel):
 
         # get the current tab:
         self.cur_tab = self._tabs_by_text[self._notebook.tab(self._notebook.select(), "text")]
+        self.refresh_images(is_paused=self._alg.paused)
+
+    def _on_mouse_click(self, event, tab):
+        #logging.info("Mouse click at (%d, %d) on tab %s" % (event.x, event.y, tab))
+        self._alg.get_image_manager().mouse_click(event.x, event.y, tab)
+        self.refresh_images(is_paused=self._alg.paused)
+
+    def _on_mouse_move(self, event, tab):
+        #logging.info("Mouse move at (%d, %d) on tab %s" % (event.x, event.y, tab))
+        self._alg.get_image_manager().mouse_move(event.x, event.y, tab)
         self.refresh_images(is_paused=self._alg.paused)
 
 
@@ -186,10 +199,10 @@ class VisualizationPanel(AlgDepPanel):
 
     def _on_resize(self, event):
         self._state_image_size = self._frame.winfo_width(), self._frame.winfo_height()
-        self.refresh_images(is_paused=self._alg.paused, control_point = self._alg.current_ctrl_pt)
+        self.refresh_images(is_paused=self._alg.paused, control_point=self._alg.current_ctrl_pt)
 
+    # @LPT.time_function
 
-    #@LPT.time_function
     def refresh_images(self, is_paused, control_point):
         """
         Get new image from the app, set the image for the current tab.
@@ -202,4 +215,4 @@ class VisualizationPanel(AlgDepPanel):
         new_img = ImageTk.PhotoImage(image=Image.fromarray(new_img))
         self._viz_label.config(image=new_img)
         self._viz_label.image = new_img
-        #self._viz_label.update_idletasks()
+        # self._viz_label.update_idletasks()

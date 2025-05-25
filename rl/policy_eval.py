@@ -30,20 +30,23 @@ class PolicyEvalDemoAlg(DemoAlg):
         :param env: The environment object.
         :param gamma: The discount factor (default is 0.9).
         """
-        super().__init__(app=app)
+        super().__init__(app=app, env=env)
         self._colors = {'bg': COLOR_BG,
                         'lines': COLOR_LINES,
                         'text': COLOR_TEXT}
-        self._env = env
+
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
-        self._img_mgr = PolicyEvalSIM(self._env)
+
         self._delta_v_tol = 1e-6
         self.pi_seed = None
         self.gamma = gamma
         self.reset_state()
 
         logging.info("PolicyEvalDemoAlg initialized.")
+
+    def _make_state_image_manager(self):
+        return PolicyEvalSIM(self._env)
 
     def reset_state(self):
         print("Class: %s resetting state" % self.__class__.__name__)
@@ -304,7 +307,7 @@ class PolicyEvalDemoAlg(DemoAlg):
             if self._maybe_pause('state-update'):
                 logging.info("---------Policy optimization early shutdown.")
                 return self._shutdown, self.n_changes
-            
+
             time.sleep(0.00001)
             self.next_state_ind += 1
 
