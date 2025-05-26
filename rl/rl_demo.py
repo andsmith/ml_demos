@@ -40,7 +40,7 @@ ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDP
 AGENT_MARK = Mark.X  # The agent's mark in the game.
 OPPONENT_MARK = Mark.O  # The opponent's mark in the game.
 
-FPS = 5
+FPS = 10
 
 
 class RLDemoApp(object):

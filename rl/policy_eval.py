@@ -265,6 +265,7 @@ class PolicyEvalDemoAlg(DemoAlg):
                 self.pe_convergence_iter = self.pi_iter
                 self.next_state_ind = 0
 
+            self.state = None  # clear so nothing is highlighted.
             if self._maybe_pause('epoch-update'):
                 return self._shutdown
 
@@ -335,10 +336,15 @@ class PolicyEvalDemoAlg(DemoAlg):
             time.sleep(0.00001)
             self.next_state_ind += 1
 
+        self.state = None  # clear so nothing is highlighted.
         return self._shutdown, self.n_changes
 
     def get_state_image(self, size, tab_name, is_paused):
         self._img_mgr.set_size(size)
+        if self.state is not None:
+            self._img_mgr.set_current_state(self.state)
+        else:
+            self._img_mgr.set_current_state()
         img = self._img_mgr.get_tab_img(tab=tab_name, annotated=is_paused)
         return img
 

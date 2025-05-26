@@ -35,6 +35,7 @@ class StateImageManager(ABC):
         self._size = None
         self.tabs = tabs
         self._env = env
+        self._cur_state = None  # highlight in images
 
         self._box_placer = None
         self._box_centers = None
@@ -104,7 +105,7 @@ class StateImageManager(ABC):
 
     def mouse_move(self, x, y, tab):
         """
-        Update mouseovered state. 
+        Update mouseovered state.
         If it changes, invalidate display images.
         """
         new_mo_state = self._get_state_at(x, y)
@@ -177,6 +178,18 @@ class StateImageManager(ABC):
             state['id']) for layer_num, state_list in enumerate(self.states_by_layer) for state in state_list}
         box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
         return images, box_sizes
+
+    def set_current_state(self, state=None):
+        old_cur_state = self._cur_state
+        self._cur_state = state
+
+        if old_cur_state is None and state is None:
+            return
+        
+        if (state is None and old_cur_state is not None) or\
+            (state is not None and old_cur_state is None) or \
+                (old_cur_state != state):
+            self.clear_images(marked_only=True)
 
     def get_tab_img(self, tab, annotated=True):
         if annotated:
@@ -328,6 +341,7 @@ class ValueFunctionSIM(StateImageManager):
         if self._base_images[tab] is None:
             self._base_images[tab] = self.draw_base(tab)
         img = self._base_images[tab].copy()
+
         for state in self.selected:
             self._box_placer.draw_box(image=img,
                                       state_id=state,
@@ -339,6 +353,12 @@ class ValueFunctionSIM(StateImageManager):
                                       state_id=self.mouseovered,
                                       color=NEON_GREEN,
                                       thickness=1)
+
+        if self._cur_state is not None:
+            self._box_placer.draw_box(image=img,
+                                      state_id=self._cur_state,
+                                      color=NEON_GREEN,
+                                      thickness=2)
         return img
 
     def draw_annotated(self, tab):
