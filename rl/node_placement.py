@@ -40,7 +40,6 @@ class BoxOrganizer(ABC):
         # for drawing debug images
         self._bkg_color = color_bg
         self._line_color = color_lines
-        self._t = 0
         self.layer_spacing = self._calc_layer_spacing()
         self.box_positions, self.grid_shapes = self._calc_box_positions()
 
@@ -64,30 +63,33 @@ class BoxOrganizer(ABC):
         """
         pass
 
-    def draw_box(self, image, state_id, color):
+    def draw_box(self, image, state_id, color, thickness=0):
         """
         Draw a box on the image.
         :param image: image to draw on.
         :param state_id: id of the box to draw.
         :param color: color of the box.
         """
-        self._t+=1
-        if state_id not in self.box_positions:
-            raise Exception("Box %s not found." % state_id)
+        if color is None:
+            return
         bos_pos = self.box_positions[state_id]
         x, y = bos_pos['x'], bos_pos['y']
-        #print("Setting box at %i, %i to color %s" % (x[0], y[0], color))
-        image[y[0]:y[1], x[0]:x[1]] = color
-        #print("image mean: ", np.mean(image))
-        #cv2.imwrite("img_%i.png" % self._t, image)
+        if thickness == 0:
+            image[y[0]:y[1], x[0]:x[1]] = color
+        else:
+            color = int(color[0]), int(color[1]), int(color[2])
+            cv2.rectangle(image, (x[0], y[0]), (x[1], y[1]), color, thickness, cv2.LINE_AA)
 
-
-
-    def draw(self, images=None, colors=None, dest=None, show_bars=False):
+    def draw(self, images=None, colors=None, dest=None, show_bars=False, **kwargs):
         """
         :param images: dict(box_id = image).  If None, will use the argument in ['colors'] key of each box.
         :Param colors: dict(box_id = color).  If None, will use the argument in ['colors'] key of each box
+        :param dest: image to draw on.  If None, will create a new image.
+        :param show_bars: if True, will draw the layer division bars.
+        :param kwargs: additional arguments to pass to the draw_box (if drawing boxes)
         """
+        if images is None and colors is None:
+            raise Exception("No images or colors provided.")
         if dest is None:
             img = np.zeros((self.size_wh[1], self.size_wh[0], 3), np.uint8)
             img[:, :] = self._bkg_color
@@ -105,11 +107,12 @@ class BoxOrganizer(ABC):
                 if box['id'] not in self.box_positions:
                     bad_boxes.add(box['id'])
                     continue
-                bos_pos = self.box_positions[box['id']]
-                x, y = bos_pos['x'], bos_pos['y']
+
                 if images is None:
-                    img[y[0]:y[1], x[0]:x[1]] = box['color'] if colors is None else colors[box['id']]
+                    self.draw_box(img, box['id'], colors[box['id']], **kwargs)
                 else:
+                    bos_pos = self.box_positions[box['id']]
+                    x, y = bos_pos['x'], bos_pos['y']
                     tile = images[box['id']]
                     img[y[0]:y[0] + tile.shape[1], x[0]:x[0] + tile.shape[0]] = tile
             if len(bad_boxes) > 0:
@@ -196,6 +199,33 @@ class BoxOrganizer(ABC):
             n_rows_used = new_n_rows_used
 
         return best['n_rows'], best['n_cols']
+
+    def get_layer_at(self, pos):
+        """
+        Return the index of the layer containing the x, y position, or None if it is out of bounds / between layers.
+        """
+        for l_ind, layer in enumerate(self.layer_spacing):
+            y_min, y_max = layer['y']
+            if y_min <= pos[1] <= y_max:
+                return l_ind
+        return None
+
+    def get_state_at(self, pos):
+        """
+        Return the state id at the given x, y position, or None if it is out of bounds / between layers.
+        """
+
+        l_ind = self.get_layer_at(pos)
+        if l_ind is None:
+            return None, -1
+        layer = self.layer_spacing[l_ind]
+        y_min, y_max = layer['y']
+        if y_min <= pos[1] <= y_max:
+            for box_id, box_pos in self.box_positions.items():
+                x_min, x_max = box_pos['x']
+                if x_min <= pos[0] <= x_max and y_min <= pos[1] <= y_max:
+                    return box_id, l_ind
+        return None, -1
 
 
 class FixedCellBoxOrganizer(BoxOrganizer):

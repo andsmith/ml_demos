@@ -3,9 +3,14 @@ Base classes and functions for RL demos.
 """
 from tic_tac_toe import Game, get_game_tree_cached, GameTree
 from game_base import Mark, Result
-
+from enum import IntEnum
 import numpy as np
 import logging
+
+
+class PIPhases(IntEnum):
+    VALUE_F_OPT = 0
+    POLICY_OPT = 1
 
 
 class Environment(object):
@@ -21,60 +26,62 @@ class Environment(object):
     This class shoehorns the game into a Markov Decision Process (MDP) by assuming the opponent is a stochastic policy.
     """
 
-    def __init__(self, opponent_policy, player_mark=Mark.X):
+    def __init__(self, opponent_policy=None, player_mark=Mark.X):
         """
         :param opponent_policy:  policy of the opponent, Policy object initialized with the opposite player mark.  Will be 
             used to define the "environment" for the agent.
         :param player_mark: The player for the agent.  The opponent is the other player.
         """
-        self._player = player_mark
-        self._opponent = GameTree.opponent(player_mark)
-        self._opp = opponent_policy
-        self._tree = get_game_tree_cached(player=player_mark)
-        self._terminal, self._children, self._parents, self._initial = self._tree.get_game_tree()
-        self._p_next_state = self._calc_state_transitions()
+        self.player = player_mark
+        self.opponent = GameTree.opponent(player_mark)
 
-    def get_children(self):
-        return self._children
+        self.winning_result = Result.X_WIN if player_mark == Mark.X else Result.O_WIN
+        self.losing_result = Result.O_WIN if player_mark == Mark.X else Result.X_WIN
+        self.draw_result = Result.DRAW
 
-    def _calc_state_transitions(self):
+        self.pi_opp = opponent_policy
+        self.tree = get_game_tree_cached(player=player_mark, verbose=True)
+        self.terminal, self.children, self.parents, self.initial = self.tree.get_game_tree()
+
+    def opp_move_dist(self, state, action):
         """
-        The state transitions from the agent's perspective are the probabilities of the opponents moves
-        for every move the agent can make.
-
-        For every state our OPPONENT can be confronted with (i.e. even number of moves made or one more player move),
-        calculate the probability of each possible next state by evaluating the opponent's policy.
+        Given player taking the action from the state, return the distribution of next states. 
+        THis is found by evaluating the opponents policy on the state after the action is taken.
+        :param state: The current state of the game.
+        :param action: The action taken by the player.
+        :returns: a list of (opp_action, prob) tuples, from the opponent's policy, or
+            None if player's action results in a terminal state.
         """
-        p_sp_g_sa = {}  # for every state, for every action the agent can take,
-        # what is the distribution of next states for the agent (after opponent makes a move).
-        logging.info("Calculating opponent's state transitions...")
+        # Get the next state after the player takes the action.
+        next_state = state.clone_and_move(action, self.player)
 
-        nonterm = self.get_nonterminal_states()
-        for s_i, state in enumerate(nonterm):
-            if s_i % 100 == 0:
-                logging.info("\tprocessing state %d of %d nonterminals." % (s_i, len(nonterm)))
-            agent_actions = state.get_actions()
-            for agent_action in agent_actions:
-                # get the next state after the agent makes a move
-                inter_state = state.clone_and_move(agent_action, self._player)  # after agent, before opponent
-                next_state_dist = self._opp.recommend_action(inter_state)
+        # Check if the game is over.  If so, return a terminal state with no next states.
+        result = next_state.check_endstate()
+        if result is not None:
+            return None
 
-                # store the distribution of next states for this state and action
-                p_sp_g_sa[(state, agent_action)] = {agent_action: next_state_dist}
+        # Get the distribution of next states from the opponent's policy.
+        opp_moves = self.pi_opp.recommend_action(next_state)
 
-        return p_sp_g_sa
+        # Filter out zero probability moves
+        return opp_moves
+
+    def set_opp_policy(self, policy):
+        """
+        Set the opponent's policy to a new policy.
+        :param policy: The new opponent policy.
+        """
+        self.pi_opp = policy
 
     def _state_valid(self, state):
         """
-        Check if the given state is valid for self._player.
+        Check if it's really agent's turn.
         """
-        return np.sum(state.state == self._player) <= np.sum(state.state == self._opponent)
-
-    def p_next_states(self, state, action):
-        return self._p_next_state[(state, action)]
+        return np.sum(state.state == self.player) <= np.sum(state.state == self.opponent)
 
     def get_terminal_states(self):
-        return [state for state in self._terminal if self._terminal[state] is not None]
+        return [state for state in self.terminal if self.terminal[state] is not None]
 
     def get_nonterminal_states(self):
-        return [state for state in self._terminal if (self._terminal[state] is None and self._state_valid(state))]
+        # states player can see in a game (when it's their turn)
+        return [state for state in self.terminal if (self.terminal[state] is None and self._state_valid(state))]

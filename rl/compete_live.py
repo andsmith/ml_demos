@@ -98,17 +98,19 @@ class LiveTournament(object):
 
 def test():
     t = LiveTournament(matches_per_round=100)
-    p1 = HeuristicPlayer(Mark.X, n_rules=6)
-    p2 = HeuristicPlayer(Mark.O, n_rules=6)
+    p0 = HeuristicPlayer(Mark.O, n_rules=0)
+    p1 = HeuristicPlayer(Mark.X, n_rules=1)
+    p2 = HeuristicPlayer(Mark.O, n_rules=2)
     p3 = HeuristicPlayer(Mark.O, n_rules=3)
-    p4 = HeuristicPlayer(Mark.O, n_rules=0)
+    p4 = HeuristicPlayer(Mark.O, n_rules=4)
+    t.register("p0", p0)
     t.register("p1", p1)
     t.register("p2", p2)
     t.register("p3", p3)
     t.register("p4", p4)
     t.add_match("p1", "p2")
-    t.add_match("p1", "p3")
-    t.add_match("p1", "p4")
+    t.add_match("p2", "p3")
+    t.add_match("p3", "p4")
 
     t.start()
 
