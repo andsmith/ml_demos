@@ -27,7 +27,9 @@ class DemoAlg(ABC):
         """
         :param app: The main app object.
         :param advance_event: Event to signal when the algorithm should advance.
-        """
+        """        
+        self.app = app
+
         self._env = env
         self._img_mgr = self._make_state_image_manager()  # Get the state/viz image manager for this algorithm.
 
@@ -38,13 +40,34 @@ class DemoAlg(ABC):
         self._shutdown = False
         self._learn_thread = None
 
+        # The current state being processed by the algorithm, set before pausing so visualization can show it.
+        self.state = None
+
         self.current_ctrl_pt = self.get_init_control()  # The current control point for the algorithm.
         if self.is_stub():
             raise RuntimeError("This is a stub class. It should not be instantiated directly.")
-        self.app = app
+
+        self._stop_states = []  # user-set breakpoints, states where the algorithm should pause.
 
     def get_image_manager(self):
         return self._img_mgr
+
+    def toggle_stop_state(self, state):
+        if state in self._stop_states:
+            self._stop_states.remove(state)
+            logging.info("Removed stop state: %s" % state)
+        else:
+            self._stop_states.append(state)
+            logging.info("Added stop state: %s" % state)
+
+    def clear_stop_states(self):
+        self._stop_states = []
+        logging.info("Cleared all stop states.")
+        if self._img_mgr is not None:
+            self._img_mgr.clear_selected()
+
+    def get_stop_states(self):
+        return self._stop_states
 
     @abstractmethod
     def _make_state_image_manager(self):
@@ -75,9 +98,15 @@ class DemoAlg(ABC):
 
         self.current_ctrl_pt = control_point
 
-        if self._run_control[control_point]:
-            self.paused = True
+        do_pause = self._run_control[control_point]
+        
+        if 'stops' in self._run_control and self._run_control['stops']:
+            if self.state is not None and self.state in self._stop_states:
+                do_pause = True
+                logging.info("Stopping at user-set stop state: %s" % self.state)
 
+        if do_pause:
+            self.paused = True
             self.app.tick(is_paused=True, control_point=control_point)
             logging.info("Algorithm paused at control point: %s" % control_point)
             self._go_signal.wait()
@@ -105,6 +134,7 @@ class DemoAlg(ABC):
     def get_run_control_options():
         """
         Return a list of options to be used in the run-control panel.
+        NOTE:  A special option 'stops' is used to indicate that the algorithm should pause when processing this state.
         :returns: list of (option-key, option-string tuples).  Keys are for 
         references w/the gui, strings are for displaying in checkboxes.
         """

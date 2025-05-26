@@ -46,7 +46,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         logging.info("PolicyEvalDemoAlg initialized.")
 
     def _make_state_image_manager(self):
-        return PolicyEvalSIM(self._env)
+        return PolicyEvalSIM(self.app,self._env)
 
     def reset_state(self):
         # start by learning v(s) for this policy:
@@ -71,15 +71,26 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.values = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self.values.update({state: 0.0 for state in self.updatable_states})
 
-        # Reset the image manager with the initial values.
-        self._img_mgr.reset_values()
-
-        for state, value in self.values.items():
-            self._img_mgr.set_state_val(state, 'values', value)
-        for state in self.updatable_states:
-            self._img_mgr.set_state_val(state, 'updates', 0.0)
+        self._update_img_mgr(values=self.values, updates=0.0)
 
         self.next_values = {}
+
+
+    def _update_img_mgr(self, values=None, updates=None):
+        
+        # Reset the image manager with the initial values.
+        self._img_mgr.reset_values()
+        if values is not None:
+            for state, value in values.items():
+                self._img_mgr.set_state_val(state, 'values', value)
+        if updates is not None:
+            if isinstance(updates, (int, float)):
+                for state in self.updatable_states:
+                    self._img_mgr.set_state_val(state, 'updates', updates)
+            else:  # dict
+                for state, update in updates.items():
+                    self._img_mgr.set_state_val(state, 'updates', update)
+
 
     def get_status(self):
         font_default = layout.LAYOUT['fonts']['status']
@@ -104,6 +115,8 @@ class PolicyEvalDemoAlg(DemoAlg):
             status += [("Pi(s) converged, iter %i" % (self.pi_convergence_iter,), font_bold)]
         else:
             status += [("", font_default),]
+
+        status +=[('N Stop States: %i' % len(self._stop_states), font_default),]
 
         return status
 
@@ -160,6 +173,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['state-update'] = "state update"
         rco['epoch-update'] = "epoch update"
         rco['policy-update'] = "policy update"
+        rco['stops'] = "selected states"
         return rco
 
     def _learn_loop(self):
@@ -174,12 +188,12 @@ class PolicyEvalDemoAlg(DemoAlg):
             if self._optimize_value_function():
                 logging.info("Policy Evaluation terminated early.")
                 break
+            # optimize policy
+            self.pi_phase = PIPhases.POLICY_OPTIM
 
             if self._maybe_pause('policy-update'):
                 break
 
-            # optimize policy
-            self.pi_phase = PIPhases.POLICY_OPTIM
             finished, self.n_changes = self._optimize_policy()
             if finished:
                 logging.info("Policy Optimization terminated early.")
@@ -251,12 +265,10 @@ class PolicyEvalDemoAlg(DemoAlg):
                 self.pe_convergence_iter = self.pi_iter
                 self.next_state_ind = 0
 
-                # self.pi_phase = PIPhases.POLICY_OPTIM # change now so it displays in status during epoch update
-
             if self._maybe_pause('epoch-update'):
                 return self._shutdown
 
-            self._img_mgr.reset_values(tabs=('updates',))
+            #self._img_mgr.reset_values(tabs=('updates',))
             self.values = self.next_values
             self.next_values = {}
 
@@ -284,11 +296,19 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def _optimize_policy(self):
         logging.info("Optimizing policy for iteration %i" % self.pi_iter)
-        self.next_state_ind = 0
 
-        # binary, marking which states have a new best action
+
+        # Reset 'updates' tab, will be used in policy optimization as binary
+        # binary, marking which states have a new action, Pi(s)=a.
         self._img_mgr.set_range('updates', (0.0, 1.0))
         self._img_mgr.reset_values(tabs=('updates'))
+        for state in self.updatable_states:  # show blank squares before filling in values
+            self._img_mgr.set_state_val(state, 'updates', 0.0)
+
+
+
+        self.n_changes = 0
+        self.next_state_ind = 0
 
         def update(state, new_action):
 

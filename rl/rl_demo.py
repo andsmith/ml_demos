@@ -175,6 +175,15 @@ class RLDemoApp(object):
     def set_control_point(self, control_point):
         self._status_control_panel.set_run_control_setting(control_point)
 
+    def toggle_stop_state(self, state):
+        self._alg.toggle_stop_state(state)
+        self._status_control_panel.refresh_status()
+
+    def clear_stop_states(self):
+        self._alg.clear_stop_states()
+        self._state_panel.refresh_images(is_paused=self.paused)
+        self._status_control_panel.refresh_status()
+
     def set_opponent(self, n_rules):
         """
         Set the opponent policy to a new heuristic player with the given number of rules.

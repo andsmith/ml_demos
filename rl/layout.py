@@ -1,8 +1,8 @@
 
 
 MID_X = 0.38  # "state-tabs" frame (sate/value/update images) to the right of this point
-MID_Y = 0.4  # "step-visualization" frame below this point
-LOW_Y = 0.84
+MID_Y = 0.5  # "step-visualization" frame below this point
+LOW_Y = 1.0
 HALF_MID_X = 0.15
 
 LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),

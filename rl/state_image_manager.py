@@ -30,7 +30,8 @@ class StateImageManager(ABC):
     breakpoints in the algorithm loop.
     """
 
-    def __init__(self, env, tabs):
+    def __init__(self, app, env, tabs):
+        self._app = app
         self._size = None
         self.tabs = tabs
         self._env = env
@@ -50,7 +51,7 @@ class StateImageManager(ABC):
         self.selected = []
 
         # Base images for states/values, updated as algorithm runs.
-        self._base_images = {tab: None for tab in tabs} 
+        self._base_images = {tab: None for tab in tabs}
         # Which states are selected/moused over, etc., drawn over base iamges
         self._marked_images = {tab: None for tab in tabs}
         # Images for displaying states with annotations of the learnining algorithm's step, drawn over marked images.
@@ -67,7 +68,7 @@ class StateImageManager(ABC):
         :param tabs:  list of tabs to clear, or None to clear all.
         :param marked_only:  If True, only clear the marked/display images (e.g. if a mouse interaction occurs).
         """
-        #print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
+        # print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
         tabs_to_clear = self.tabs if tabs is None else tabs
         tabs_to_clear = (tabs_to_clear,) if isinstance(tabs_to_clear, str) else tabs_to_clear
 
@@ -117,12 +118,30 @@ class StateImageManager(ABC):
         new_click_state = self._get_state_at(x, y)
         if new_click_state is None:
             return False
-        if new_click_state not in self.selected:
-            self.selected.append(new_click_state)
-        else:
-            self.selected.remove(new_click_state)
-        self.clear_images(marked_only=True)
+        self._toggle_selected(new_click_state)
         return True
+
+    def _toggle_selected(self, state):
+        """
+        Toggle the selected state.
+        :param state:  The state to toggle.
+        """
+        if state in self.selected:
+            self.selected.remove(state)
+        else:
+            self.selected.append(state)
+        self.clear_images(marked_only=True)
+        self._app.toggle_stop_state(state)  # internal change, need to tell the app
+
+    def clear_selected(self):
+        """
+        externally cleared (not from user clicks)
+        """
+        n_selected = len(self.selected)
+        self.selected = []
+        if n_selected > 0:
+            logging.info(f"Cleared {n_selected} selected states.")
+            self.clear_images(marked_only=True)
 
     def _calc_dims(self):
         """
@@ -158,7 +177,6 @@ class StateImageManager(ABC):
             state['id']) for layer_num, state_list in enumerate(self.states_by_layer) for state in state_list}
         box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
         return images, box_sizes
-
 
     def get_tab_img(self, tab, annotated=True):
         if annotated:
@@ -207,7 +225,7 @@ class ValueFunctionSIM(StateImageManager):
     All states are initially visible, values are updated, etc.
     """
 
-    def __init__(self, env, tabs, value_ranges, colormap_names, bg_colors):
+    def __init__(self, app, env, tabs, value_ranges, colormap_names, bg_colors):
         """
         :param env:  The environment to use.
         :param tabs:  list of strings, names of tabs (for dict references, not display)
@@ -219,7 +237,7 @@ class ValueFunctionSIM(StateImageManager):
         :param colormap_names:  dict(tab_name: colormap name) for each tab (defaults to 'viridis')
         :param bg_colors:  dict(tab_name: color) for each tab (defaults COLOR_BG for states, SKY_BLUE for values/updates)
         """
-        super().__init__(env, tabs)
+        super().__init__(app, env, tabs)
         self._cmaps = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
         self._ranges = value_ranges
         self._bg_colors = bg_colors
@@ -322,7 +340,7 @@ class ValueFunctionSIM(StateImageManager):
                                       color=NEON_GREEN,
                                       thickness=1)
         return img
-    
+
     def draw_annotated(self, tab):
         # Stub, override for subclass
         if self._marked_images[tab] is None:
@@ -332,12 +350,13 @@ class ValueFunctionSIM(StateImageManager):
 
 
 class PolicyEvalSIM(ValueFunctionSIM):
-    def __init__(self, env):
+    def __init__(self, app, env):
+
         tabs = ['states', 'values', 'updates']
         colormap_names = {'values': 'gray', 'updates': 'coolwarm'}
         value_ranges = {'values': (-1, 1), 'updates': (-1, 1)}
         bg_colors = {'states': COLOR_BG, 'values': SKY_BLUE, 'updates': SKY_BLUE}
-        super().__init__(env, tabs, value_ranges, colormap_names, bg_colors)
+        super().__init__(app, env, tabs, value_ranges, colormap_names, bg_colors)
 
     def get_state_update_order(self):
         if self._box_placer is None:
@@ -360,9 +379,12 @@ class SimTester(object):
         self._init_values(env)
         self._init_tabs()
 
+    def toggle_selected(self, state):
+        print(f"Toggling selected state:\n{state}\n")
+
     def _init_values(self, env):
 
-        self._sim = PolicyEvalSIM(env)
+        self._sim = PolicyEvalSIM(self, env)
         self._tabs = self._sim.tabs
         vals = []
 

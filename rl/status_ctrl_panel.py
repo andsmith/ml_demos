@@ -41,9 +41,9 @@ class StatusControlPanel(Panel):
     def _init_widgets(self):
 
         # init three frames:
-        self._n_status_lines = 7
-        y1 = .53
-        y2 = .85
+        self._n_status_lines = 8
+        y1 = .50
+        y2 = .82
         self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
         self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=y1)
         self._run_control_frame = tk.Frame(self._frame, bg=self._bg_color)
@@ -189,7 +189,7 @@ class StatusControlPanel(Panel):
         self._go_button.pack(side=tk.LEFT, pady=10, padx=5)
 
     def _clear_breakpoints(self):
-        pass
+        self.app.clear_stop_states()
 
     def _go_stop(self):
 
