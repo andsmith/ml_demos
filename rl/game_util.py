@@ -5,7 +5,7 @@ import logging
 from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 from game_base import Mark, Result
 from layer_optimizer import SimpleTreeOptimizer  # for horizontal sorting
-from node_placement import FixedCellBoxOrganizer, FixedCellWithColorKey  # for 2d embedding and vertical sorting
+from node_placement import FixedCellBoxOrganizer, FixedCellWithKey  # for 2d embedding and vertical sorting
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,7 +31,7 @@ def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
 
 
 def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
-                   layer_bar_w=1, player=Mark.X, key_height=0, key_width=0,):
+                   layer_bar_w=1, player=Mark.X, key_size=None):
     """
     Get the dict of box positions {x:(xmin, max), y:(ymin, max)} for each state, from a player's POV (RL states)
     Use the FixedCellBoxOrganizer to place the boxes in a grid, return it's .box_positions attribute.
@@ -43,13 +43,14 @@ def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
     :param color_bg:  Background color of the image.
     :param color_lines:  Color of the lines between boxes.
     :param player:  The player for the agent.  The opponent is the other player.
+    :param key_sizes:  Optional dict with 'color' and 'state' keys, each with a tuple of (width, height) for the keys.
     :return:  The box positions for each state, a dict from the Game (state) to the x & y spans.
     """
     box_sizes = BOX_SIZES if box_sizes is None else box_sizes
     state_layers = sort_states_into_layers(all_states, player_mark=player)
-    if key_height > 0:
-        box_placer = FixedCellWithColorKey(img_size, state_layers, box_sizes, min_key_h=key_height, min_key_w=key_width,
-                                           layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
+    if key_size is not None:
+        box_placer = FixedCellWithKey(img_size, state_layers, box_sizes, min_key_w=key_size[0], min_key_h=key_size[1],
+                                      layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
     else:
         box_placer = FixedCellBoxOrganizer(img_size, state_layers, box_sizes,
                                            layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)

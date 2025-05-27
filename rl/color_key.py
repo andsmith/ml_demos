@@ -29,6 +29,8 @@ def get_font_scale(font, max_height):
     return scale
 
 
+
+
 class ColorKey(object):
     """
 
@@ -134,8 +136,12 @@ class ColorKey(object):
         img[axis_y: axis_y + axis_width, spectrum_x[0]:spectrum_x[1]] = line_color
 
 
-        ticks = [self.range[0], 0.0, self.range[1]] if self.range[0] < 0 and self.range[1] > 0 else \
-            [self.range[0], (self.range[0]+self.range[1])/2, self.range[1]]
+        if indicate_value is None:
+            # only show ticks if no value is to be indicated
+            ticks = [self.range[0], 0.0, self.range[1]] if self.range[0] < 0 and self.range[1] > 0 else \
+                [self.range[0], (self.range[0]+self.range[1])/2, self.range[1]]
+        else:
+            ticks = []
         
         tick_width = axis_width
         num_ticks = len(ticks)

@@ -17,6 +17,7 @@ from abc import ABC, abstractmethod
 from drawing import GameStateArtist
 from scipy.spatial import KDTree
 from color_key import ColorKey
+from state_key import StateKey
 
 
 # BOX_SIZES = [22, 12, 12, 12, 12, 12]  # good for single value function
@@ -33,12 +34,12 @@ class StateImageManager(ABC):
     breakpoints in the algorithm loop.
     """
 
-    def __init__(self, app, env, tabs, key_size):
+    def __init__(self, app, env, tabs, key_sizes):
         """
         :param app:  The application instance, used to notify about state changes.
         :param env:  The environment to use.
         :param tabs:  list of strings, names of tabs (for dict references, not display)
-        :param argv:  Additional arguments for the get_box_placer
+        :param key_sizes:  {'state': (width, height), 'color': (width, height)}
         """
         self._app = app
         self._size = None
@@ -50,9 +51,15 @@ class StateImageManager(ABC):
         self._box_centers = None
         self._box_tree = None
         self._color_keys = {}  # dict of ColorKey objects for each tab, if applicable
-        self._key_size = key_size
-        self._box_placer_args = {'key_width': key_size[0],
-                                 'key_height': key_size[1],}
+        self._state_key = None  # Use the same for all tabs.
+        self._key_sizes = key_sizes
+        key_height = key_sizes['color'][1]
+
+        if key_height != key_sizes['state'][1]:
+            raise ValueError("Key sizes must have the same height for state and color keys.")
+        
+        self._total_key_size = (key_sizes['color'][0] + key_sizes['state'][0] ,
+                                key_height)
 
         self.terminal_states = env.get_terminal_states()
         self.updatable_states = env.get_nonterminal_states()
@@ -74,7 +81,6 @@ class StateImageManager(ABC):
         self._size_cache = {}
 
         logging.info(f"StateImageManager initialized with {len(self.all_states)} states")
-
 
         self.clear_images()
 
@@ -169,7 +175,7 @@ class StateImageManager(ABC):
                                           box_sizes=self._box_sizes,
                                           layer_vpad_px=1,
                                           layer_bar_w=1,
-                                          player=self._env.player, **self._box_placer_args)
+                                          player=self._env.player, key_size=self._total_key_size)
 
         # Swap state positions so wins are on the right, losses on the left, draws in the middle, etc.
         terminal_lut = {state: state.check_endstate() for state in self.all_states}
@@ -189,7 +195,31 @@ class StateImageManager(ABC):
         box_centers = np.array(box_centers)
         box_tree = KDTree(box_centers)
 
+        # now we can calculate the position of the color key bounding box
+        ck_width = self._key_sizes['color'][0]
+        # height is highest y of state boxes in row 1 (second row)
+        layer1_states = self.states_by_layer[1]
+        # box_placer.box_positions[layer1_states[0]['id']]
 
+        y_pad = box_placer.grid_shapes[1]['box_side_len']//3
+
+        y_tops = [box_placer.box_positions[state_info['id']]['y'][0] for state_info in layer1_states]
+        ck_height = np.min(y_tops) - y_pad
+
+        # Update the key heights
+        logging.info("Updating key height from %i to %i" % (self._key_sizes['color'][1], ck_height))
+        self._key_sizes['color'] = (self._key_sizes['color'][0], ck_height)
+        self._key_sizes['state'] = (self._key_sizes['state'][0], ck_height)
+
+        # create the color keys
+        self._color_keys = {tab: ColorKey(size=(ck_width, ck_height),
+                                          cmap=plt.get_cmap(self._cmaps[tab]),
+                                          range=self._ranges[tab])
+                            for tab in self.tabs if tab != 'states'}
+        
+        # create the state key
+        self._state_key = StateKey(size = self._key_sizes['state'],)
+        self._state_key_pos = (self._size[0] - self._key_sizes['color'][0] -self._key_sizes['state'][0],  0)
 
         return box_placer, box_centers, box_tree
 
@@ -259,7 +289,7 @@ class ValueFunctionSIM(StateImageManager):
     All states are initially visible, values are updated, etc.
     """
 
-    def __init__(self, app, env, tabs, value_ranges, colormap_names, bg_colors, color_key_size):
+    def __init__(self, app, env, tabs, value_ranges, colormap_names, bg_colors, key_sizes):
         """
         :param env:  The environment to use.
         :param tabs:  list of strings, names of tabs (for dict references, not display)
@@ -270,42 +300,17 @@ class ValueFunctionSIM(StateImageManager):
         :param value_ranges:  dict(tab_name: (min, max)) for each tab (defaults to (-1, 1))
         :param colormap_names:  dict(tab_name: colormap name) for each tab (defaults to 'viridis')
         :param bg_colors:  dict(tab_name: color) for each tab (defaults COLOR_BG for states, SKY_BLUE for values/updates)
-        :param color_key_size:  (width, height)
+        :param key_sizes:  dict with 'color' and 'state' keys, each with a tuple (width, height)
 
-        """        
+        """
 
-        super().__init__(app, env, tabs, key_size=color_key_size)
+        super().__init__(app, env, tabs, key_sizes)
         self._cmaps = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
         self._ranges = value_ranges
         self._bg_colors = bg_colors
         self._values = {}
         self.reset_values()
 
-    def _calc_dims(self):
-        """
-        Calculate state layout.
-        """
-        box_placer, box_centers, box_tree = super()._calc_dims()
-
-        # now we can calculate the position of the color key bounding box
-        ck_width = self._key_size[0]
-        # height is highest y of state boxes in row 1 (second row)
-        layer1_states = self.states_by_layer[1]
-        # box_placer.box_positions[layer1_states[0]['id']]
-
-        y_pad = box_placer.grid_shapes[1]['box_side_len']//3
-
-        y_tops = [box_placer.box_positions[state_info['id']]['y'][0] for state_info in layer1_states]
-        ck_height = np.min(y_tops) - y_pad
-
-        # create the color keys
-        self._color_keys = {tab: ColorKey(size=(ck_width, ck_height),
-                                          cmap=plt.get_cmap(self._cmaps[tab]), 
-                                          range=self._ranges[tab])
-                            for tab in self.tabs if tab != 'states'}
-
-        return box_placer, box_centers, box_tree
-    
     def set_range(self, tab, value_range):
         """
         Set the value range for a tab.
@@ -384,21 +389,29 @@ class ValueFunctionSIM(StateImageManager):
         else:
             state_colors = {state: self.get_color(tab, self._values[tab].get(state, None)) for state in self.all_states}
             img = self._box_placer.draw(images=None, colors=state_colors, show_bars=False, dest=img)
+            # Add a vertical line between the state key and the color key:
+            # v_line_x = self._size[0] - self._key_sizes['color'][0] 
+            # v_line_bottom = self._key_sizes['color'][1]
+            # img[0:v_line_bottom, v_line_x:v_line_x + 1] = COLOR_LINES
 
         return img
-    
+
     def draw_marked(self, tab):
-        
+
+        # Mark on the base image, regenerate if needed.
         if self._base_images[tab] is None:
             self._base_images[tab] = self.draw_base(tab)
         img = self._base_images[tab].copy()
 
+        # Indicate selected states with a box.
         for state in self.selected:
             self._box_placer.draw_box(image=img,
                                       state_id=state,
                                       color=NEON_RED,
                                       thickness=1)
         indicated_value = None
+
+        # Indicate mouseovered state with a box.
         if self.mouseovered is not None:
             self._box_placer.draw_box(image=img,
                                       state_id=self.mouseovered,
@@ -406,10 +419,17 @@ class ValueFunctionSIM(StateImageManager):
                                       thickness=1)
             if tab in self._color_keys:
                 indicated_value = self._values[tab].get(self.mouseovered, None)
+
+        # Draw the color key if applicable.
         if tab in self._color_keys:
-            self._color_keys[tab].draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT, indicate_value=indicated_value)
-
-
+            self._color_keys[tab].draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT,
+                                       indicate_value=indicated_value)
+            
+        # Draw the state key if not the state tab
+        if tab != 'states' and self.mouseovered is not None:
+            self._state_key.draw(img, self.mouseovered, pos=self._state_key_pos)
+            
+        # Draw the state the algorithm is currently on, if set.
         if self._cur_state is not None:
             self._box_placer.draw_box(image=img,
                                       state_id=self._cur_state,
@@ -428,15 +448,16 @@ class ValueFunctionSIM(StateImageManager):
 class PolicyEvalSIM(ValueFunctionSIM):
     def __init__(self, app, env):
 
-        color_key_w = LAYOUT['color_key']['width']
-        color_key_h = LAYOUT['color_key']['height']
-
         tabs = ['states', 'values', 'updates']
         colormap_names = {'values': 'gray', 'updates': 'coolwarm'}
-
         value_ranges = {'values': (-1, 1), 'updates': (-1, 1)}
         bg_colors = {'states': COLOR_BG, 'values': SKY_BLUE, 'updates': SKY_BLUE}
-        super().__init__(app, env, tabs, value_ranges, colormap_names, bg_colors, (color_key_w, color_key_h))
+
+        key_sizes = {'color': (LAYOUT['color_key']['width'], LAYOUT['color_key']['height']),
+                     'state': (LAYOUT['state_key']['width'], LAYOUT['state_key']['height'])}
+
+        # Initialize the base class with the app, env, tabs, value_ranges, colormap_names, bg_colors, and key_sizes
+        super().__init__(app, env, tabs, value_ranges, colormap_names, bg_colors, key_sizes)
 
     def get_state_update_order(self):
         if self._box_placer is None:
@@ -460,7 +481,7 @@ class SimTester(object):
         self._init_tabs()
 
     def toggle_stop_state(self, state):
-        print(f"Toggling selected state:\n{state}\n")
+        logging.info(f"Toggling selected state:\n{state}\n")
 
     def _init_values(self, env):
 

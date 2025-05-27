@@ -429,9 +429,9 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         return box_positions, grid_shapes
 
 
-class FixedCellWithColorKey(FixedCellBoxOrganizer):
+class FixedCellWithKey(FixedCellBoxOrganizer):
     """
-    States in the top row are moved toward the left, upper right area is reserved for a color key.
+    States in the top row are moved toward the left, upper right area is reserved for a key.
     """
 
     def __init__(self, size_wh, layers, box_sizes, min_key_h=0, min_key_w=0, **argv):
@@ -446,7 +446,7 @@ class FixedCellWithColorKey(FixedCellBoxOrganizer):
         self._min_key_h = min_key_h
         self._min_key_w = min_key_w
         super().__init__(size_wh, layers, box_sizes, **argv)  # initializes box positions
-        self.color_key_bbox = self._shift_box_positions()
+        self.key_bbox = self._shift_box_positions()
 
     def _calc_layer_spacing(self):
         layer_heights, layer_row_counts, usable_height = self._calc_layer_heights()
@@ -456,7 +456,6 @@ class FixedCellWithColorKey(FixedCellBoxOrganizer):
             layer_heights[0] += extra
         layer_spacing = self._adjust_layer_heights(layer_heights, layer_row_counts, usable_height)
         return layer_spacing
-    
 
     def _shift_box_positions(self):
         """
@@ -482,9 +481,9 @@ class FixedCellWithColorKey(FixedCellBoxOrganizer):
 
     def _draw_layer_bars(self, image):
         # draw a vertical line between the top row and the color key area.
-        line_x = self.color_key_bbox['x'][0]
-        line_y_top = self.color_key_bbox['y'][0]
-        line_y_bottom = self.layer_spacing[0]['bar_y']
+        line_x = self.key_bbox['x'][0]
+        line_y_top = self.key_bbox['y'][0]
+        line_y_bottom = self.layer_spacing[0]['bar_y'][0]
         line_x_left = line_x - self._layer_bar_w//2
         line_x_right = line_x_left + self._layer_bar_w
         image[line_y_top:line_y_bottom, line_x_left:line_x_right] = self._line_color
@@ -693,6 +692,7 @@ class AutoBoxOrganizer(LayerwiseBoxOrganizer):
         super().__init__(size_wh, layers)
 
         self.layer_spacing = self._calc_layer_spacing()
+
     def _calc_layer_spacing(self):
         # for now, just evenly space the layers
         spacing = []
