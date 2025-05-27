@@ -26,7 +26,6 @@ def get_font_scale(font, max_height):
         if text_height < max_height:
             break
         scale -= 0.01
-    logging.info("Font scale for height %i is %.2f", max_height, scale)
     return scale
 
 
@@ -61,7 +60,7 @@ class ColorKey(object):
                             'dot_size_frac': .02,  # for dot/dashed line of indicator
                             'tick_font': {'big': cv2.FONT_HERSHEY_COMPLEX, 'small': cv2.FONT_HERSHEY_SIMPLEX},
                             'pad_x_frac': .08,  # allow for axis labels to be centered under spectrum endpoints
-                            'spacing_y_frac': .1,  # top, axis, ticks, bottom
+                            'spacing_y_frac': .15,  # top, axis, ticks, bottom
 
                             }
         self.draw_params.update(draw_params)
@@ -80,9 +79,7 @@ class ColorKey(object):
         :param text_color: Color of the text.
         :param indicate_value: If given, draw a line at this value, print it below.
         """
-        center = (img.shape[1] // 2, img.shape[0] // 2)
         bkg_color = tuple(img[0, 0].tolist())
-        print("Color key background color:", bkg_color)
 
         left, right = img.shape[1] - self.size[0], img.shape[1]
         top, bottom = 0, self.size[1]
@@ -92,7 +89,7 @@ class ColorKey(object):
         space_y = max(2, int(self.draw_params['spacing_y_frac'] * h))  # between top & spectrum,
         spectrum_space = max(3, int(space_y / 1.5))  # space between axis and spectrum
         tick_height = max(3, int(self.draw_params['tick_height_frac'] * h))
-        tick_space = max(2, int(space_y / 2))  # space between ticks and tick labels
+        tick_space = max(2, int(space_y / 3))  # space between ticks and tick labels
 
         total_v_padding = space_y * 2 + spectrum_space + tick_space
         leftover_v_space = h - total_v_padding - tick_height
@@ -117,8 +114,6 @@ class ColorKey(object):
         font = self._get_font(tick_label_h)
 
         font_scale = get_font_scale(font, tick_label_h)
-        logging.info("For space %i, using font %s with scale %.2f", tick_label_h, font, font_scale)
-        # Draw the background
 
         # Create a gradient image
         spectrum_width = spectrum_x[1] - spectrum_x[0]
@@ -182,7 +177,7 @@ class ColorKey(object):
                 label_text = f"{label_value:.1f}"
                 draw_label_at(label_text, tick_x, text_color)
 
-        else:
+        if indicate_value is not None:
 
             # Write the indicatee value
 

@@ -6,15 +6,17 @@ LOW_Y = 1.0
 HALF_MID_X = 0.15
 
 LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
-                                   'y_rel': (0.0, MID_Y)},
+                                 'y_rel': (0.0, MID_Y)},
 
                      'selection': {'x_rel': (0.0, HALF_MID_X),
-                                 'y_rel': (MID_Y, LOW_Y)},
+                                   'y_rel': (MID_Y, LOW_Y)},
                      'step-visualization': {'x_rel': (HALF_MID_X, MID_X),
                                             'y_rel': (0.0, 1.0)},
                      'state-tabs': {'x_rel': (MID_X, 1.0),
                                     'y_rel': (0.0, 1.0)}
                      },
+          'color_key': {'height': 50, 'width': 450},
+          'state_key': {'height': 50, 'width': 70},  # should be same height as color_key
 
           'margin_rel': .0025,  # margin between frames in relative coordinates
 

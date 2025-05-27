@@ -13,7 +13,6 @@ import cv2
 from drawing import GameStateArtist
 import time
 
-
 class PIPhases(IntEnum):
     POLICY_EVAL = 0
     POLICY_OPTIM = 1
@@ -213,16 +212,19 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def _optimize_value_function(self):
         """
+        Policy Evaluation:  Find the value function V(s) for the current policy Pi(s).
+
         :returns: shutdown status
         """
         self._img_mgr.set_range('updates', (-1.0, 1.0))
         self._img_mgr.reset_values(tabs=('updates'))
 
-        def update(state, value):
+        def update(state, new_val):
             old_val = self.values[state]
-            delta = value - old_val
-            self.next_values[state] = value
+            delta = new_val - old_val
+            self.next_values[state] = new_val
             self._img_mgr.set_state_val(state, 'updates', delta)
+            self._img_mgr.set_state_val(state, 'values', new_val)   
 
         state_update_order = self._img_mgr.get_state_update_order()
 
@@ -230,28 +232,22 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.pe_converged = False
         self.pe_convergence_iter = None
 
-        # Don't use for-loops, in case user clicks reset pe_iter, next_state_ind need to start again at zero.
+        # Keep running even if converged, should not change values.
         while not self._shutdown:
 
-            # reset epoch state
-            self.next_state_ind = 0
+            # reset updates tab so blank spaces show before filling in values (because this is model-based RL).
             for state in self.updatable_states:
                 self._img_mgr.set_state_val(state, 'updates', 0.0)
 
+            # One epoch:
+            self.next_state_ind = 0
             while not self._shutdown and self.next_state_ind < len(state_update_order):
-
-                # TODO:  Fill in here.
                 self.state = state_update_order[self.next_state_ind]
-                delta = np.random.randn() * 0.1  # Simulate some value change
-                old_val = self.values[self.state]
-                new_val = old_val + delta
+                new_val = self._optimize_state_value(self.state)
                 update(self.state, new_val)
-
                 if self._maybe_pause('state-update'):
                     return self._shutdown
-
                 self.next_state_ind += 1
-                time.sleep(0.000001)
 
             if self._shutdown:
                 return True
@@ -279,7 +275,16 @@ class PolicyEvalDemoAlg(DemoAlg):
             self.pe_iter += 1
 
         return self._shutdown
-
+            
+    def _optimize_state_value(self, state):
+        old_val = self.values[state]
+        delta = np.random.randn() * 0.1  # Simulate some value change
+        new_val = old_val + delta
+        time.sleep(0.00001)  # Simulate some processing time
+        return new_val
+    
+        
+    
     def _check_value_function_convergence(self):
         """
         Check if the value function has converged.
@@ -287,13 +292,16 @@ class PolicyEvalDemoAlg(DemoAlg):
         """
         if self.pe_iter == 1:
             return True  # For testing
+        max_delta = 0.0
         for state in self.updatable_states:
             delta = abs(self.values[state] - self.next_values[state])
-            if delta > self.max_delta_vs:
-                self.max_delta_vs = delta
+            if delta > max_delta:
+                max_delta = delta
             if delta > self._delta_v_tol:
                 return False
         return True
+
+
 
     def _optimize_policy(self):
         logging.info("Optimizing policy for iteration %i" % self.pi_iter)
@@ -312,8 +320,10 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.next_state_ind = 0
 
         def update(state, new_action):
+            old_action_dist = self.policy[state]
+            import ipdb; ipdb.set_trace()
+            
 
-            changed = False if self.pi_iter > 2 else np.random.rand() < 0.333  # for testing, simulate some changes
             if changed:
                 self.n_changes += 1
                 self._img_mgr.set_state_val(state, 'updates', 1.0)
@@ -323,12 +333,9 @@ class PolicyEvalDemoAlg(DemoAlg):
         state_update_order = self._img_mgr.get_state_update_order()
 
         while not self._shutdown and self.next_state_ind < len(self.updatable_states):
-            # TODO:  Fill in here.
             self.state = state_update_order[self.next_state_ind]
-
-            # Simulate some policy change
-            update(self.state, None)
-
+            new_action = self._optimize_state_policy(self.state)
+            update(self.state, new_action)
             if self._maybe_pause('state-update'):
                 logging.info("---------Policy optimization early shutdown.")
                 return self._shutdown, self.n_changes

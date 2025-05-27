@@ -11,6 +11,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 import cv2
+
+import logging
+
+
 MIN_BOX_SIZE = 7
 
 
@@ -80,6 +84,16 @@ class BoxOrganizer(ABC):
             color = int(color[0]), int(color[1]), int(color[2])
             cv2.rectangle(image, (x[0], y[0]), (x[1], y[1]), color, thickness, cv2.LINE_AA)
 
+    def _draw_layer_bars(self, image):
+        """
+        Draw the layer division bars on the image.
+        :param image: image to draw on.
+        """
+        for layer in self.layer_spacing:
+            if 'bar_y' in layer:
+                bar_y = layer['bar_y']
+                image[bar_y[0]:bar_y[1], :] = self._line_color
+
     def draw(self, images=None, colors=None, dest=None, show_bars=False, **kwargs):
         """
         :param images: dict(box_id = image).  If None, will use the argument in ['colors'] key of each box.
@@ -95,11 +109,11 @@ class BoxOrganizer(ABC):
             img[:, :] = self._bkg_color
         else:
             img = dest
+
         # draw layer bars
         if show_bars:
-            for layer in self.layer_spacing:
-                if 'bar_y' in layer:
-                    img[layer['bar_y'][0]:layer['bar_y'][1], :] = self._line_color
+            self._draw_layer_bars(img)
+
         # draw boxes
         for l_ind, layer_boxes in enumerate(self.layers):
             bad_boxes = set()
@@ -246,7 +260,6 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         :param box_sizes: list of ints, the side-length of the square boxes in each layer.
         """
         self._box_side_lengths = box_sizes
-
         super().__init__(size_wh, layers, **argv)
 
     def _calc_layer_spacing(self):
@@ -260,8 +273,18 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                     'bar_y': (top, bottom) pixel coordinates of the layer division bar (i.e between each 'y' region)
                     'n_boxes': number of boxes in this layer
         """
+        layer_heights, layer_row_counts, usable_height = self._calc_layer_heights()
+
+        print("Layer heights:", layer_heights)
+        print("Layer row counts:", layer_row_counts)
+        print("Window_height:  %i ,remaining_height: %i" %
+              (self.size_wh[1], usable_height))
+        layer_spacing = self._adjust_layer_heights(layer_heights, layer_row_counts, usable_height)
+        return layer_spacing
+
+    def _calc_layer_heights(self):
+
         n_layers = len(self._layer_counts)
-        layer_spacing = []
         # 1. packed layers
         layer_row_counts = []
 
@@ -276,11 +299,17 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         total_bar_height = (n_layers - 1) * self._layer_bar_w
         used_height = total_padding + total_bar_height
 
-        usable_height = self.size_wh[1] - used_height
+        usable_height = self.size_wh[1] - used_height  # height not used for padding
+        layer_heights = np.array([layer_row_counts[l] * self._box_side_lengths[l] for l in range(n_layers)])
 
+        return layer_heights, layer_row_counts, usable_height
+
+    def _adjust_layer_heights(self, layer_heights, layer_row_counts, usable_height):
         # 2. distribute extra space to layers equally until doing so would require too much, then
         # stop distributing to the layer w/the most rows and continue until there is no more space.
-        layer_heights = np.array([layer_row_counts[l] * self._box_side_lengths[l] for l in range(n_layers)])
+
+        n_layers = len(self._layer_counts)
+
         extra_height = usable_height - np.sum(layer_heights)
         adding_to = np.ones(n_layers, dtype=bool)  # which layers are still getting extra space
         while extra_height > 0:
@@ -301,6 +330,8 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             extra_height -= n_req
 
         # Now we can set layer spacing.
+        layer_spacing = []
+
         y = self._layer_vpad_px
         for l, layer_h in enumerate(layer_heights):
             layer_top = y
@@ -355,7 +386,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
                                 'n_cols': n_cols})
 
         # Now we can calculate the box positions in each layer.
-        box_positions = {}
+        box_positions = {}  # state -> {'x': (left, right), 'y': (top, bottom)}
         for l, boxes in enumerate(self.layers):
             # print("Layer %i: %i boxes" % (l, len(boxes)))
             layer_top, layer_bottom = self.layer_spacing[l]['y']
@@ -396,6 +427,68 @@ class FixedCellBoxOrganizer(BoxOrganizer):
             if n != len(boxes):
                 raise Exception("Did not place all boxes in layer: %d vs %d (MinBoxSize too high.)" % (n, len(boxes)))
         return box_positions, grid_shapes
+
+
+class FixedCellWithColorKey(FixedCellBoxOrganizer):
+    """
+    States in the top row are moved toward the left, upper right area is reserved for a color key.
+    """
+
+    def __init__(self, size_wh, layers, box_sizes, min_key_h=0, min_key_w=0, **argv):
+        """
+        :param size_wh: size of the window in pixels (width, height).
+        :param layers: list of lists of boxes, each list is a layer:
+           layer[i] is a list of boxes that will be placed in band i.
+               Each box is a dict with an 'id' key.
+        :param box_sizes: list of ints, the side-length of the square boxes in each layer.
+        :param min_key_h: minimum height of the color key area.
+        """
+        self._min_key_h = min_key_h
+        self._min_key_w = min_key_w
+        super().__init__(size_wh, layers, box_sizes, **argv)  # initializes box positions
+        self.color_key_bbox = self._shift_box_positions()
+
+    def _calc_layer_spacing(self):
+        layer_heights, layer_row_counts, usable_height = self._calc_layer_heights()
+        if layer_heights[0] < self._min_key_h:
+            extra = min(usable_height, self._min_key_h - layer_heights[0])
+            logging.info("Adding %d pixels to the first layer to make room for the color key." % extra)
+            layer_heights[0] += extra
+        layer_spacing = self._adjust_layer_heights(layer_heights, layer_row_counts, usable_height)
+        return layer_spacing
+    
+
+    def _shift_box_positions(self):
+        """
+        The bounding box for the color key has width min_key_w and occupies the right portion of the top row.
+        Horizontally space the boxes for those states evenly in the remaining space on the left 
+        """
+        if self._min_key_w <= 0:
+            return
+
+        rel_x_shfit = (self.size_wh[0] - self._min_key_w) / self.size_wh[0]
+        logging.info("Shifting box positions by %f to make room for the color key." % rel_x_shfit)
+        for box_info in self.layers[0]:
+            position = self.box_positions[box_info['id']]
+            x_left, x_right = position['x']
+            center = (x_left + x_right) / 2
+            new_center = center * rel_x_shfit
+            x_delta = new_center - center
+            position['x'] = (int(x_left + x_delta), int(x_right + x_delta))
+
+        bbox_bottom = self.layer_spacing[0]['bar_y'][0]
+        return {'x': (self.size_wh[0] - self._min_key_w, self.size_wh[0]),
+                'y': (0, bbox_bottom)}
+
+    def _draw_layer_bars(self, image):
+        # draw a vertical line between the top row and the color key area.
+        line_x = self.color_key_bbox['x'][0]
+        line_y_top = self.color_key_bbox['y'][0]
+        line_y_bottom = self.layer_spacing[0]['bar_y']
+        line_x_left = line_x - self._layer_bar_w//2
+        line_x_right = line_x_left + self._layer_bar_w
+        image[line_y_top:line_y_bottom, line_x_left:line_x_right] = self._line_color
+        return super()._draw_layer_bars(image)
 
 
 class LayerwiseBoxOrganizer(BoxOrganizer):
@@ -598,8 +691,8 @@ class AutoBoxOrganizer(LayerwiseBoxOrganizer):
         """
         self._min_layer_size = 50
         super().__init__(size_wh, layers)
-        self.layer_spacing = self._calc_layer_spacing()
 
+        self.layer_spacing = self._calc_layer_spacing()
     def _calc_layer_spacing(self):
         # for now, just evenly space the layers
         spacing = []

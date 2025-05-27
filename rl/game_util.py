@@ -5,16 +5,17 @@ import logging
 from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 from game_base import Mark, Result
 from layer_optimizer import SimpleTreeOptimizer  # for horizontal sorting
-from node_placement import FixedCellBoxOrganizer  # for 2d embedding and vertical sorting
+from node_placement import FixedCellBoxOrganizer, FixedCellWithColorKey  # for 2d embedding and vertical sorting
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-from reinforcement_base import  get_game_tree_cached
+from reinforcement_base import get_game_tree_cached
 from drawing import GameStateArtist
 
 
 BOX_SIZES = [22, 12, 12, 12, 12, 15]  # good for single value function
 # BOX_SIZES =  [20, 11, 7, 7, 8, 14] # good for 2-value function windows.
+
 
 def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
 
@@ -28,8 +29,9 @@ def sort_states_into_layers(state_list, player_mark=Mark.X, key='id'):
         print("Layer %i has %i states." % (n_marks, len(layer)))
     return layers
 
+
 def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
-                       layer_bar_w=1, player=Mark.X):
+                   layer_bar_w=1, player=Mark.X, key_height=0, key_width=0,):
     """
     Get the dict of box positions {x:(xmin, max), y:(ymin, max)} for each state, from a player's POV (RL states)
     Use the FixedCellBoxOrganizer to place the boxes in a grid, return it's .box_positions attribute.
@@ -45,19 +47,19 @@ def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
     """
     box_sizes = BOX_SIZES if box_sizes is None else box_sizes
     state_layers = sort_states_into_layers(all_states, player_mark=player)
-    box_placer = FixedCellBoxOrganizer(img_size, state_layers, box_sizes,
+    if key_height > 0:
+        box_placer = FixedCellWithColorKey(img_size, state_layers, box_sizes, min_key_h=key_height, min_key_w=key_width,
+                                           layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
+    else:
+        box_placer = FixedCellBoxOrganizer(img_size, state_layers, box_sizes,
                                            layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
     return box_placer, box_sizes, state_layers
 
 
-def optimize_layers(box_placer, all_states, player=Mark.X):
-    """
-    """
-
 def get_state_icons(state_layers, box_sizes=None, player=Mark.X):
-    
+
     space_sizes = [GameStateArtist.get_space_size(box_size, bar_w_frac=0.0) for box_size in box_sizes]
     artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in space_sizes]
-    images = {state['id']: artists[layer_no].get_image(state['id']) for layer_no, layer in enumerate(state_layers) for state in layer}
+    images = {state['id']: artists[layer_no].get_image(state['id'])
+              for layer_no, layer in enumerate(state_layers) for state in layer}
     return images
-
