@@ -12,6 +12,23 @@ _SHIFT_BITS = 5
 _SHIFT = 1 << _SHIFT_BITS
 
 
+def get_font_scale(font, max_height, incl_baseline=False):
+    """
+    Find the maximum font scale that fits a number in the given height.
+    :param font_name: Name of the font to use.
+    :param max_height: Maximum height of the text.
+    :return: The maximum font scale that fits the text in the given height.
+    """
+    scale = 5.0
+    while True:
+        (_, text_height), baseline = cv2.getTextSize('0', font, scale, 1)
+        # print("Text height for scale %.2f is %i  (should be under %i)" % (scale, text_height , max_height))
+        h = text_height + baseline if incl_baseline else text_height
+        if h < max_height:
+            break
+        scale -= 0.01
+    return scale
+
 class GameStateArtist(object):
     """
     Render a game state to an image, in these categories, depending on the space size:

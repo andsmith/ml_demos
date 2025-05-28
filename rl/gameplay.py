@@ -26,18 +26,27 @@ class Match(object):
 
         self._self_check = False
 
-    def play(self, randomize_players=True, verbose=False, initi_state=None):
+    def play_and_trace(self, flip_coin=True, verbose=False, initi_state=None):
         """
-        Play one game.
+        Play a random game, return the sequence of states and actions.
+        :param flip_coin:  If True, randomly choose which player goes first.
+        :return:  A dict with keys 'state', 'action', 'result' and values:
+           'state': the game state
+           'action': tuple (row, col)  (if state is not terminal),
+           'result': the result of the game, one ofMark.X, Mark.O, Result.DRAW  (if state is terminal).
         """
-        if randomize_players and np.random.rand() < 0.5:
+
+
+        if flip_coin and np.random.rand() < 0.5:
             self._players.reverse()
 
         self._game = Game() if initi_state is None else initi_state
 
+        trace = []
         while True:
             for player in self._players:
                 action = player.take_action(self._game)
+                trace.append({'state':self._game, 'action': action})
                 self._game = self._game.clone_and_move(action, player.player)
                 # if self._self_check:
                 # if self._game not in VALID_STATES:
@@ -48,9 +57,17 @@ class Match(object):
                     print("\n")
                 w = self._game.check_endstate()
                 if w is not None:
-                    return w
+                    trace.append({'state':self._game, 'result':w})  # Final action is None
+                    return trace
 
 
+    def play(self, randomize_players=True, verbose=False, initi_state=None):
+        """
+        Play one game , return result.
+        """
+        trace = self.play_and_trace(flip_coin=randomize_players, verbose=verbose, initi_state=initi_state)
+        return trace[-1]['result'] 
+    
 def demo_match():
     player1 = HeuristicPlayer(Mark.X, n_rules=6)
     player2 = HeuristicPlayer(Mark.O, n_rules=1)

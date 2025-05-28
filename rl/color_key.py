@@ -11,23 +11,7 @@ import logging
 from colors import COLOR_BG, COLOR_LINES
 import matplotlib.pyplot as plt
 
-
-def get_font_scale(font, max_height):
-    """
-    Find the maximum font scale that fits a number in the given height.
-    :param font_name: Name of the font to use.
-    :param max_height: Maximum height of the text.
-    :return: The maximum font scale that fits the text in the given height.
-    """
-    scale = 5.0
-    while True:
-        (_, text_height), _ = cv2.getTextSize('0', font, scale, 1)
-        # print("Text height for scale %.2f is %i  (should be under %i)" % (scale, text_height , max_height))
-        if text_height < max_height:
-            break
-        scale -= 0.01
-    return scale
-
+from drawing import get_font_scale
 
 
 

@@ -1,0 +1,229 @@
+"""
+Play a large number of games, visuzalize the results as they are computed:
+
+    * On a narrow band at the top of the image, show statistics and a graph:
+        - on the right, show statistics:
+            - n games played so far
+            - n wins   (blue)
+            - n draws  (green)
+            - n losses (orange)
+        - on the left, show a bar graph w/lines extending from the four statistics to the left.
+
+
+       And show a 1/dimensional "thermomenter" type indicator showing the relative win/draw/loss rates.
+
+    * On the botton, show as many example games as will fit in the image.  Each example game shows:
+        * "Win" "Draw" or "Loss" is at the top of each game,
+        * The sequence of game states in a vertical column under the outcome label.
+            - The initial state is at the top, as normal.
+            - Each subsequent state has the agent selected action highlighted
+            - Terminal states appear at the bottom w/the final action highlighted
+        * The reward for the final action is printed at the bottom.
+"""
+import numpy as np
+from drawing import GameStateArtist, get_font_scale
+from tic_tac_toe import Game
+from game_base import WIN_MARKS, Mark, Result
+from threading import Thread
+from gameplay import Match
+import logging
+from collections import OrderedDict
+import cv2
+from baseline_players import HeuristicPlayer
+
+from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_O, COLOR_X, COLOR_TEXT
+from reinforcement_base import Environment
+
+LAYOUT = {'result_viz':  # Move to layout.py::LAYOUT
+          {"state_space_size": 20,  # determines state image size
+           'indent_frac': 0.5,  # function of state image size,
+           'font': cv2.FONT_HERSHEY_COMPLEX,
+           'sumary_area': {'h': 150, 'text_w': 500},  # size of the summary area in pixels'
+           'text_indent': (20, 10),  # indent for the text in the summary area (x,y) in pixels
+           'text_spacing_frac': .7,  # fit text in spaces this X smaller than vertical room allows.
+           'bar_w_frac': 0.5,  # fraction of font scale for bar graph
+           'graph_width_frac': 0.4,  # fraction of the summary area width for the bar graph
+           'graph_indent_frac': 0.1
+           }
+          }
+
+DEFAULT_COLORS = {'bg': COLOR_BG, 'lines': COLOR_LINES, 'text': COLOR_TEXT,
+                  'win': COLOR_X, 'loss': COLOR_O, 'draw': COLOR_DRAW}
+
+
+class PolicyEvaluationViz(object):
+    def __init__(self, player_policy, opp_policy, colors=None):
+        self._player = player_policy.player
+        self._opp = opp_policy.player
+        self._opp_pi = opp_policy
+        self._pi = player_policy
+        self._colors = colors if colors is not None else DEFAULT_COLORS
+
+        self._layout = LAYOUT['result_viz']
+
+        self._env = Environment(opponent_policy=opp_policy, player_mark=self._player)
+        self._updatable_states = self._env.get_nonterminal_states()
+        self._n_states = len(self._updatable_states)
+        self._game_traces = []
+
+        self._results = {'games': 0,
+                         'wins': 0,
+                         'draws': 0,
+                         'losses': 0,
+                         'line_t_frac': 0.02,  # fraction of the image height for the line thickness
+                         'n_diffs': self._pi.compare(self._opp_pi, states=self._updatable_states, count=True, deterministic=True)}
+
+    def play(self, n_games=50):
+        match = Match(self._pi, self._opp_pi)
+
+        def _accumulate_result(result):
+            if (result == WIN_MARKS[self._player]):
+                self._results['wins'] += 1
+            elif result == WIN_MARKS[self._opp]:
+                self._results['losses'] += 1
+            elif result == Result.DRAW:
+                self._results['draws'] += 1
+            else:
+                raise ValueError("Unexpected result: %s" % result.name)
+            self._results['games'] += 1
+
+        for iter in range(n_games):
+            result = match.play_and_trace(flip_coin=True, verbose=False)
+            _accumulate_result(result[-1]['result'])
+            self._game_traces.append(result)
+
+    def _draw_summary(self, img):
+        x_center = int(img.shape[1] / 2)
+
+        # first calculate font sizes
+        n_lines = 4  # len(summary_lines)
+        height = self._layout['sumary_area']['h'] - self._layout['text_indent'][1] * 2
+        h_per_line = int(height / n_lines)
+        font_scale = get_font_scale(self._layout['font'], h_per_line *
+                                    self._layout['text_spacing_frac'], incl_baseline=True)
+
+        def _draw_text(text, baseline_pos, color, font_scale=1.0, justify='left'):
+            (txt_width, txt_height), baseline = cv2.getTextSize(line, self._layout['font'], font_scale, 1)
+            y_pos = baseline_pos[1] + txt_height+baseline
+
+            if justify == 'left':
+                x_pos = baseline_pos[0]
+            else:
+                x_pos = baseline_pos[0] - txt_width
+
+            pos = (x_pos, y_pos)
+
+            print("Drawing text: '%s' at %s with font scale %f" % (text, pos, font_scale))
+            cv2.putText(img, text, pos, self._layout['font'], font_scale, color, 1, cv2.LINE_AA)
+
+            return pos, txt_height, txt_width, baseline
+
+        # on the left, print the policy names, the number of policy differences and the number of games played.
+        summary_lines = OrderedDict()
+        summary_lines['player1'] = 'Player 1: %s' % self._pi
+        summary_lines['player2'] = 'Player 2: %s' % self._opp_pi
+        summary_lines['n_diffs'] = 'pi_1(s) != pi_2(s): %i / %i' % (self._results['n_diffs'],
+                                                                    len(self._updatable_states))
+        # Write text stats, remember y positions for the bar graph
+
+        y0 = self._layout['text_indent'][1]
+        x0 = self._layout['text_indent'][0]
+
+        max_w = 0
+        for i, (line_key, line) in enumerate(summary_lines.items()):
+            pos, _, w, _ = _draw_text(line, (x0, y0), self._colors['text'], font_scale=font_scale)
+
+            img[pos[0], pos[1], :] = (0, 0, 255)
+            y0 += h_per_line
+            max_w = max(max_w, w)
+
+        # Now print & draw the results graph:
+        x_far_left = max_w + self._layout['text_indent'][0] *2+ x0 + int(max_w * self._layout['graph_indent_frac'])
+        x_far_right = img.shape[1] - self._layout['text_indent'][0]
+        x_center = int((x_far_left + x_far_right) / 2)
+
+        results_w = x_far_right - x_far_left - self._layout['text_indent'][0] 
+        graph_w = int(results_w * self._layout['graph_width_frac'])
+        
+        summary_lines = OrderedDict()
+        summary_lines['games'] = 'N Games: %i' % self._results['games']
+        summary_lines['wins'] = '%s-Wins: %i' % (self._player.name,self._results['wins'])
+        summary_lines['draws'] = '%s-Draws: %i' % (self._player.name,self._results['draws'])
+        summary_lines['losses'] = '%s-Losses: %i' % (self._player.name,self._results['losses'])
+
+        x0 = x_far_left 
+        y0 = self._layout['text_indent'][1]
+        y_text_pos = {}
+        y_text_heights = {}
+        width = 0
+        for i, (line_key, line) in enumerate(summary_lines.items()):
+            base_pos, heigt, txt_width, baseline = _draw_text(
+                line, (x0, y0), self._colors['text'], font_scale=font_scale, justify='left')
+            y_text_pos[line_key] = base_pos, baseline
+            y_text_heights[line_key] = heigt
+            y0 += h_per_line
+            if line_key != 'games':
+                width = max(width, txt_width)
+
+
+        # Draw the bar graph
+        x_left =x_far_left + width + self._layout['text_indent'][0] //2
+        x_right = x_left + graph_w
+
+        bar_max_len = graph_w
+
+        def _draw_bar(color, x_frac_rel, name):
+            print("Drawing bar for %s with x_frac_rel=%f  (spanning x %i to %i)" % (name, x_frac_rel, x_left, x_right))
+            x_end = x_right - int((1.0-x_frac_rel) * bar_max_len)
+            x_start = x_left
+
+            y_t_top = y_text_pos[name][0][1] - y_text_heights[name]
+            y_t_bottom = y_text_pos[name][0][1]
+
+            y_start = y_t_top
+            y_end = y_t_bottom
+            print('\tDrawing bar  x(%i, %i)  y(%i, %i)' % (x_start, x_end, y_start, y_end))
+            img[y_start:y_end, x_start:x_end] = color
+        n_games = self._results['games']
+        # before drawing bars, shade area under it
+        grah_y_top = y_text_pos['wins'][0][1] - y_text_heights['wins'] - y_text_pos['losses'][1]
+        grah_y_bottom = y_text_pos['losses'][0][1] + y_text_pos['losses'][1]
+        patch = img[grah_y_top:grah_y_bottom, x_left:x_right]
+        img[grah_y_top:grah_y_bottom, x_left:x_right] = (patch *.9).astype(np.uint8)
+
+        _draw_bar(self._colors['win'], self._results['wins'] / n_games, 'wins')
+        _draw_bar(self._colors['draw'], self._results['draws'] / n_games, 'draws')
+        _draw_bar(self._colors['loss'], self._results['losses'] / n_games, 'losses')
+
+        return width, height
+
+    def draw(self, size_wh):
+        img = np.zeros((size_wh[1], size_wh[0], 3), dtype=np.uint8)
+        img[:] = self._colors['bg']
+
+        self._draw_summary(img)
+        cv2.line(img, (0, self._layout['sumary_area']['h']),
+                 (size_wh[0], self._layout['sumary_area']['h']), self._colors['lines'],
+                 2)
+        return img
+
+
+def test_policy_eval_viz():
+    img_size = (1024, 950)
+
+    agent = HeuristicPlayer(n_rules=0, mark=Mark.X)
+    opponent = HeuristicPlayer(n_rules=2, mark=Mark.O)
+
+    viz = PolicyEvaluationViz(player_policy=agent, opp_policy=opponent)
+    viz.play()
+
+    img = viz.draw(img_size)
+    cv2.imshow("Policy Evaluation Visualization", img[:, :, ::-1])
+    cv2.waitKey(0)
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    test_policy_eval_viz()
+    # Uncomment the following line to run the test
+    # test_value_func_policy()
