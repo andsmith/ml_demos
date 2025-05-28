@@ -1,9 +1,8 @@
 import numpy as np
 from game_base import Mark, Result, WIN_MARKS, get_cell_center
-from util import get_annulus_polyline
+from util import get_annulus_polyline, float_rgb_to_int
 import cv2
-from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_X, COLOR_O, COLOR_DRAW_SHADE, COLOR_SHADE
-
+from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_X, COLOR_O, COLOR_DRAW_SHADE, COLOR_SHADE, NEON_GREEN
 MARKER_COLORS = {Mark.X: COLOR_X,
                  Mark.O: COLOR_O,
                  Mark.EMPTY: COLOR_BG}
@@ -11,23 +10,6 @@ MARKER_COLORS = {Mark.X: COLOR_X,
 _SHIFT_BITS = 5
 _SHIFT = 1 << _SHIFT_BITS
 
-
-def get_font_scale(font, max_height, incl_baseline=False):
-    """
-    Find the maximum font scale that fits a number in the given height.
-    :param font_name: Name of the font to use.
-    :param max_height: Maximum height of the text.
-    :return: The maximum font scale that fits the text in the given height.
-    """
-    scale = 5.0
-    while True:
-        (_, text_height), baseline = cv2.getTextSize('0', font, scale, 1)
-        # print("Text height for scale %.2f is %i  (should be under %i)" % (scale, text_height , max_height))
-        h = text_height + baseline if incl_baseline else text_height
-        if h < max_height:
-            break
-        scale -= 0.01
-    return scale
 
 class GameStateArtist(object):
     """
@@ -45,7 +27,7 @@ class GameStateArtist(object):
             - marker O is a 3x3 square with a hole in the middle.
             - For terminal states, box/grid lines change color and single-pixel wide win-lines are drawn.
 
-        * "tiny" sized images: (size < 5)
+        * "micro" sized images: (size < 5)
             - lines are 1-pixel wide, with no anti-aliasing
             - markers are both completely filled squares with the player's color.
             - For terminal states, the losing player's marked cells have an inner border of the winner's color, (or all cells if a draw).
@@ -66,8 +48,6 @@ class GameStateArtist(object):
             return 'normal'
         elif space_size >= 5:
             return 'small'
-        elif False:  # space_size > 3:
-            return 'tiny'
         else:
             return 'micro'
             # no grid lines
@@ -158,6 +138,71 @@ class GameStateArtist(object):
             dims = GameStateArtist(space_size, bar_w_frac=bar_w_frac).dims
         return space_size
 
+    def get_action_dist_image(self, action_dist, player_mark, cmap, highlight_choice=None, alpha=1.0, highlight_color=None):
+        """
+        instead of orange/blue, for nonzero probability actions, use the colormap to render
+        the mark by the color determined by the action probability.
+        :param action_dist: list of tuples (action, probability), where action is a tuple (row, col)
+        :param player_mark: Mark, the player's mark (X or O)
+        :param cmap: colormap, a matplotlib colormap to use for rendering the action probabilities
+        :param highlight_choice: index into action_dist, which action was chosen, to outlined.
+        :returns: list of (bounding_box, probability) tuples for the color key mouseover action.
+        """
+        highlight_color = NEON_GREEN if highlight_color is None else highlight_color
+
+        size = GameStateArtist.get_size(self._space_size)
+
+        img = self._get_blank()
+        self._draw_grid_lines(img, term=None)
+
+        action_to_prob = {action: (prob, i) for i, (action, prob) in enumerate(action_dist)}
+        bboxes = []
+        # Draw markers
+        for i in range(3):
+            for j in range(3):
+                action = (i, j)
+                if action not in action_to_prob:
+                    continue
+                prob, action_ind = action_to_prob[action]
+                color = float_rgb_to_int(np.array(cmap(1-prob))**alpha)  # get the RGB color from the colormap
+                highlight = (highlight_choice == action_ind) if highlight_choice is not None else False
+                h_col = None if not highlight else highlight_color
+                bbox = self._add_marker(img, row=i, col=j, marker=player_mark, color=color,
+                                        highlight_color=h_col)
+                bboxes.append((bbox, prob))
+
+        return img, bboxes
+
+    def _draw_grid_lines(self, img, term):
+        grid_line_color = COLOR_LINES
+
+        size = GameStateArtist.get_size(self._space_size)
+
+        thickness = self.dims['line_t']
+        img_s = self.dims['img_size']
+        # Draw grid lines
+        if size != 'micro':
+            for i in [1, 2]:
+                # always dark or draw color
+                line_color = grid_line_color if not (term is not None and term == Result.DRAW) else COLOR_DRAW
+                z_0 = i * (self._space_size + thickness)
+                z_1 = z_0 + thickness
+
+                w0 = thickness
+                w1 = img_s - thickness
+
+                img[z_0:z_1, w0:w1] = line_color
+                img[w0:w1, z_0:z_1] = line_color
+
+    def _get_blank(self):
+        img_s = self.dims['img_size']
+
+        # Create the image
+        img = np.zeros((img_s, img_s, 3), dtype=np.uint8)
+        img[:, :] = COLOR_BG
+
+        return img
+
     def get_image(self, game):
         """
         Return an image of the game board & its dimension dictionary.
@@ -169,31 +214,11 @@ class GameStateArtist(object):
             if None, only draw the box around terminal states
 
         """
-        line_t = self.dims['line_t']
-        img_s = self.dims['img_size']
-
-        # Create the image
-        img = np.zeros((img_s, img_s, 3), dtype=np.uint8)
-        img[:, :] = COLOR_BG
-
-        term = game.check_endstate()
-        grid_line_color = COLOR_LINES
-
         size = GameStateArtist.get_size(self._space_size)
 
-        # Draw grid lines
-        if size != 'micro':
-            for i in [1, 2]:
-                # always dark or draw color
-                line_color = grid_line_color if not (term is not None and term == Result.DRAW) else COLOR_DRAW
-                z_0 = i * (self._space_size + line_t)
-                z_1 = z_0 + line_t
-
-                w0 = line_t
-                w1 = img_s - line_t
-
-                img[z_0:z_1, w0:w1] = line_color
-                img[w0:w1, z_0:z_1] = line_color
+        img = self._get_blank()
+        term = game.check_endstate()
+        self._draw_grid_lines(img, term)
 
         # Draw markers
         for i in range(3):
@@ -300,12 +325,13 @@ class GameStateArtist(object):
             cv2.line(img, (x0, y0), (x1, y1), color, self.dims['line_t'], lineType=aa, shift=_SHIFT_BITS)
         return img
 
-    def _add_marker(self, img, row, col, marker):
+    def _add_marker(self, img, row, col, marker, color=None, highlight_color=None):
         """
         :param img: np.array, image to draw on
         :param dims: image dimensions dict, output of Game.get_image_dims()
         :param loc: tuple, (i,j) location in the 3x3 grid, (0,1,2) for each
         :param marker: str, "X", "O"
+        returns: bounding box of cell marker was drwan in.
         """
         cell_span = self.dims['cells'][row][col]
         padding = self._space_size * .4
@@ -327,34 +353,58 @@ class GameStateArtist(object):
             y0, y1 = cell_span['y'][0]+pad_l/2, cell_span['y'][1]-pad_l/2-1
             return x0, x1, y0, y1
 
+        color = MARKER_COLORS[marker] if color is None else color
+
         if size == 'normal':  # draw Normal
+
+            x_thickness = int(self.dims['line_t'])
+            if x_thickness > 2:
+                x_thickness = x_thickness - 1
+
+            circle_thickness = x_thickness*1.4  # if x_thickness>2 else x_thickness*1.35
+            center = get_cell_center(self.dims, (row, col))
+            rad = (self._space_size/2)-padding/2 + (self._space_size/17)
+            rad_inner = rad - circle_thickness
+
+            rad_highlight = max(2, rad_inner-1)
+
+
+            print("\tCircle thickness:", circle_thickness, "x_thickness:", x_thickness)
 
             if marker == Mark.X:
                 x0, x1, y0, y1 = get_X_points(padding)
-                x_thickness = int(self.dims['line_t'])
 
-                _draw_line((x0, y0), (x1, y1), MARKER_COLORS[marker], x_thickness)
-                _draw_line((x1, y0), (x0, y1), MARKER_COLORS[marker], x_thickness)
+                _draw_line((x0, y0), (x1, y1), color, x_thickness)
+                _draw_line((x1, y0), (x0, y1), color, x_thickness)
 
             else:
-                center = get_cell_center(self.dims, (row, col))
-                rad = (self._space_size/2)-padding/2 + (self._space_size//9)
-                rad_inner = rad - (self.dims['line_t']*1)
-                _circle_at(center, rad, MARKER_COLORS[marker], -1)
+                _circle_at(center, rad, color, -1)
                 _circle_at(center, rad_inner, COLOR_BG, -1)
+
+            if highlight_color is not None:
+                if size == 'normal':
+                    # draw a highlight circle around the marker
+                    _circle_at(center, rad_highlight, highlight_color,-1)
+                else:
+                    raise ValueError("Highlight color not supported for normal images.")
 
         elif size == 'small':
             border = 1  # if self._space_size < 10 else 2
             # fill the cell with the color, leaving a border
             x_span, y_span = cell_span['x'], cell_span['y']
-            img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = MARKER_COLORS[marker]
+            img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = color
+
+            if highlight_color is not None:
+                raise ValueError("Highlight color not supported for small images.")
 
         else:  # size == 'micro'
             # fill the cell with the color
+            if highlight_color is not None:
+                raise ValueError("Highlight color not supported for micro images.")
             x_span, y_span = cell_span['x'], cell_span['y']
-            img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = MARKER_COLORS[marker]
+            img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = color
 
-        return img
+        return cell_span
 
     def _get_o_points(self, size, line_width):
 
@@ -393,34 +443,6 @@ def test_terminals():
     cv2.destroyAllWindows()
 
 
-def test_img():
-    from tic_tac_toe import Game
-    game = Game()
-    game.move(Mark.X, (0, 0))
-    game.move(Mark.O, (1, 1))
-    game.move(Mark.X, (2, 2))
-    img = np.zeros((1024, 1024, 3), dtype=np.uint8)
-    game_imgb = game.get_img(space_size=11)
-    # cv2.imshow("Tic Tac Toe", game_imgb[:,:,::-1])
-    # cv2.waitKey(0)
-
-    sizes = np.array([10, 20, 50])
-    padding = 10
-    widths = []
-    for i, size in enumerate(sizes):
-        x_offset = np.ceil(np.sum(widths) + i * padding).astype(int)
-        game_img = game.get_img(space_size=size)
-        w = game_img.shape[1]
-        img[:w, x_offset:x_offset + w,] = game_img
-
-        widths.append(w)
-
-    cv2.imwrite("game.png", img)
-    cv2.imshow("Tic Tac Toe", img[:, :, ::-1])
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-
 def make_image():
     from tic_tac_toe import Game
     game = Game()
@@ -439,15 +461,14 @@ def make_image():
     artist = GameStateArtist(20)
     print("Artist category:", artist.get_size(artist._space_size))
     print("Artist space size:", artist._space_size)
-    img = artist.get_image(game,draw_box=True)
+    img = artist.get_image(game)
     import matplotlib.pyplot as plt
     plt.imshow(img)
     plt.show()
 
 
 if __name__ == "__main__":
-    # test_img()
-    # test_terminals()
+    test_terminals()
     # get_draw()
 
     make_image()
