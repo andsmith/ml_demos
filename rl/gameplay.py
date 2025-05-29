@@ -3,12 +3,14 @@ Play agents against each other.
 Watch the game unfold, or run many trials.
 """
 import numpy as np
-from tic_tac_toe import Game, Mark, Result
+from tic_tac_toe import Game
+from game_base import Mark, Result, get_reward
 from baseline_players import RandomPlayer, HeuristicPlayer
 from multiprocessing import Pool, cpu_count
 import time
 
 # VALID_STATES = Game.enumerate_states()[1]
+
 
 
 class Match(object):
@@ -26,28 +28,60 @@ class Match(object):
 
         self._self_check = False
 
-    def play_and_trace(self, flip_coin=True, verbose=False, initi_state=None):
+
+    @staticmethod
+    def print_trace(trace):
+
+        for turn in range(len(trace['game'])):
+            print("")
+            action_dist = trace['game'][turn]['action_dist']
+            action_ind = trace['game'][turn]['action_ind']
+            action = action_dist[action_ind][0]  # get the action from the distribution
+            player = trace['game'][turn]['player']
+            state = trace['game'][turn]['state']
+            print(state)
+
+            print("Turn:  %d\nPlayer %s marks cell (%d, %d):" % (turn + 1, player.name, action[0], action[1]))
+            print("\n")
+
+        print("Final state:")
+        print(trace['game'][-1]['next_state'])
+        print("Result: %s" % trace['result'].name)
+
+
+
+    def play_and_trace(self, order=0, verbose=False, initi_state=None, deterministic=False):
         """
         Play a random game, return the sequence of states and actions.
-        :param flip_coin:  If True, randomly choose which player goes first.
+        :param order:  -1 (p2,p1), 0 (random), 1 (p1, p2)
         :return:  A dict with keys 'state', 'action', 'result' and values:
            'state': the game state
            'action': tuple (row, col)  (if state is not terminal),
            'result': the result of the game, one ofMark.X, Mark.O, Result.DRAW  (if state is terminal).
         """
-
-
-        if flip_coin and np.random.rand() < 0.5:
-            self._players.reverse()
+        players = self._players[:]
+        if order==-1 or (order==0 and np.random.rand() < 0.5):
+            players = self._players[::-1]
 
         self._game = Game() if initi_state is None else initi_state
 
-        trace = []
+        trace = {'first player': players[0].player,
+                 'second_player': players[1].player,
+                 'game': [],
+                 'result': None}
         while True:
-            for player in self._players:
-                action = player.take_action(self._game)
-                trace.append({'state':self._game, 'action': action})
-                self._game = self._game.clone_and_move(action, player.player)
+            for player in players:
+                action_dist, action_ind = player.recommend_and_take_action(self._game, 
+                                                                           deterministic=deterministic)
+                action = action_dist[action_ind][0]  
+                next_state = self._game.clone_and_move(action, player.player)
+                trace['game'].append({'state':self._game,
+                                       'action_dist': action_dist,
+                                       'action_ind': action_ind,
+                                       'player': player.player,
+                                       'reward': 0.0,
+                                       'next_state': next_state})
+                self._game = next_state
                 # if self._self_check:
                 # if self._game not in VALID_STATES:
                 #    raise ValueError("Invalid state: %s" % self._game)
@@ -57,16 +91,17 @@ class Match(object):
                     print("\n")
                 w = self._game.check_endstate()
                 if w is not None:
-                    trace.append({'state':self._game, 'result':w})  # Final action is None
+                    trace['result'] = w
+                    trace['game'][-1]['reward'] = get_reward(self._game, action, player.player)
                     return trace
 
 
-    def play(self, randomize_players=True, verbose=False, initi_state=None):
+    def play(self, order=0, verbose=False, initi_state=None):
         """
         Play one game , return result.
         """
-        trace = self.play_and_trace(flip_coin=randomize_players, verbose=verbose, initi_state=initi_state)
-        return trace[-1]['result'] 
+        trace = self.play_and_trace(order=order, verbose=verbose, initi_state=initi_state)
+        return trace['result'] 
     
 def demo_match():
     player1 = HeuristicPlayer(Mark.X, n_rules=6)
@@ -82,7 +117,7 @@ def demo_fixed_match():
 
     for _ in range(10):
 
-        print("Winner: %s" % match.play(verbose=False, initi_state=starting_point, randomize_players=False).name)
+        print("Winner: %s" % match.play(verbose=False, initi_state=starting_point).name)
         print('\n\n\n----------------------\n')
 
 
@@ -183,14 +218,29 @@ def demo_tournament():
     player1 = HeuristicPlayer(Mark.X, n_rules=6)
     #player2 = RandomPlayer(Mark.O)
     player2 = HeuristicPlayer(Mark.O, n_rules=2)
-    tournament = Tournament(player1, player2, 1000, n_cpu=10)
+    tournament = Tournament(player1, player2, 1000, n_cpu=12)
 
     tournament.run()
     tournament.print_results()
 
 
+def get_test_trace(required_result=Result.DRAW,order=0):
+    player1 = HeuristicPlayer(Mark.X, n_rules=6)
+    player2 = HeuristicPlayer(Mark.O, n_rules=1)
+    match = Match(player1, player2)
+    trace = None
+    while trace is None or trace['result'] != required_result:
+        trace = match.play_and_trace(order=order, verbose=False)
+        
+    return trace
+
+def demo_print_trace():
+    trace = get_test_trace(required_result=Result.DRAW) 
+    Match.print_trace(trace)
+
 if __name__ == "__main__":
     #demo_match()
+    demo_print_trace()
     #demo_fixed_match()
-    demo_tournament()
+    #demo_tournament()
     # _test()

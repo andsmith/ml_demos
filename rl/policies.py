@@ -28,6 +28,13 @@ class Policy(ABC):
         self.draw_result = Result.DRAW
 
     @abstractmethod
+    def __str__(self):
+        """
+        Return a string representation of the policy.
+        """
+        pass
+
+    @abstractmethod
     def recommend_action(self, state):
         """
         Return actions to take given the current state.
@@ -41,6 +48,11 @@ class Policy(ABC):
     def compare(self, other, states, count=False, deterministic=True, prob_rel_tol=1e-5):
         """
         For all updatable states, is the distribution of recommended actions the same?
+        :param other:  another Policy object to compare with.
+        :param states:  list of Game states to compare the policies on.
+        :param count:  if True, return the number of different actions, otherwise return True/False.
+        :param deterministic:  if True, only compare the best action from each policy's distribution.
+        :param prob_rel_tol:  relative tolerance for the probabilities of the best actions.
         """
         n_diff=0
         for state in states:
@@ -70,14 +82,27 @@ class Policy(ABC):
             return True
         return n_diff
 
-    def take_action(self, game_state, epsilon=0):
+    def take_action(self, game_state, deterministic=False):
+        # just return the sampled action
+        distribution, best = self.recommend_and_take_action(game_state, deterministic)
+        return distribution[best][0]
+    
+    def recommend_and_take_action(self, game_state, deterministic=False):
+        """
+        Get action distribution, sample it.
+        """
         recommendations = self.recommend_action(game_state)
         probs = np.array([prob for _, prob in recommendations])
         actions = np.array([action for action, _ in recommendations])
         action_inds = np.arange(len(actions))
-        # sample from the distribution
+        if deterministic:
+            # only sample from actions w/prob. equal to best action's.
+            best_prob = np.max(probs)
+            probs[probs < best_prob] = 0.0
+            probs = probs / np.sum(probs)
         action_ind = np.random.choice(action_inds, p=probs)
-        return tuple(actions[action_ind])
+        return recommendations, action_ind
+
 
     def __str__(self):
         return self.__class__.__name__ + "(%s)" % self.player.name

@@ -25,6 +25,7 @@ class StateKey(object):
             self._state_artist = GameStateArtist(space_size=space_size)
             self._size = new_size
             state_img_side_len = self._state_artist.dims['img_size']
+            print("Image size:  %s,  cell_size:  %s" %(state_img_side_len, space_size))
             v_room = height - state_img_side_len
             h_room = new_size[0] - state_img_side_len
             self._indent = (h_room // 2, v_room // 2)
@@ -44,7 +45,9 @@ class StateKey(object):
 
 
 def test_state_key():
-    size = (170, 150)
+    size = (170, 70)
+    #size = (170, 150)
+
 
     img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
     img[:] = COLOR_BG

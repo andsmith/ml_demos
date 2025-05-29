@@ -166,7 +166,7 @@ class GameStateArtist(object):
                 prob, action_ind = action_to_prob[action]
                 color = float_rgb_to_int(np.array(cmap(1-prob))**alpha)  # get the RGB color from the colormap
                 highlight = (highlight_choice == action_ind) if highlight_choice is not None else False
-                h_col = None if not highlight else highlight_color
+                h_col = None if (not highlight or len(action_dist) == 1) else highlight_color
                 bbox = self._add_marker(img, row=i, col=j, marker=player_mark, color=color,
                                         highlight_color=h_col)
                 bboxes.append((bbox, prob))
@@ -368,9 +368,6 @@ class GameStateArtist(object):
 
             rad_highlight = max(2, rad_inner-1)
 
-
-            print("\tCircle thickness:", circle_thickness, "x_thickness:", x_thickness)
-
             if marker == Mark.X:
                 x0, x1, y0, y1 = get_X_points(padding)
 
@@ -384,7 +381,7 @@ class GameStateArtist(object):
             if highlight_color is not None:
                 if size == 'normal':
                     # draw a highlight circle around the marker
-                    _circle_at(center, rad_highlight, highlight_color,-1)
+                    _circle_at(center, rad_highlight, highlight_color, -1)
                 else:
                     raise ValueError("Highlight color not supported for normal images.")
 

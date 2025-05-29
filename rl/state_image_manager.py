@@ -426,7 +426,7 @@ class ValueFunctionSIM(StateImageManager):
                                        indicate_value=indicated_value)
             
         # Draw the state key if not the state tab
-        if tab != 'states' and self.mouseovered is not None:
+        if self.mouseovered is not None:
             self._state_key.draw(img, self.mouseovered, pos=self._state_key_pos)
             
         # Draw the state the algorithm is currently on, if set.

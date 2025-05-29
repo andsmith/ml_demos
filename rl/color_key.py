@@ -11,7 +11,7 @@ import logging
 from colors import COLOR_BG, COLOR_LINES
 import matplotlib.pyplot as plt
 
-from drawing import get_font_scale
+from util import get_font_scale
 
 
 
@@ -237,8 +237,8 @@ def test_color_key():
     """
     box_w = 400
     keys = []
-    indicated = [-1.05, -1.0, -0.75, 0.0, 0.5, 1.0, 1.05]
-    for i, box_h in enumerate([40, 50, 60, 70, 100, 120, 150]):
+    indicated = [-1.05, -1.0, -0.75,None,  0.0, 0.5, 1.0, 1.05]
+    for i, box_h in enumerate([40, 50, 60, 70, 70, 100, 120, 150]):
 
         box_size = (box_w, box_h)
         img = np.zeros((box_h, box_w, 3), dtype=np.uint8)

@@ -20,13 +20,22 @@ class PIPhases(IntEnum):
 
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, env,  gamma=0.9):
+    def __init__(self, app, env,alg_params): 
+
+# TODO:   DemoAlg.get_options() shoudl return a dict of option types, 
+# then the alg_params dict should match it here.
+
+
         """
         Initialize the algorithm with the app, GUI, environment, and discount factor.
 
         :param app: The application object.
         :param gui: The GUI object.
         :param env: The environment object.
+        :param  alg_params:  Algorithm parameters dict:
+            {'pi_seed': Policy to estimate first value function.
+            'gamma': Discount factor for future rewards (default is 0.9).}
+
         :param gamma: The discount factor (default is 0.9).
         """
         super().__init__(app=app, env=env)
@@ -38,7 +47,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.terminal_states = self._env.get_terminal_states()
 
         self._delta_v_tol = 1e-6
-        self.pi_seed = None
+        self.pi_seed = pi_seed
         self.gamma = gamma
         self.reset_state()
 
