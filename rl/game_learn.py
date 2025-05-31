@@ -226,6 +226,10 @@ class PolicyImprovementDemo(ABC):
             if self._converged:
                 self._convergence_iter = self._iter + 1
                 logging.info("Policy converged after %i iterations." % self._convergence_iter)
+                filename="value_function_converged.pkl" %( self._iter+1)
+                with open(filename, 'wb') as f:
+                    pickle.dump([self._v_new, self.pi], f)
+                print("Saved value function to file: %s" % filename)
                 self._gui.refresh_text_labels()
                 
             self._gui.refresh_text_labels()

@@ -48,21 +48,26 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   'graph_indent_frac': 0.1},
 
                 'match_area': {
-                            'trace_size': (120,380),  # w,h in pixels
-                            'trace_pad_frac': .075,  # between traces, frac of trace width
+                            'trace_size': (90,380),  # w,h in pixels
+                            'trace_pad_frac': .025,  # between traces, frac of trace width
                             'group_pad_frac': .01,  # between groups, frac of img_width
                             'group_bar_thickness_frac': 0.02},  # fraction of image height for the bar thickness, fraction of image_width
                 'trace_params': {
-                            'header_font_frac': 0.4,  # fraction of image side length for the header text
-                            'return_font_frac': 0.3,  # same for the return text
+                            'header_font_frac': 0.45,  # fraction of image side length for the header text
+                            'return_font_frac': 0.4,  # same for the return text
                             'col_title_frac': 0.4,  # fraction of image side length for the column titles
+                            'txt_spacing_frac': 0.2,
                             # fraction of image side length to use as padding between images and text, etc.
-                            "pad_frac": 0.075,
+                            "pad_frac": 0.2,
                             'font': cv2.FONT_HERSHEY_SIMPLEX,
                             'colors': {'bg': COLOR_BG,
                                         'lines': COLOR_LINES,
                                         'text': COLOR_TEXT}}}}
-TITLE_INDENT = 5
 
+
+
+
+
+TITLE_INDENT = 5
 
 WIN_SIZE = (1920, 990)

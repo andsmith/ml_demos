@@ -26,7 +26,6 @@ class Match(object):
         :param player1: Policy
         :param player2: Policy
         """
-        print("Match initialized with object of type %s and %s" % (player1.__class__, player2.__class__))
         self._players = [player1, player2]
         self._game = None
 
@@ -221,7 +220,7 @@ class ResultSet(object):
     def draw(self, img, y_top, trace_artist_params={}, layout_params={}):
         """
         Three boxes, "Wins" "Draws" and "Losses".
-        In each, approximately the same number of traces, if possible  (equla. for now)
+        In each, approximately the same number of traces, if possible  (equal for now)
         in each box, as many traces as will fit.
         The title for each trace is its number of occurrences.
 
@@ -233,7 +232,7 @@ class ResultSet(object):
         :returns:  list of (bbox, probability) for the mousing over & updating the ColorKey.
         """
         w, h = img.shape[1], img.shape[0]
-        img[y_top, :, :] = 0
+        
         
         if self._cur_sample is None:
             self.resample()
@@ -241,13 +240,13 @@ class ResultSet(object):
         layout = LAYOUT['results_viz']['match_area']
         layout.update(layout_params)
 
-        trace_params = LAYOUT['results_viz']['trace_params']
-        trace_params.update(trace_artist_params)
-
         h = img.shape[0] - y_top
         trace_size = layout['trace_size']
         trace_w, trace_h = trace_size
-        ta = TraceArtist(trace_size, Mark.X, params=trace_params, sample_header=" x 10   ")
+        
+        ta = TraceArtist(trace_size, Mark.X, params=trace_artist_params, sample_header=" x 10   ")
+        
+        trace_h = ta.dims['y_bottom']
 
         trace_pad = int(layout['trace_pad_frac'] * trace_w)  # padding between traces
         group_pad = int(layout['group_pad_frac'] * w)
@@ -264,8 +263,8 @@ class ResultSet(object):
         n_draw_cols = min(len(self._traces['draws']), max(0, n_h_traces - n_win_cols - n_loss_cols))
         n_rows = n_v_traces
 
-        print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
-        print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
+        #print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
+        #print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
 
         r = 0
         no_additions = 0
@@ -302,18 +301,16 @@ class ResultSet(object):
         
 
         r = 0
-        print("Drawing %d wins, %d losses, %d draws" % (n_wins, n_losses, n_draws))
-        print("From totals: %d wins, %d losses, %d draws" % (len(self._traces['wins']),
-                                                             len(self._traces['losses']),
-                                                             len(self._traces['draws'])))
+        #print("Drawing %d wins, %d losses, %d draws" % (n_wins, n_losses, n_draws))
+        #print("From totals: %d wins, %d losses, %d draws" % (len(self._traces['wins']),
+        #                                                     len(self._traces['losses']),
+        #                                                     len(self._traces['draws'])))
 
         def _box_width(n):
             bw = n * trace_w + (n+1) * trace_pad
-            print("Box width for %d traces is %d" % (n, bw))
             return bw
         def _box_height(n):
             bh = n * trace_h + (n+1) * trace_pad
-            print("Box height for %d traces is %d" % (n, bh))
             return bh
         # draw the boxes for each outcome group
         x_left = 0
@@ -321,16 +318,20 @@ class ResultSet(object):
 
 
         bbox_top = y_top + group_pad + group_bar_thickness
+        bbox_height = h - group_pad*2 -group_bar_thickness * 2 
+        win_width, draw_width, loss_width = _box_width(n_win_cols), _box_width(n_draw_cols), _box_width(n_loss_cols)
+        used_width = win_width + draw_width + loss_width + 6 * group_bar_thickness
+        horiz_spacing = (w- used_width) // 4
 
         #bbox_bottom = bbox_top + group_bar_thickness + 2 * 
-        win_bbox = {'x': (x_left+group_pad+group_bar_thickness, x_left+_box_width(n_win_cols) + group_pad+group_bar_thickness),
-                    'y': (bbox_top, h - group_pad+y_top +group_bar_thickness)}
+        win_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+win_width + horiz_spacing+group_bar_thickness),
+                    'y': (bbox_top, bbox_top + bbox_height)}
         x_left = win_bbox['x'][1] +group_bar_thickness
-        draw_bbox = {'x': (x_left+group_pad+group_bar_thickness, x_left+_box_width(n_draw_cols) +group_bar_thickness+ group_pad),
-                     'y': (bbox_top, h + group_pad+y_top +group_bar_thickness)}
+        draw_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+draw_width+group_bar_thickness+ horiz_spacing),
+                     'y': (bbox_top, bbox_top + bbox_height)}
         x_left = draw_bbox['x'][1]+group_bar_thickness
-        loss_bbox = {'x': (x_left+group_pad+group_bar_thickness, x_left+_box_width(n_loss_cols) +group_bar_thickness+ group_pad),
-                     'y': (bbox_top, h + group_pad+y_top+group_bar_thickness)}
+        loss_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+loss_width +group_bar_thickness+ horiz_spacing),
+                     'y': (bbox_top, bbox_top + bbox_height)}
 
         def _draw_box_at(img, color, bbox, thickness=1):
             """
@@ -360,17 +361,11 @@ class ResultSet(object):
                 header_text = ("x %i" % count) if count > 1 else "X 1"
                 pos = (x, y)
                 ta.draw_trace(img, trace, pos, header_txt=header_text)
-                trace_bbox  = {'x': (pos[0], pos[0] + trace_w),
-                               'y': (pos[1], pos[1] + trace_h)}
-                # outline entire trace image (bbox):
-                #_draw_box_at(img, 0, trace_bbox, thickness=1)
-                # import cv2
-                # cv2.imwrite('taco.png', img[:,:,::-1])  # save the image for debugging
                 x += trace_w + trace_pad
 
                 if x + trace_w > group_bbox['x'][1]:
                     x = group_bbox['x'][0] + trace_pad
-                    y += trace_h + trace_pad
+                    y += trace_h 
 
         _draw_box_at(img, COLOR_X, win_bbox, thickness=group_bar_thickness)
         _draw_box_at(img, COLOR_DRAW, draw_bbox, thickness=group_bar_thickness)
@@ -396,15 +391,39 @@ def test_result_set(n=100):
 
     import cv2
 
-    img_size = (1000, 950)
-    img = np.zeros((img_size[0], img_size[1], 3), dtype=np.uint8)
-    img[:] = 127
+    img_size = [(1000, 550)]
+
+    def on_mouse(event, x, y, flagqs, param):
+        """
+        Mouse callback for the image window.
+        """
+        
+
+    cv2.namedWindow("results", cv2.WINDOW_NORMAL)
+    cv2.resizeWindow("results", img_size[0][0], img_size[0][1])
+    # Set the resize callback to update the image size
+    cv2.setMouseCallback("results", on_mouse)
+
     import pprint
     print("Test set summary:")
     pprint.pprint(rs.get_summary(), width=40)
-    rs.draw(img, y_top=60)
-    cv2.imshow("Test Box", img[:, :, ::-1])
-    cv2.waitKey(0)
+
+    while True:
+        _,_, width, height = cv2.getWindowImageRect("results")
+        
+        new_size = width, height
+        if (new_size[0] != img_size[0][0] or new_size[1] != img_size[0][1]):
+            img_size[0] = (new_size[0], new_size[1])
+            print("New size: %s" % str(img_size[0]))
+        img = np.zeros((img_size[0][1], img_size[0][0], 3), dtype=np.uint8)
+        img[:] = 127
+        rs.draw(img, y_top=60)
+        cv2.imshow("results", img[:, :, ::-1])
+        key = cv2.waitKey(10)
+        if key == 27 or key == ord('q'):
+            break
+
+
 
 
 def _test():

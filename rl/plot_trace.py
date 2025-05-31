@@ -9,6 +9,7 @@ from util import write_lines_in_bbox, get_font_scale
 from game_base import Mark, Result, WIN_MARKS
 from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
 import matplotlib.pyplot as plt
+from layout import LAYOUT
 
 
 class TraceArtist(object):
@@ -105,17 +106,6 @@ class TraceArtist(object):
 
     """
 
-    _DEFAULT_PARAMS = {'header_font_frac': 0.45,  # fraction of image side length for the header text
-                       'return_font_frac': 0.4,  # same for the return text
-                       'col_title_frac': 0.4,  # fraction of image side length for the column titles
-                       'txt_spacing_frac': 0.1,  # fraction of image side length to use as spacing between text lines
-                       "pad_frac": 0.1,  # fraction of image side length to use as padding between images and text, etc.
-                       'font': cv2.FONT_HERSHEY_SIMPLEX,
-                       'colors': {'bg': COLOR_BG,
-                                  'lines': COLOR_LINES,
-                                  'text': COLOR_TEXT}
-                       }
-
     def __init__(self, size_wh, player, params={}, sample_header=None):
         """
         :param size_wh:  The size of the bounding box for the trace, in pixels
@@ -124,17 +114,19 @@ class TraceArtist(object):
         """
         self._size = size_wh
         self._player = player  # the player for whom the trace is drawn
-        self._params = self._DEFAULT_PARAMS.copy()
+        self._params = LAYOUT['results_viz']['trace_params'].copy()
         self._params.update(params)
         self._cmap = plt.get_cmap('gray')  # colormap for the player colors
-        self.dims = self._calc_dims(sample_header)
-        logging.info("TraceArtist initialized with size %s, state_img_size %i, for player %s" %
-                     (self._size, self.dims['img_size'], self._player.name))
+        self._sample_header = sample_header
+        self.dims = self._calc_dims()
+        #logging.info("TraceArtist initialized with size %s, state_img_size %i, for player %s" %
+        #             (self._size, self.dims['img_size'], self._player.name))
+
     @staticmethod
     def _fmt_return(ret_val):
         return "R: %.3f" % ret_val
 
-    def _calc_dims(self, sample_header):
+    def _calc_dims(self):
         """
         Calculate image positions, text positions and line coordinates for the two 
         kinds of traces (agent first, agent second)
@@ -151,15 +143,17 @@ class TraceArtist(object):
         w, h = self._size
 
         # if we are width-limited:
-        n_h_pads = n_state_cols + 1 
-        n_squares = n_state_cols  + n_h_pads * self._params['pad_frac']
+        n_h_pads = n_state_cols + 1
+        n_squares = n_state_cols + n_h_pads * self._params['pad_frac']
         max_img_w = int(w / n_squares)
 
         # if we are height-limited:
-        text_square_frac =  self._params['header_font_frac'] + self._params['return_font_frac']+self._params['col_title_frac']
+        text_square_frac = self._params['header_font_frac'] + \
+            self._params['return_font_frac']+self._params['col_title_frac']
         n_v_pads = n_state_rows + 4  # 3 for header, col_titles (and half-space), return, and bottom padding
         n_txt_pads = 5
-        n_squares = (n_state_rows+text_square_frac) + n_v_pads * self._params['pad_frac'] + n_txt_pads * self._params['txt_spacing_frac']
+        n_squares = (n_state_rows+text_square_frac) + n_v_pads * \
+            self._params['pad_frac'] + n_txt_pads * self._params['txt_spacing_frac']
         max_img_h = int(h / n_squares)
 
         s_size = GameStateArtist.get_space_size(min(max_img_h, max_img_w), bar_w_frac=.2)
@@ -169,37 +163,34 @@ class TraceArtist(object):
         pad_y_px = int(img_s * self._params['pad_frac'])
         txt_pad_y_px = int(img_s * self._params['txt_spacing_frac'])
         interior_pad_x = pad_y_px  # use the same padding for x and y, since we are top-justified
-        exterior_total_pad_x =   w - (interior_pad_x * (n_state_cols-1) + img_s * n_state_cols) 
+        exterior_total_pad_x = w - (interior_pad_x * (n_state_cols-1) + img_s * n_state_cols)
 
         exterior_pad_x = exterior_total_pad_x // 2
-
 
         if max_img_w < max_img_h:
             # we are width-limited, extra room below
             x_left = interior_pad_x
         else:
             x_left = exterior_pad_x
-        #x_lefts = np.arange(n_state_cols) * (img_s + interior_pad_x) + x_left
+        # x_lefts = np.arange(n_state_cols) * (img_s + interior_pad_x) + x_left
         x_center = w//2
         x_left = x_center - img_s - interior_pad_x//2
         x_right = x_center + img_s + interior_pad_x//2
         x_lefts = [x_left, x_right - img_s]  # left and right columns
 
-
         # start placing things
-        y = pad_y_px  # start at the top, with padding
+        y = txt_pad_y_px  # start at the top, with padding
 
         # header
         header_h = int(img_s * self._params['header_font_frac'])
-        header_y =  y
-        y += header_h 
+        header_y = y
+        y += header_h
         y += txt_pad_y_px
 
         # column titles
         col_title_h = int(img_s * self._params['col_title_frac'])
         col_title_y = y
         y += col_title_h + pad_y_px
-
 
         turns = []
         for _ in range(n_state_rows):
@@ -208,34 +199,33 @@ class TraceArtist(object):
                              'y': (y, y + img_s)}
             action_img_box = {'x': (x_lefts[1], x_lefts[1] + img_s),
                               'y': (y, y + img_s)}
-            
+
             col_text_w = (state_img_box['x'][1] - state_img_box['x'][0])  # same for both
 
             turns.append({'left_bbox': state_img_box,
                           'right_bbox': action_img_box})
             y += img_s + pad_y_px
 
-        return_h =  int(img_s * self._params['return_font_frac'])
+        return_h = int(img_s * self._params['return_font_frac'])
 
-        y_bottom = y + return_h + txt_pad_y_px + pad_y_px
+        y_bottom = y + return_h + txt_pad_y_px + txt_pad_y_px
 
         # calculate font scales
         text_w = w - 2 * exterior_pad_x  # width for the text, minus padding
 
         header_font_scale = get_font_scale(
             self._params['font'], max_height=header_h, max_width=text_w,
-            incl_baseline=True, text_lines=["Header text" if sample_header is None else sample_header])
-        
+            incl_baseline=True, text_lines=["Header text" if self._sample_header is None else self._sample_header])
+
         return_w = int(text_w*.85)
         return_font_scale = get_font_scale(
             self._params['font'], max_height=return_h, max_width=return_w,
             incl_baseline=True, text_lines=[self._fmt_return(-3.587)])
-        
 
         col_font_scale = get_font_scale(
             self._params['font'], max_height=col_title_h, max_width=col_text_w,
             incl_baseline=True, text_lines=col_titles[1:])
-        
+
         dims = {'artist': artist,
                 'img_size': img_s,
                 'trace_size': self._size,
@@ -256,7 +246,6 @@ class TraceArtist(object):
                 'turns': turns,
                 'y_bottom': y_bottom,
                 'col_title_h': col_title_h}
-        
         return dims
 
     def _align_trace_RL(self, trace):
@@ -276,11 +265,9 @@ class TraceArtist(object):
             state = trace_state['state']
             next_state = trace_state['next_state']
 
-
             action_dist = trace_state['action_dist']
             action_taken_ind = trace_state['action_ind']
             action_taken = action_dist[action_taken_ind][0]
-
 
             if player != self._player:
                 if next_state_ind == len(trace['game']):
@@ -290,10 +277,10 @@ class TraceArtist(object):
                     break
                 continue
 
-            state_imgs.append(self.dims['artist'].get_image(state)) # , highlight_cell = action_taken)
-            
+            state_imgs.append(self.dims['artist'].get_image(state))  # , highlight_cell = action_taken)
+
             action_img, action_bboxes = self.dims['artist'].get_action_dist_image(action_dist, self._player,
-                                                                                  cmap=self._cmap,highlight_choice=action_taken_ind)
+                                                                                  cmap=self._cmap, highlight_choice=action_taken_ind)
             action_imgs.append(action_img)
             action_cell_bboxes.append(action_bboxes)
 
@@ -314,12 +301,12 @@ class TraceArtist(object):
         pad_x_left = self.dims['exterior_pad_x']
         pad_x_int = self.dims['interior_pad_x']
         y_bottom = self.dims['y_bottom']
-        txt_pad_y_px =  self.dims['txt_pad_y']
+        txt_pad_y_px = self.dims['txt_pad_y']
         y_top_rel = pad_y_px if header_txt is not None else txt_pad_y_px
         center_x, x_span_both = self.dims['center_x'], self.dims['x_span']
-        
 
-        def _put_text(text, y_pos,x_span, font_scale,incl_baseline=True, justify='center'):
+
+        def _put_text(text, y_pos, x_span, font_scale, incl_baseline=True, justify='center'):
             """
             Put text in the image at the given position (spec offset to (0, 0)).
             :param text:  The text to put in the image.
@@ -328,57 +315,56 @@ class TraceArtist(object):
             """
             (text_width, text_height), baseline = cv2.getTextSize(text, self._params['font'], font_scale, 1)
             text_height += baseline if incl_baseline else 0
-            y_bottom = y_pos + text_height + pos_xy[1] 
+            y_bottom = y_pos + text_height + pos_xy[1]
             center_x = int((x_span[0] + x_span[1]) / 2)
             if justify == 'center':
                 x_left = pos_xy[0] + center_x - text_width // 2
             elif justify == 'left':
-                x_left =  pos_xy[0] + x_span[0] 
+                x_left = pos_xy[0] + x_span[0]
 
             txt_pos = (x_left, y_bottom)
 
             cv2.putText(img, text, txt_pos, self._params['font'], font_scale,
                         self._params['colors']['text'], 1, cv2.LINE_AA)
             return text_height, baseline
-        
-
 
         # Draw the header text
         if header_txt is not None:
-            header_y = self.dims['header_y'] 
-            h_height= _put_text(header_txt, header_y,x_span_both, self.dims['header_font_scale'], justify='center')[0]
-            y_top_rel += _put_text(header_txt, header_y,x_span_both, self.dims['header_font_scale'], justify='center')[0]
+            header_y = self.dims['header_y']
+            h_height = _put_text(header_txt, header_y, x_span_both, self.dims['header_font_scale'], justify='center')[0]
+            y_top_rel += _put_text(header_txt, header_y, x_span_both,
+                                   self.dims['header_font_scale'], justify='center')[0]
             y_top_rel += txt_pad_y_px
 
- 
         # Draw the column titles
         for col_ind, col_title in enumerate(self.dims['col_titles']):
             x_left = self.dims['col_xs'][col_ind]
             x_right = x_left + self.dims['img_size']
             x_span = (x_left, x_right)
-            col_title_y = self.dims['col_title_y'] 
-            col_h, col_base=_put_text(col_title, col_title_y,x_span, self.dims['col_font_scale'], justify='center', incl_baseline=False)
+            col_title_y = self.dims['col_title_y']
+            col_h, col_base = _put_text(col_title, col_title_y, x_span,
+                                        self.dims['col_font_scale'], justify='center', incl_baseline=False)
             y_top_rel += pad_y_px
 
- 
-        y_top_rel = col_title_y + col_h + col_base +txt_pad_y_px
-
+        y_top_rel = col_title_y + col_h + col_base + txt_pad_y_px
+        # import ipdb; ipdb.set_trace()
         for row in range(len(action_imgs)):
+
             state_bbox = self.dims['turns'][row]['left_bbox']
             action_bbox = self.dims['turns'][row]['right_bbox']
 
             # Draw the state image
             x_left = pos_xy[0] + state_bbox['x'][0]
-            y_top = pos_xy[1] + state_bbox['y'][0] 
+            y_top = pos_xy[1] + state_bbox['y'][0]
             img[y_top:y_top + self.dims['img_size'],
-                 x_left:x_left + self.dims['img_size'], :] = state_imgs[row]
+                x_left:x_left + self.dims['img_size'], :] = state_imgs[row]
 
             # Draw the action image
             x_right = pos_xy[0] + action_bbox['x'][0]
-            img[y_top:y_top + self.dims['img_size'], 
+            img[y_top:y_top + self.dims['img_size'],
                 x_right:x_right + self.dims['img_size'], :] = action_imgs[row]
 
-            y_top_rel += self.dims['img_size'] + pad_y_px
+            y_top_rel = state_bbox['y'][1] + pad_y_px
 
         if term_pos == 'left':
             term_bbox = self.dims['turns'][-1]['left_bbox']
@@ -386,28 +372,34 @@ class TraceArtist(object):
             term_bbox = self.dims['turns'][-1]['right_bbox']
 
         # Draw the terminal state image
+
         x_left = pos_xy[0] + term_bbox['x'][0]
-        y_top = y_top_rel + pos_xy[1]
-        y_bottom = y_top + self.dims['img_size']
-        img[y_top:y_bottom, x_left:x_left + self.dims['img_size'], :] = state_imgs[-1]
+        y_top = pos_xy[1] + y_top_rel
+
+        img[y_top:y_top + self.dims['img_size'],
+            x_left:x_left + self.dims['img_size'], :] = state_imgs[-1]
 
         y_top_rel += self.dims['img_size'] + txt_pad_y_px
 
         # Write the return value
         return_txt = self._fmt_return(total_return)
         # return_txt_pos = ( self.dims['center_x'], y_top )
-        _put_text(return_txt, y_top_rel, x_span_both,self.dims['return_font_scale'], justify='center', incl_baseline=True)
-        
+        _put_text(return_txt, y_top_rel, x_span_both,
+                  self.dims['return_font_scale'], justify='center', incl_baseline=True)
+
         return img
+    
+    def set_size(self, new_size_wh):
+        self._size = new_size_wh
+        self.dims=self._calc_dims() 
 
 
 class ResizableTester(object):
-    def __init__(self, traces, size,shape,margin=0):
+    def __init__(self, traces, size, shape, margin=0):
         self._traces = traces
         self._size = size
         self._margin = margin
-        self._shape = shape 
-    
+        self._shape = shape
 
     def get_frame(self, size):
         n_traces = self._shape[0] * self._shape[1]
@@ -418,24 +410,22 @@ class ResizableTester(object):
         true_trace_height = ta.dims['y_bottom']
 
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-        t_ind=0
+        t_ind = 0
         for row in range(self._shape[0]):
             for col in range(self._shape[1]):
                 if t_ind >= len(self._traces):
                     break
 
-                x_left = self._margin + col * (trace_width + self._margin) 
-                y_top =  self._margin + row * (true_trace_height + self._margin)
+                x_left = self._margin + col * (trace_width + self._margin)
+                y_top = self._margin + row * (true_trace_height + self._margin)
 
                 # Draw bkg color
                 trace_size = ()
                 img[y_top:y_top + true_trace_height, x_left:x_left + trace_width, :] = ta._params['colors']['bg']
 
                 ta.draw_trace(img, self._traces[t_ind], pos_xy=(x_left, y_top), header_txt="Test Game %i" %
-                            (col+1) if np.random.rand() > 0.5 else "")
+                              (col+1) if np.random.rand() > 0.5 else "")
                 t_ind += 1
-                
-            
 
         return img
 
@@ -460,9 +450,9 @@ class ResizableTester(object):
 
 def test_plot_trace():
     from gameplay import get_test_trace, Match
-    test_shape = (3,10)
+    test_shape = (2, 7)
     n_trials = test_shape[0] * test_shape[1]
-    img_size = (1500, 620)
+    img_size = (900, 820)
 
     test_traces = [get_test_trace() for _ in range(n_trials)]
     for trace in test_traces:
