@@ -56,7 +56,11 @@ class ColorKey(object):
             return self.draw_params['tick_font']['big']
         else:
             return self.draw_params['tick_font']['small']
-
+        
+    def map_color(self, value):
+        val_norm = (value - self.range[0]) / (self.range[1] - self.range[0])
+        return np.array(self.cmap(val_norm)[:3])  # returns RGBA, we use RGB
+            
     def draw(self, img, line_color, text_color, indicate_value=None):
         """
         Draw the color key on the given image in the upper right (TODO: make this configurable).
@@ -107,8 +111,7 @@ class ColorKey(object):
         spec_values = []
         for i in range(spectrum_width):
             value = self.range[0] + (self.range[1] - self.range[0]) * i / (w - 1)
-            val_norm = (value - self.range[0]) / (self.range[1] - self.range[0])
-            color = np.array(self.cmap(val_norm)[:3])  # Get the color from the colormap
+            color = self.map_color(value)
             gradient[:, i] = (color[:3] * 255).astype(np.uint8)
             spec_values.append(value)
 
@@ -231,6 +234,24 @@ class ColorKey(object):
         return img
 
 
+class ProbabilityColorKey(ColorKey):
+    """
+    Uses 'gray' colormap, range [0, 1] and inverts rgb values (so dark is 1.0)
+    """
+    def __init__(self, size, draw_params={}):
+        """
+        Create a probability color key object.
+        :param size: width, height
+        :param range: Range of values for the color key.
+        :param draw_params: Parameters for drawing the color key.
+        """
+        cmap = plt.get_cmap('gray')
+        super().__init__(cmap=cmap, range=(0.,1.), size=size, draw_params=draw_params)
+
+    def map_color(self, value):
+        return super().map_color(1.0 - value)  # invert the color for probabilities
+    
+    
 def test_color_key():
     """
     Test the ColorKey class.
@@ -259,7 +280,31 @@ def test_color_key():
     cv2.imshow("Color Key", all_keys_img[:, :, ::-1])
     cv2.waitKey(0)
 
+def test_probability_color_key():
+    """
+    Test the ProbabilityColorKey class.
+    """
+    box_w = 300
+    box_h = 60
+    box_size = (box_w, box_h)
+    imgs = []
+    img_blank = np.zeros((box_h, box_w, 3), dtype=np.uint8)
+    img_blank[:] = (127, 127, 127)
+
+    ck = ProbabilityColorKey(size=box_size)
+    img = img_blank.copy()
+    imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_LINES))
+
+    for prob in[0.0, 0.25, 0.1234123512315, .9999, 1.0]:
+        print(f"Drawing color key for probability {prob:.4f}")
+        img = img_blank.copy()
+        imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_LINES, indicate_value=prob))
+        
+    img = np.concatenate(imgs, axis=0)
+    cv2.imshow("Probability Color Key", img[:, :, ::-1])
+    cv2.waitKey(0)  
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    test_color_key()
+    test_probability_color_key()

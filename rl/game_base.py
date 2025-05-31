@@ -16,7 +16,7 @@ class Mark(IntEnum):
 TERMINAL_REWARDS = {
     Result.X_WIN: 1.0,
     Result.O_WIN: -1.0,
-    Result.DRAW: -.666,
+    Result.DRAW: -.5,
 }
 
 def get_reward(state, action, player_mark=Mark.X):

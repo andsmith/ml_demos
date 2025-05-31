@@ -16,12 +16,19 @@ import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 from drawing import GameStateArtist
 from scipy.spatial import KDTree
-from color_key import ColorKey
+from color_key import ColorKey, ProbabilityColorKey
 from state_key import StateKey
 
 
 # BOX_SIZES = [22, 12, 12, 12, 12, 12]  # good for single value function
 SPACE_SIZES = [7, 2, 2, 2, 2, 3]
+
+
+######
+#  NOTE on special tabs:
+#    - 'states' tab shows state icons (not values) in their embedding, does not have a color key
+#    - 'results' tab shows a results_viz image, not a state embedding.
+######
 
 
 class StateImageManager(ABC):
@@ -50,7 +57,6 @@ class StateImageManager(ABC):
         self._box_placer = None
         self._box_centers = None
         self._box_tree = None
-        self._color_keys = {}  # dict of ColorKey objects for each tab, if applicable
         self._state_key = None  # Use the same for all tabs.
         self._key_sizes = key_sizes
         key_height = key_sizes['color'][1]
@@ -196,7 +202,6 @@ class StateImageManager(ABC):
         box_tree = KDTree(box_centers)
 
         # now we can calculate the position of the color key bounding box
-        ck_width = self._key_sizes['color'][0]
         # height is highest y of state boxes in row 1 (second row)
         layer1_states = self.states_by_layer[1]
         # box_placer.box_positions[layer1_states[0]['id']]
@@ -210,12 +215,7 @@ class StateImageManager(ABC):
         logging.info("Updating key height from %i to %i" % (self._key_sizes['color'][1], ck_height))
         self._key_sizes['color'] = (self._key_sizes['color'][0], ck_height)
         self._key_sizes['state'] = (self._key_sizes['state'][0], ck_height)
-
-        # create the color keys
-        self._color_keys = {tab: ColorKey(size=(ck_width, ck_height),
-                                          cmap=plt.get_cmap(self._cmaps[tab]),
-                                          range=self._ranges[tab])
-                            for tab in self.tabs if tab != 'states'}
+                                                          
         
         # create the state key
         self._state_key = StateKey(size = self._key_sizes['state'],)
@@ -306,8 +306,17 @@ class ValueFunctionSIM(StateImageManager):
 
         super().__init__(app, env, tabs, key_sizes)
         self._cmaps = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
+        ck_width, ck_height = key_sizes['color']
         self._ranges = value_ranges
         self._bg_colors = bg_colors
+
+        # create the color keys
+        self._color_keys = {tab: ColorKey(size=(ck_width, ck_height),
+                                          cmap=self._cmaps[tab],
+                                          range=self._ranges[tab])
+                            for tab in self.tabs if tab not in['results', 'states']}
+        self._color_keys['results'] = ProbabilityColorKey(size=(ck_width, ck_height))
+       
         self._values = {}
         self.reset_values()
 

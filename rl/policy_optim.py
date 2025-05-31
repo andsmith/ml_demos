@@ -37,7 +37,6 @@ class ValueFuncPolicy(Policy):
         self._v = v  # hash of Game (state) to value
         self._env = environment
         self._gamma = gamma
-        self._pi_old = old_policy  #
         self._pi = self._optimize()
 
     def equals(self, other):
@@ -63,7 +62,6 @@ class ValueFuncPolicy(Policy):
             #    import ipdb
             #    ipdb.set_trace()
 
-            old_action_dist = self._pi_old.recommend_action(state)
 
             def get_reward_term_and_next_states(action):
                 next_state = state.clone_and_move(action, self.player)

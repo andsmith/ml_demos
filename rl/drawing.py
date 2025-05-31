@@ -203,7 +203,7 @@ class GameStateArtist(object):
 
         return img
 
-    def get_image(self, game):
+    def get_image(self, game, highlight_cell=None, alpha=1.0, highlight_color=None):
         """
         Return an image of the game board & its dimension dictionary.
 
@@ -214,6 +214,8 @@ class GameStateArtist(object):
             if None, only draw the box around terminal states
 
         """
+        highlight_color = NEON_GREEN if highlight_color is None else highlight_color
+
         size = GameStateArtist.get_size(self._space_size)
 
         img = self._get_blank()
@@ -223,9 +225,11 @@ class GameStateArtist(object):
         # Draw markers
         for i in range(3):
             for j in range(3):
+                no_marker = False
                 if game.state[i, j] == Mark.EMPTY:
-                    continue
-                self._add_marker(img, row=i, col=j, marker=game.state[i, j])
+                    no_marker=True
+                h_col = highlight_color if highlight_cell is not None and (i, j) == highlight_cell else None
+                self._add_marker(img, row=i, col=j, marker=game.state[i, j],highlight_color=h_col, no_marker=no_marker)
 
         # shade the whole image (including the bbox area) is averaged with the winner/draw color.
         shade_color = COLOR_SHADE if term is None else {Result.DRAW: COLOR_DRAW_SHADE,
@@ -325,7 +329,7 @@ class GameStateArtist(object):
             cv2.line(img, (x0, y0), (x1, y1), color, self.dims['line_t'], lineType=aa, shift=_SHIFT_BITS)
         return img
 
-    def _add_marker(self, img, row, col, marker, color=None, highlight_color=None):
+    def _add_marker(self, img, row, col, marker, color=None, highlight_color=None, no_marker=False):
         """
         :param img: np.array, image to draw on
         :param dims: image dimensions dict, output of Game.get_image_dims()
@@ -368,15 +372,14 @@ class GameStateArtist(object):
 
             rad_highlight = max(2, rad_inner-1)
 
-            if marker == Mark.X:
-                x0, x1, y0, y1 = get_X_points(padding)
-
-                _draw_line((x0, y0), (x1, y1), color, x_thickness)
-                _draw_line((x1, y0), (x0, y1), color, x_thickness)
-
-            else:
-                _circle_at(center, rad, color, -1)
-                _circle_at(center, rad_inner, COLOR_BG, -1)
+            if not no_marker:
+                if marker == Mark.X:
+                    x0, x1, y0, y1 = get_X_points(padding)
+                    _draw_line((x0, y0), (x1, y1), color, x_thickness)
+                    _draw_line((x1, y0), (x0, y1), color, x_thickness)
+                else:
+                    _circle_at(center, rad, color, -1)
+                    _circle_at(center, rad_inner, COLOR_BG, -1)
 
             if highlight_color is not None:
                 if size == 'normal':
@@ -389,17 +392,18 @@ class GameStateArtist(object):
             border = 1  # if self._space_size < 10 else 2
             # fill the cell with the color, leaving a border
             x_span, y_span = cell_span['x'], cell_span['y']
-            img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = color
-
-            if highlight_color is not None:
-                raise ValueError("Highlight color not supported for small images.")
+            if not no_marker:
+                img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = color
+            if highlight_color is not None:    
+                img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = highlight_color
 
         else:  # size == 'micro'
             # fill the cell with the color
-            if highlight_color is not None:
-                raise ValueError("Highlight color not supported for micro images.")
             x_span, y_span = cell_span['x'], cell_span['y']
-            img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = color
+            if not no_marker:
+                img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = color
+            if highlight_color is not None:
+                img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = highlight_color
 
         return cell_span
 
