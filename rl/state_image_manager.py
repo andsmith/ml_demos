@@ -59,12 +59,13 @@ class StateImageManager(ABC):
         self._box_tree = None
         self._state_key = None  # Use the same for all tabs.
         self._key_sizes = key_sizes
+        self._key_h_pad = LAYOUT['key_h_pad']
         key_height = key_sizes['color'][1]
 
         if key_height != key_sizes['state'][1]:
             raise ValueError("Key sizes must have the same height for state and color keys.")
         
-        self._total_key_size = (key_sizes['color'][0] + key_sizes['state'][0] ,
+        self._total_key_size = (key_sizes['color'][0] + key_sizes['state'][0]+ self._key_h_pad ,
                                 key_height)
 
         self.terminal_states = env.get_terminal_states()
@@ -219,7 +220,7 @@ class StateImageManager(ABC):
         
         # create the state key
         self._state_key = StateKey(size = self._key_sizes['state'],)
-        self._state_key_pos = (self._size[0] - self._key_sizes['color'][0] -self._key_sizes['state'][0],  0)
+        self._state_key_pos = (self._size[0] - self._key_sizes['color'][0] -self._key_sizes['state'][0] -self._key_h_pad,  0)
 
         return box_placer, box_centers, box_tree
 

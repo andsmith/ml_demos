@@ -17,6 +17,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                      'state-tabs': {'x_rel': (MID_X, 1.0),
                                     'y_rel': (0.0, 1.0)}
                      },
+          'key_h_pad': 30,
           'color_key': {'height': 60, 'width': 250},
 
           'state_key': {'height': 60, 'width': 70},  # should be same height as color_key
