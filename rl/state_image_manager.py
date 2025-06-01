@@ -18,7 +18,7 @@ from drawing import GameStateArtist
 from scipy.spatial import KDTree
 from color_key import ColorKey, ProbabilityColorKey
 from state_key import StateKey
-
+from gameplay import ResultSet, Match
 
 # BOX_SIZES = [22, 12, 12, 12, 12, 12]  # good for single value function
 SPACE_SIZES = [7, 2, 2, 2, 2, 3]
@@ -489,6 +489,14 @@ class SimTester(object):
         self._init_tk(size)
         self._init_values(env)
         self._init_tabs()
+        self._play()
+
+    def _play(self):
+        rs = ResultSet(self._env.player)
+        for _ in range(n):
+            match = Match(self._env.player, self._env.opponent)
+            rs.add_trace(match.play_and_trace(order=0, verbose=False))
+
 
     def toggle_stop_state(self, state):
         logging.info(f"Toggling selected state:\n{state}\n")
