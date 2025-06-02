@@ -1,11 +1,12 @@
 
 
-from colors import COLOR_BG, COLOR_TEXT, COLOR_LINES
+from colors import COLOR_SCHEME
 import cv2
 MID_X = 0.38  # "state-tabs" frame (sate/value/update images) to the right of this point
 MID_Y = 0.5  # "step-visualization" frame below this point
 LOW_Y = 1.0
 HALF_MID_X = 0.15
+
 
 LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                                  'y_rel': (0.0, MID_Y)},
@@ -17,10 +18,9 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                      'state-tabs': {'x_rel': (MID_X, 1.0),
                                     'y_rel': (0.0, 1.0)}
                      },
-          'key_h_pad': 30,
-          'color_key': {'height': 60, 'width': 250},
 
-          'state_key': {'height': 60, 'width': 70},  # should be same height as color_key
+          'state_embedding': {  # a kind of TabContentPage showing all RL states
+              'space_sizes': [7, 2, 2, 2, 2, 3]},  # sizes of the spaces between states in pixels
 
           'margin_rel': .0025,  # margin between frames in relative coordinates
 
@@ -48,26 +48,20 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   'graph_width_frac': 0.4,  # fraction of the summary area width for the bar graph
                   'graph_indent_frac': 0.1},
 
-                'match_area': {
-                            'trace_size': (90,380),  # w,h in pixels
-                            'trace_pad_frac': .025,  # between traces, frac of trace width
-                            'group_pad_frac': .01,  # between groups, frac of img_width
-                            'group_bar_thickness_frac': 0.02},  # fraction of image height for the bar thickness, fraction of image_width
-                'trace_params': {
-                            'header_font_frac': 0.45,  # fraction of image side length for the header text
-                            'return_font_frac': 0.4,  # same for the return text
-                            'col_title_frac': 0.4,  # fraction of image side length for the column titles
-                            'txt_spacing_frac': 0.2,
-                            # fraction of image side length to use as padding between images and text, etc.
-                            "pad_frac": 0.2,
-                            'font': cv2.FONT_HERSHEY_SIMPLEX,
-                            'colors': {'bg': COLOR_BG,
-                                        'lines': COLOR_LINES,
-                                        'text': COLOR_TEXT}}}}
-
-
-
-
+    'match_area': {
+                  'trace_size': (90, 380),  # w,h in pixels
+                  'trace_pad_frac': .025,  # between traces, frac of trace width
+                  'group_pad_frac': .01,  # between groups, frac of img_width
+                  'group_bar_thickness_frac': 0.02},  # fraction of image height for the bar thickness, fraction of image_width
+    'trace_params': {
+                  'header_font_frac': 0.45,  # fraction of image side length for the header text
+                  'return_font_frac': 0.4,  # same for the return text
+                  'col_title_frac': 0.4,  # fraction of image side length for the column titles
+                  'txt_spacing_frac': 0.2,
+                  # fraction of image side length to use as padding between images and text, etc.
+                  "pad_frac": 0.2,
+                  'font': cv2.FONT_HERSHEY_SIMPLEX,
+                  'colors': COLOR_SCHEME}}}
 
 TITLE_INDENT = 5
 

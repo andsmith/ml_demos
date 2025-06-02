@@ -8,7 +8,7 @@ import tkinter.ttk as ttk
 from abc import ABC, abstractmethod
 from PIL import Image, ImageTk
 from util import tk_color_from_rgb
-from colors import COLOR_BG, SKY_BLUE, NEON_GREEN, NEON_RED, COLOR_LINES, COLOR_TEXT
+from colors import COLOR_SCHEME, UI_COLORS
 from layout import LAYOUT, WIN_SIZE
 import numpy as np
 import logging
@@ -24,9 +24,6 @@ class MouseBoxManager(object):
         - For mousovering plots for color keys
 
     """
-
-    _COLORS = {'mouseover': NEON_GREEN,
-               'selected': NEON_RED, }
 
     def __init__(self, app):
         """
@@ -157,11 +154,11 @@ class MouseBoxManager(object):
         for box_id in selected_ids:
             if box_id in self.bboxes:
                 bbox = self.bboxes[box_id]
-                _draw_box(bbox, self._COLORS['selected'])
+                _draw_box(bbox, UI_COLORS['selected'])
 
         if self.mouseover_id is not None:
             bbox = self.bboxes[self.mouseover_id]
-            _draw_box(bbox, self._COLORS['mouseover'])
+            _draw_box(bbox, UI_COLORS['mouseovered'])
         
 
 
@@ -174,9 +171,6 @@ class MSMTester(object):
     Mouseovering a box will highlight it in green.
 
     """
-    _COLORS = {'bg': COLOR_BG,
-               'lines': COLOR_LINES,
-               'text': COLOR_TEXT}
 
     def __init__(self, img_size, box_size):
         self._img_size = img_size  # full window
@@ -204,7 +198,7 @@ class MSMTester(object):
         The base images have the color in each box for the two tabs.
         """
         blank = np.zeros((self._tab_img_size[1], self._tab_img_size[0], 3), dtype=np.uint8)
-        blank[:] = self._COLORS['bg']
+        blank[:] = COLOR_SCHEME['bg']
 
         self._base_img = {'tab 1': blank.copy(),
                           'tab 2': blank.copy()}
@@ -292,11 +286,11 @@ class MSMTester(object):
         self._labels = {}
 
         for tab_name in self._tab_names:
-            frame = tk.Frame(self._notebook, bg=tk_color_from_rgb(self._COLORS['bg']))
+            frame = tk.Frame(self._notebook, bg=tk_color_from_rgb(COLOR_SCHEME['bg']))
             self._notebook.add(frame, text=tab_name)
             self._frames[tab_name] = frame
 
-            img = Image.new('RGB', self._img_size, color=self._COLORS['bg'])
+            img = Image.new('RGB', self._img_size, color=COLOR_SCHEME['bg'])
             label = tk.Label(frame, image=ImageTk.PhotoImage(img))
             label.pack(fill=tk.BOTH, expand=True)
             self._labels[tab_name] = label
