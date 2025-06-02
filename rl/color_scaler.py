@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import logging
 
-from colors import SKY_BLUE
+from colors import _SKY_BLUE as SKY_BLUE
 
 class ColorScaler(object):
 

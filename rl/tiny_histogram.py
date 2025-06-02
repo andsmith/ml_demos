@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import logging
-from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
+from colors import _COLOR_BG as COLOR_BG, _COLOR_LINES as COLOR_LINES, _COLOR_TEXT as COLOR_TEXT
 from util import calc_font_size
 
 def get_n_bins(values):

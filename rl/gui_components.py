@@ -47,7 +47,8 @@ import numpy as np
 from game_util import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
-from colors import COLOR_BG, COLOR_LINES, SKY_BLUE as DARK_GRAY, UI_COLORS
+from colors import UI_COLORS, _COLOR_BG as COLOR_BG,  _COLOR_LINES as COLOR_LINES,_DARK_GRAY as DARK_GRAY
+from colors import COLOR_SCHEME
 import tkinter as tk
 from PIL import Image, ImageTk
 from copy import deepcopy

@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import cv2
 from tic_tac_toe import Game, Mark, Result
-from colors import get_n_colors, shade_color, NEON_GREEN, OFF_WHITE_RGB
+from colors import get_n_colors, shade_color, _NEON_GREEN as NEON_GREEN, _OFF_WHITE_RGB as OFF_WHITE_RGB
 from drawing import GameStateArtist
 from color_scaler import ColorScaler
 from tiny_histogram import MultiHistogram
