@@ -10,7 +10,6 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from PIL import Image, ImageTk
 import numpy as np
-from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT, NEON_BLUE, NEON_GREEN, NEON_RED
 from gui_base import Panel
 from util import tk_color_from_rgb, get_clobber_free_filename
 from layout import LAYOUT, WIN_SIZE
@@ -44,11 +43,11 @@ class StatusControlPanel(Panel):
         self._n_status_lines = 8
         y1 = .50
         y2 = .82
-        self._status_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._status_frame = tk.Frame(self._frame, bg=self._color_bg)
         self._status_frame.place(relx=0, rely=0, relwidth=1, relheight=y1)
-        self._run_control_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._run_control_frame = tk.Frame(self._frame, bg=self._color_bg)
         self._run_control_frame.place(relx=0, rely=y1, relwidth=1., relheight=y2-y1)
-        self._button_frame = tk.Frame(self._frame, bg=self._bg_color)
+        self._button_frame = tk.Frame(self._frame, bg=self._color_bg)
         self._button_frame.place(relx=0.0, rely=y2, relwidth=1., relheight=1-y2)
         self._frame.bind("<Configure>", self._on_resize)
 
@@ -92,7 +91,7 @@ class StatusControlPanel(Panel):
         # add new status labels:
         status_title = tk.Label(self._status_frame, text="Status",
                                 font=LAYOUT['fonts']['title'],
-                                bg=self._bg_color, fg=self._text_color, anchor="w", justify="left")
+                                bg=self._color_bg, fg=self._color_text, anchor="w", justify="left")
         status_title.pack(side=tk.TOP, fill=tk.X, padx=TITLE_INDENT, pady=4)
 
     def _init_status(self):
@@ -101,7 +100,7 @@ class StatusControlPanel(Panel):
         """
         self._status_labels = []
         for i in range(self._n_status_lines):
-            label = tk.Label(self._status_frame, text="", bg=self._bg_color, anchor="w", justify="left")
+            label = tk.Label(self._status_frame, text="", bg=self._color_bg, anchor="w", justify="left")
             label.pack(side=tk.TOP, fill=tk.X, padx=ITEM_INDENT, pady=0)
             self._status_labels.append(label)
 
@@ -135,7 +134,7 @@ class StatusControlPanel(Panel):
         Below status, left half of the panel.
         """
         breakpoint_label = tk.Label(self._run_control_frame, text="Checkpoints",
-                                    bg=self._bg_color, font=LAYOUT['fonts']['title'], anchor="w", justify="left")
+                                    bg=self._color_bg, font=LAYOUT['fonts']['title'], anchor="w", justify="left")
         breakpoint_label.pack(side=tk.TOP, fill=tk.X, padx=TITLE_INDENT, pady=4)
 
         self._add_spacer(frame=self._run_control_frame)
@@ -159,7 +158,7 @@ class StatusControlPanel(Panel):
         # add new options:
         for key, text in alg_options.items():
             var = tk.IntVar()
-            check = tk.Checkbutton(self._run_control_frame, text=text, variable=var, bg=self._bg_color,
+            check = tk.Checkbutton(self._run_control_frame, text=text, variable=var, bg=self._color_bg,
                                    font=LAYOUT['fonts']['default'], anchor="w", justify="left", command=self._on_control_change)
             check.pack(side=tk.TOP, fill=tk.X, padx=10, pady=0)
             self._run_control_options.append((check, var, key))
@@ -178,13 +177,13 @@ class StatusControlPanel(Panel):
         self._add_spacer(20, frame=self._button_frame)
         # "Clear breakpoints" button:
         self._clear_button = tk.Button(self._button_frame, text="Clear Stops",
-                                       font=LAYOUT['fonts']['buttons'], bg=self._bg_color,
+                                       font=LAYOUT['fonts']['buttons'], bg=self._color_bg,
                                        command=self._clear_breakpoints, padx=7, pady=5)
         self._clear_button.pack(side=tk.LEFT, pady=10, padx=5)
 
         # "Go/Stop" button
         self._go_button = tk.Button(self._button_frame, text="Go",
-                                    font=LAYOUT['fonts']['buttons'], bg=self._bg_color,
+                                    font=LAYOUT['fonts']['buttons'], bg=self._color_bg,
                                     command=self._go_stop, padx=7, pady=5)
         self._go_button.pack(side=tk.LEFT, pady=10, padx=5)
 

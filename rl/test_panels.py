@@ -3,7 +3,7 @@ Algorithm selection, state load/save/reset, fullscreen, start game.
 Fake algorithm (bouncing circles/squares)
 Fake app (uses real pannels)
 """
-
+'''
 from policy_eval import PolicyEvalDemoAlg
 from collections import OrderedDict
 import tkinter as tk
@@ -35,9 +35,7 @@ class TestDemoAlg(PolicyEvalDemoAlg):
 
     def __init__(self, *args, **kwargs):
         self._state = None
-        self._bkg_color_rgb = COLOR_BG
-        self._text_color_rgb = COLOR_TEXT
-        self._line_color_rgb = COLOR_LINES
+        self._colors = COLOR_SCHEME
         self._tab_img_cache = {'paused': {}, 'running': {}}
         self._tab_img_size = None
         self.reset_state()
@@ -160,3 +158,4 @@ class TestDemoAlg(PolicyEvalDemoAlg):
     def get_str():
         return "Test Algorithm (Circles)"
 
+'''

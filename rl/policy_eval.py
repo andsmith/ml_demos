@@ -44,7 +44,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.app = app
         self.env = app.env
         self._embedding = self._make_embedding()
-        
+
         super().__init__(app=app)
         self.updatable_states = self.app.env.get_nonterminal_states()
         self.terminal_states = self.app.env.get_terminal_states()
@@ -132,7 +132,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         else:
             status += [("", font_default),]
 
-        status += [('N Stop States: %i' % len(self._stop_states), font_default),]
+        status += [('N Stop States: %i' % len(self.app.selected), font_default),]
 
         return status
 
@@ -179,7 +179,9 @@ class PolicyEvalDemoAlg(DemoAlg):
         # values_key_dict
         # updates_key_dict
 
-        tabs = OrderedDict((('state', FullStateContentPage(self, self._embedding, keys=full_key_dict)),))
+        tabs = OrderedDict((('state', {'disp_text': "States",
+                                       'tab_content': FullStateContentPage(self, self._embedding, keys=full_key_dict)}),
+                            ))
         # ('values', ValueFunctionContentPage(self,  embedding, as_delta=False, keys = [state_key,value_color_key])),
         # ('updates', ValueFunctionContentPage(self, embedding, as_delta=True, keys = [state_key, delta_color_key]))
 
@@ -187,7 +189,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def get_tabs(self):
         return self._tabs
-    
+
     def load_state(self, filename):
         """
         Load the state from a file.
@@ -395,7 +397,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def get_viz_image(self, size, control_point, is_paused):
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-        img[:] = self._colors['bg']
+        img[:] = COLOR_SCHEME['bg']
 
         artist = GameStateArtist(40)
         if self.state is not None:
@@ -405,13 +407,13 @@ class PolicyEvalDemoAlg(DemoAlg):
             img[y:y+h, x:x+w] = icon
 
         text = "Phase: %s" % (self.pi_phase.name,)
-        cv2.putText(img, text, (10, 100), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
+        cv2.putText(img, text, (10, 100), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         text = "ctrl-pt: %s" % (control_point,)
-        cv2.putText(img, text, (10, 200), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
+        cv2.putText(img, text, (10, 200), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         text = "paused: %s" % (is_paused,)
-        cv2.putText(img, text, (10, 300), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
+        cv2.putText(img, text, (10, 300), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         text = "%f" % (np.random.randn(),)
-        cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
+        cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         return img
 
 

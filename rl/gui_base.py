@@ -14,16 +14,18 @@ class Panel(ABC):
     Every panel has a frame.
     """
 
-    def __init__(self, app, bbox_rel, margin_rel=0.0):
+    def __init__(self, app, bbox_rel,color_scheme={}, margin_rel=0.0):
         """
 
         """
+        colors = COLOR_SCHEME.copy()
+        colors.update(color_scheme)
         self.app = app
         self._bbox_rel = bbox_rel
-        self._bg_color = tk_color_from_rgb(COLOR_SCHEME['bg'])
-        self._text_color = tk_color_from_rgb(COLOR_SCHEME['text'])
-        self._line_color = tk_color_from_rgb(COLOR_SCHEME['lines'])
-        self._frame = tk.Frame(master=self.app.root, bg=self._bg_color)
+        self._color_bg = tk_color_from_rgb( colors['bg'])
+        self._color_text = tk_color_from_rgb(colors['text'])
+        self._color_lines = tk_color_from_rgb(colors['lines'])
+        self._frame = tk.Frame(master=self.app.root, bg=self._color_bg)
 
         y_margin = margin_rel / (WIN_SIZE[1] / WIN_SIZE[0])
 
@@ -65,7 +67,7 @@ class Panel(ABC):
         :param height:  Height of the spacer in pixels.
         """
         frame = self._frame if frame is None else frame
-        label = tk.Label(frame, text="", bg=self._bg_color, font=('Helvetica', height))
+        label = tk.Label(frame, text="", bg=self._color_bg, font=('Helvetica', height))
         label.pack(side=tk.LEFT, fill=tk.X, pady=0)
 
     def get_size(self):

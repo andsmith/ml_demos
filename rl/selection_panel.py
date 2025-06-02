@@ -8,7 +8,7 @@ import tkinter as tk
 import numpy as np
 from gui_base import Panel
 from layout import LAYOUT, TITLE_INDENT
-from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT, COLOR_URGENT
+from colors import COLOR_SCHEME
 from util import tk_color_from_rgb
 
 
@@ -27,20 +27,24 @@ class SelectionPanel(Panel):
         :param app: The main application object.
         :param alg_types: List of algorithm types to display.
         """
+        # TODO:  Control these from algorithm-params box:
+        self.opp_n_rules = 2  # number of rules for heuristic opponent(0-6)
+        self._pending_opp_n_rules = None
+
         self._alg_types = alg_types
         self._bbox_rel = bbox_rel
         self._algs_by_name = {alg_type.get_name(): alg_type for alg_type in alg_types}
         self.cur_alg_name = alg_types[0].get_name()  # selected algorithm type
         self._pending_alg_name = None  # algorithm to be started after "RESET" button is pressed
-
+        # Set colors before SUPER call
+        self._color_urgent = tk_color_from_rgb(COLOR_SCHEME['urgent'])
+        
         super().__init__(app=app, bbox_rel=bbox_rel, margin_rel=margin_rel)
+
         # Change colors after SUPER call
-        self._color_lines = tk_color_from_rgb(COLOR_LINES)
-        self._color_bg = tk_color_from_rgb(COLOR_BG)
-        self._color_text = tk_color_from_rgb(COLOR_TEXT)
-        self._color_urgent = tk_color_from_rgb(COLOR_URGENT)
-        self.opp_n_rules = 2  # number of rules for heuristic opponent(0-6)
-        self._pending_opp_n_rules = None
+        self._color_lines = tk_color_from_rgb(COLOR_SCHEME['lines'])
+        self._color_bg = tk_color_from_rgb(COLOR_SCHEME['bg'])
+        self._color_text = tk_color_from_rgb(COLOR_SCHEME['text'])
 
 
     def _init_widgets(self):

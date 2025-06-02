@@ -9,7 +9,6 @@ import tkinter as tk
 import tkinter.ttk as ttk
 from PIL import Image, ImageTk
 import numpy as np
-from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT, NEON_BLUE, NEON_GREEN, NEON_RED
 from gui_base import Panel
 from util import tk_color_from_rgb, get_clobber_free_filename
 from layout import LAYOUT, WIN_SIZE, TITLE_INDENT
@@ -114,8 +113,8 @@ class TabPanel(AlgDepPanel):
            Whoever makes the tab imges needs to know the new size, etc.
         """
         self._tab_content = tab_content
-        names = tab_content['names_in_order']
-        disp_names = tab_content['display_names']
+        names = [name for name in tab_content.keys()]
+        disp_names = {tab_name:tab_content[tab_name]['disp_text'] for tab_name in names}
         self._tab_name_by_disp = {disp_names[tab_name]: tab_name for tab_name in names}
         # Clear old tabs:
         for tab, img_label in self._tabs.values():
@@ -126,10 +125,10 @@ class TabPanel(AlgDepPanel):
         for tab_name in names:
             tab_disp_name = disp_names[tab_name]
             # Create a new frame for the tab:
-            tab_frame = tk.Frame(self._notebook, bg=self._bg_color)
+            tab_frame = tk.Frame(self._notebook, bg=self._color_bg)
             tab_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
             # Create a label for the tab to hold the image (filling the whole tab frame):
-            img_label = tk.Label(tab_frame, bg=self._bg_color)
+            img_label = tk.Label(tab_frame, bg=self._color_bg)
             img_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
             img_label.bind("<Button-1>", lambda event: self._on_mouse_click(event, tab_name))
@@ -217,7 +216,7 @@ class VisualizationPanel(AlgDepPanel):
 
     def _init_widgets(self):
         # no widgets, just a label for the viz image
-        self._viz_label = tk.Label(self._frame, bg=self._bg_color)
+        self._viz_label = tk.Label(self._frame, bg=self._color_bg)
         self._viz_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
     def _on_resize(self, event):

@@ -18,23 +18,23 @@ from dynamic_prog import DynamicProgDemoAlg, InPlaceDPDemoAlg
 from q_learning import QLearningDemoAlg
 from policy_grad import PolicyGradientsDemoAlg
 from layout import LAYOUT, WIN_SIZE
-from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
+from colors import COLOR_SCHEME
 from selection_panel import SelectionPanel
 from reinforcement_base import Environment
 from tic_tac_toe import Game
 from game_base import Mark, TERMINAL_REWARDS, get_reward
-from alg_panels import StatePanel, VisualizationPanel
+from alg_panels import TabPanel, VisualizationPanel
 from status_ctrl_panel import StatusControlPanel
 import time
 import pickle
 from threading import Event
 from baseline_players import HeuristicPlayer
 # Will display in this order:
-from test_panels import TestDemoAlg
+#from test_panels import TestDemoAlg
 from util import tk_color_from_rgb
 #from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
-ALGORITHMS = [TestDemoAlg, PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
+ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
               QLearningDemoAlg, PolicyGradientsDemoAlg]
 
 AGENT_MARK = Mark.X  # The agent's mark in the game.
@@ -79,7 +79,7 @@ class RLDemoApp(object):
 
     def _init_tk(self):
         self.root = Tk()
-        self.root.configure(bg=tk_color_from_rgb(COLOR_LINES))
+        self.root.configure(bg=tk_color_from_rgb(COLOR_SCHEME['lines']))  # TODO: Switch to 'bg' after debug
         self.root.title("Reinforcement Learning Demo")
         self.root.geometry(f"{WIN_SIZE[0]}x{WIN_SIZE[1]}")
         # Set background color to black.
@@ -99,7 +99,7 @@ class RLDemoApp(object):
 
         # Create panels that need to know about the algorithm:
         self._status_control_panel = StatusControlPanel(self, self._alg, LAYOUT['frames']['control'],margin_rel = LAYOUT['margin_rel'])
-        self._state_panel = StatePanel(self, self._alg, LAYOUT['frames']['state-tabs'],margin_rel = LAYOUT['margin_rel'])
+        self._state_panel = TabPanel(self, self._alg, LAYOUT['frames']['state-tabs'], margin_rel=LAYOUT['margin_rel'])
         self._visualization_panel =VisualizationPanel(self, self._alg, LAYOUT['frames']['step-visualization'],margin_rel = LAYOUT['margin_rel'])
 
     def start_alg(self):
