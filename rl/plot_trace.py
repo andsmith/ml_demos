@@ -6,8 +6,7 @@ import cv2
 import logging
 from drawing import GameStateArtist
 from util import write_lines_in_bbox, get_font_scale
-from game_base import Mark, Result, WIN_MARKS
-from colors import COLOR_BG, COLOR_LINES, COLOR_TEXT
+from game_base import Mark
 import matplotlib.pyplot as plt
 from layout import LAYOUT
 

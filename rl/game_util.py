@@ -2,7 +2,6 @@
 Visualize the value function of a policy as it's updated.
 """
 import logging
-from colors import COLOR_BG, COLOR_LINES, RED, GREEN, MPL_BLUE_RGB, MPL_GREEN_RGB, MPL_ORANGE_RGB
 from game_base import Mark, Result
 from layer_optimizer import SimpleTreeOptimizer  # for horizontal sorting
 from node_placement import FixedCellBoxOrganizer, FixedCellWithKey  # for 2d embedding and vertical sorting

@@ -61,7 +61,7 @@ class PolicyEvaluationResultViz(object):
         self._color_key = ProbabilityColorKey(size=self._color_key_size)
         self._cur_value = None  # mouseover
         self._cur_sample = None
-        self._results = ResultSet(self._player, self._opp)
+        self._results = ResultSet(self._player)
 
     def play(self, n_games=200):
         match = Match(self._pi, self._opp_pi)

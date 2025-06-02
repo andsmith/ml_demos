@@ -34,7 +34,7 @@ from test_panels import TestDemoAlg
 from util import tk_color_from_rgb
 #from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
-ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
+ALGORITHMS = [TestDemoAlg, PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDPDemoAlg,
               QLearningDemoAlg, PolicyGradientsDemoAlg]
 
 AGENT_MARK = Mark.X  # The agent's mark in the game.
@@ -54,7 +54,7 @@ class RLDemoApp(object):
         self.shutdown = False  # set to True to signal the app to exit
         self.paused = True
         self._advance_event = Event()  # Event to signal the algorithm to advance.
-
+        self.selected = []  # selected states are app-wide
         self._init_ctrl_point = None  # Start paused here.
         # For running continuous modes:
         self._timing_info = {'t_last_refresh': time.perf_counter(),  # for refreshing the window
@@ -63,7 +63,19 @@ class RLDemoApp(object):
                              'n_frames': 0,
                              'fps': 0.0}
         self._ticks_skipped = 0
-        self._init_alg_panels()
+        self._init_alg_panels()     
+
+    def toggle_selection(self, state):
+        """
+        Toggle the selection of a state.
+        :param state: The state to toggle.
+        """
+        if state in self.selected:
+            self.selected.remove(state)
+        else:
+            self.selected.append(state)
+
+        logging.info("Changed select of state to:  %s\n%s" % (state in self.selected, state))
 
     def _init_tk(self):
         self.root = Tk()

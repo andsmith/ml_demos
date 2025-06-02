@@ -2,10 +2,11 @@ import numpy as np
 from game_base import Mark, Result, WIN_MARKS, get_cell_center
 from util import get_annulus_polyline, float_rgb_to_int
 import cv2
-from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_X, COLOR_O, COLOR_DRAW_SHADE, COLOR_SHADE, NEON_GREEN
-MARKER_COLORS = {Mark.X: COLOR_X,
-                 Mark.O: COLOR_O,
-                 Mark.EMPTY: COLOR_BG}
+from colors import COLOR_SCHEME
+
+MARKER_COLORS = {Mark.X: COLOR_SCHEME['color_x'],
+                 Mark.O: COLOR_SCHEME['color_o'],
+                 Mark.EMPTY: COLOR_SCHEME['bg']}
 
 _SHIFT_BITS = 5
 _SHIFT = 1 << _SHIFT_BITS
@@ -148,7 +149,7 @@ class GameStateArtist(object):
         :param highlight_choice: index into action_dist, which action was chosen, to outlined.
         :returns: list of (bounding_box, probability) tuples for the color key mouseover action.
         """
-        highlight_color = NEON_GREEN if highlight_color is None else highlight_color
+        highlight_color = COLOR_SCHEME['highlight'] if highlight_color is None else highlight_color
 
         size = GameStateArtist.get_size(self._space_size)
 
@@ -174,7 +175,7 @@ class GameStateArtist(object):
         return img, bboxes
 
     def _draw_grid_lines(self, img, term):
-        grid_line_color = COLOR_LINES
+        grid_line_color = COLOR_SCHEME['lines']
 
         size = GameStateArtist.get_size(self._space_size)
 
@@ -184,7 +185,7 @@ class GameStateArtist(object):
         if size != 'micro':
             for i in [1, 2]:
                 # always dark or draw color
-                line_color = grid_line_color if not (term is not None and term == Result.DRAW) else COLOR_DRAW
+                line_color = grid_line_color if not (term is not None and term == Result.DRAW) else COLOR_SCHEME['color_draw']
                 z_0 = i * (self._space_size + thickness)
                 z_1 = z_0 + thickness
 
@@ -199,7 +200,7 @@ class GameStateArtist(object):
 
         # Create the image
         img = np.zeros((img_s, img_s, 3), dtype=np.uint8)
-        img[:, :] = COLOR_BG
+        img[:, :] = COLOR_SCHEME['bg']
 
         return img
 
@@ -208,13 +209,11 @@ class GameStateArtist(object):
         Return an image of the game board & its dimension dictionary.
 
         :param dims: dict, output of get_image_dims
-        :param color_bg: color of the background
-        :param color_lines: color of the lines
         :param draw_box: draw a bounding box around the grid (with (non)terminal color)
             if None, only draw the box around terminal states
 
         """
-        highlight_color = NEON_GREEN if highlight_color is None else highlight_color
+        highlight_color = COLOR_SCHEME['highlight'] if highlight_color is None else highlight_color
 
         size = GameStateArtist.get_size(self._space_size)
 
@@ -232,9 +231,9 @@ class GameStateArtist(object):
                 self._add_marker(img, row=i, col=j, marker=game.state[i, j],highlight_color=h_col, no_marker=no_marker)
 
         # shade the whole image (including the bbox area) is averaged with the winner/draw color.
-        shade_color = COLOR_SHADE if term is None else {Result.DRAW: COLOR_DRAW_SHADE,
-                                                        Result.X_WIN: COLOR_X,
-                                                        Result.O_WIN: COLOR_O}[term]
+        shade_color = COLOR_SCHEME['color_shade'] if term is None else {Result.DRAW: COLOR_SCHEME['color_draw_shade'],
+                                                        Result.X_WIN: COLOR_SCHEME['color_x'],
+                                                        Result.O_WIN: COLOR_SCHEME['color_o']}[term]
         weight = 0.25 if term is not None else .1
         tile = np.float32(img)
         shade_color = np.float32(shade_color)
@@ -244,9 +243,9 @@ class GameStateArtist(object):
         # Draw win lines, connecting a row of 3.
         if size in ['micro',  'tiny']:  # Skip for tiny images
             return img
-        win_line_color = {Result.DRAW: COLOR_DRAW,
-                          Result.X_WIN: COLOR_X,
-                          Result.O_WIN: COLOR_O}[term] if term is not None else COLOR_LINES
+        win_line_color = {Result.DRAW: COLOR_SCHEME['color_draw'],
+                          Result.X_WIN: COLOR_SCHEME['color_x'],
+                          Result.O_WIN: COLOR_SCHEME['color_o']}[term] if term is not None else COLOR_SCHEME['lines']
         win_lines = self.get_win_lines(game)
         for line in win_lines:
             self.draw_win_line(img, line, win_line_color)
@@ -379,7 +378,7 @@ class GameStateArtist(object):
                     _draw_line((x1, y0), (x0, y1), color, x_thickness)
                 else:
                     _circle_at(center, rad, color, -1)
-                    _circle_at(center, rad_inner, COLOR_BG, -1)
+                    _circle_at(center, rad_inner, COLOR_SCHEME['bg'], -1)
 
             if highlight_color is not None:
                 if size == 'normal':

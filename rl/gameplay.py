@@ -3,14 +3,14 @@ Play agents against each other.
 Watch the game unfold, or run many trials.
 """
 import numpy as np
-from tic_tac_toe import Game
+from tic_tac_toe import Game, GameTree
 from game_base import Mark, Result, get_reward, WIN_MARKS
 from baseline_players import RandomPlayer, HeuristicPlayer
 from multiprocessing import Pool, cpu_count
 import time
 import logging
 from layout import LAYOUT
-from colors import COLOR_X, COLOR_O, COLOR_DRAW
+from colors import COLOR_SCHEME
 # VALID_STATES = Game.enumerate_states()[1]
 
 from plot_trace import TraceArtist
@@ -127,9 +127,9 @@ class ResultSet(object):
     Accumulate traces.  Determine wins/losses/draws, count unique traces
     """
 
-    def __init__(self, player_mark, opponent_mark):
+    def __init__(self, player_mark):
         self._player_mark = player_mark
-        self._opp_mark = opponent_mark
+        self._opp_mark = GameTree.opponent(player_mark)
         self._cur_sample = None  # dict of permutations of wins/draw/loss (index into self._traces  )
         self._n_games = 0
 
@@ -367,9 +367,9 @@ class ResultSet(object):
                     x = group_bbox['x'][0] + trace_pad
                     y += trace_h 
 
-        _draw_box_at(img, COLOR_X, win_bbox, thickness=group_bar_thickness)
-        _draw_box_at(img, COLOR_DRAW, draw_bbox, thickness=group_bar_thickness)
-        _draw_box_at(img, COLOR_O, loss_bbox, thickness=group_bar_thickness)
+        _draw_box_at(img, COLOR_SCHEME['color_x'], win_bbox, thickness=group_bar_thickness)
+        _draw_box_at(img, COLOR_SCHEME['color_draw'], draw_bbox, thickness=group_bar_thickness)
+        _draw_box_at(img, COLOR_SCHEME['color_o'], loss_bbox, thickness=group_bar_thickness)
 
         def _get_sample(traces, inds):
             return [traces[i] for i in inds]
@@ -384,7 +384,7 @@ class ResultSet(object):
 def test_result_set(n=100):
     player = HeuristicPlayer(Mark.X, n_rules=2)
     opponent = HeuristicPlayer(Mark.O, n_rules=2)
-    rs = ResultSet(player.player, opponent.player)
+    rs = ResultSet(player.player)
     for _ in range(n):
         match = Match(player, opponent)
         rs.add_trace(match.play_and_trace(order=0, verbose=False))

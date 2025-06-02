@@ -10,6 +10,8 @@ from abc import ABC, abstractmethod
 import pickle
 from threading import Event, Thread, get_ident
 import logging
+from layout import LAYOUT
+import numpy as np
 
 # from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
@@ -27,11 +29,11 @@ class DemoAlg(ABC):
         """
         :param app: The main app object.
         :param advance_event: Event to signal when the algorithm should advance.
-        """        
+        """
         self.app = app
 
         self._env = env
-        self._img_mgr = self._make_state_image_manager()  # Get the state/viz image manager for this algorithm.
+        self._content = self._make_content_manager()  # Get the state/viz image manager for this algorithm.
 
         self._go_signal = None  # Used to signal the algorithm to advance/continue.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
@@ -49,8 +51,42 @@ class DemoAlg(ABC):
 
         self._stop_states = []  # user-set breakpoints, states where the algorithm should pause.
 
-    def get_image_manager(self):
-        return self._img_mgr
+    def get_content_manager(self):
+        return self._content
+    
+    @staticmethod
+    @abstractmethod
+    def _get_key_info(self):
+        """
+        Return layout of the key area (upper right) for content tabs.
+        :return:  dict('key1_name': {
+                            'size': {
+                                'width': w, 'height': h}},
+                        ... })
+        """
+        pass
+
+    def _calc_key_placement(self):
+        # Full State Tab just uses the state key, on the left in the key area, so sum up the space for the other keys
+        keys = self._get_key_info()
+
+        key_spacing = LAYOUT['key_h_pad']
+        total_key_height = np.max([k_size['height'] for k_size in keys['sizes'].values()]) + \
+            key_spacing * (len(keys['sizes']) - 1)  # no space on
+
+        total_key_width = np.sum([k_size['width'] for k_size in keys['sizes'].values()]) + \
+            key_spacing * (len(keys['sizes']) - 1)
+        
+        x = - total_key_width
+        x_offsets = {}
+        key_sizes = {}
+        for key_name, k_size in keys['sizes'].items():
+            x_offsets[key_name] = x
+            key_sizes[key_name] = (k_size['width'], total_key_height)
+            x += k_size['width'] + key_spacing
+            
+        total_key_size = (total_key_width, total_key_height)
+        return x_offsets, key_sizes, total_key_size
 
     def toggle_stop_state(self, state):
         if state in self._stop_states:
@@ -68,14 +104,6 @@ class DemoAlg(ABC):
 
     def get_stop_states(self):
         return self._stop_states
-
-    @abstractmethod
-    def _make_state_image_manager(self):
-        """
-        Get the state image manager for this algorithm.
-        :return: Subclass of StateImageManager that manages the state images for this algorithm.
-        """
-        pass
 
     def advance(self):
         """
@@ -99,7 +127,7 @@ class DemoAlg(ABC):
         self.current_ctrl_pt = control_point
 
         do_pause = self._run_control[control_point]
-        
+
         if 'stops' in self._run_control and self._run_control['stops']:
             if self.state is not None and self.state in self._stop_states:
                 do_pause = True
@@ -142,9 +170,9 @@ class DemoAlg(ABC):
 
     @staticmethod
     @abstractmethod
-    def get_state_tab_info():
+    def get_tab_content():
         """
-        ordered dict of {tab_name: display_name} for the state image panel.
+        ordered dict of {tab_name: TabContentPage object} for the state image panel.
         :return: A dictionary of tab names and their display names.
         """
         pass

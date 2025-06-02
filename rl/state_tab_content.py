@@ -19,217 +19,43 @@ from scipy.spatial import KDTree
 from color_key import ColorKey, ProbabilityColorKey
 from state_key import StateKey
 from gameplay import ResultSet, Match
-
-# BOX_SIZES = [22, 12, 12, 12, 12, 12]  # good for single value function
-SPACE_SIZES = [7, 2, 2, 2, 2, 3]
-
-
-######
-#  NOTE on special tabs:
-#    - 'states' tab shows state icons (not values) in their embedding, does not have a color key
-#    - 'results' tab shows a results_viz image, not a state embedding.
-######
+from tab_content import TabContentPage
+from state_embedding import StateEmbedding
 
 
-class StateImageManager(ABC):
-    """
-    Base class for images that go into the state panel tabs.
-    There is a tiny icon for each possible RL state, can used directly to make the image, or
-       a colored box can be drawn in its place to represent a value, etc.
-
-    This class also allows mouse interaction, selecting/unselecting/mouseovering states for
-    breakpoints in the algorithm loop.
-    """
-
-    def __init__(self, app, env, tabs, key_sizes):
+class FullStateContentPage(TabContentPage):
+    def __init__(self, app, env, embedding, bg_color, key_info):
         """
         :param app:  The application instance, used to notify about state changes.
         :param env:  The environment to use.
-        :param tabs:  list of strings, names of tabs (for dict references, not display)
-        :param key_sizes:  {'state': (width, height), 'color': (width, height)}
+        :param bg_color:  The background color to use for the image. Defaults to COLOR_BG.
+        :param embedding:  The StateEmbedding instance to use for drawing states.
         """
+        super().__init__(app, env, bg_color, key_info)
         self._app = app
-        self._size = None
-        self.tabs = tabs
         self._env = env
-        self._cur_state = None  # highlight in images
-
-        self._box_placer = None
-        self._box_centers = None
-        self._box_tree = None
-        self._state_key = None  # Use the same for all tabs.
-        self._key_sizes = key_sizes
-        self._key_h_pad = LAYOUT['key_h_pad']
-        key_height = key_sizes['color'][1]
-
-        if key_height != key_sizes['state'][1]:
-            raise ValueError("Key sizes must have the same height for state and color keys.")
-        
-        self._total_key_size = (key_sizes['color'][0] + key_sizes['state'][0]+ self._key_h_pad ,
-                                key_height)
-
-        self.terminal_states = env.get_terminal_states()
-        self.updatable_states = env.get_nonterminal_states()
-        self.all_states = self.updatable_states + self.terminal_states
-        self.states_by_layer = sort_states_into_layers(self.all_states)
-        self.layers_per_state = {state['id']: i for i, layer in enumerate(self.states_by_layer) for state in layer}
-        self._state_icons, self._box_sizes = self._get_state_icons()
-
-        self.mouseovered = None
-        self.selected = []
-
-        # Base images for states/values, updated as algorithm runs.
-        self._base_images = {tab: None for tab in tabs}
-        # Which states are selected/moused over, etc., drawn over base iamges
-        self._marked_images = {tab: None for tab in tabs}
-        # Images for displaying states with annotations of the learnining algorithm's step, drawn over marked images.
-        self._disp_images = {tab: None for tab in tabs}
-
-        self._size_cache = {}
-
-        logging.info(f"StateImageManager initialized with {len(self.all_states)} states")
-
-        self.clear_images()
-
-    def clear_images(self, tabs=None, marked_only=False):
-        """
-        Clear the images for the tabs.
-        :param tabs:  list of tabs to clear, or None to clear all.
-        :param marked_only:  If True, only clear the marked/display images (e.g. if a mouse interaction occurs).
-        """
-        # print("Clearing state images for tabs: %s (Disp only:  %s)" % (tabs, disp_only))
-        tabs_to_clear = self.tabs if tabs is None else tabs
-        tabs_to_clear = (tabs_to_clear,) if isinstance(tabs_to_clear, str) else tabs_to_clear
-
-        for tab in tabs_to_clear:
-            if not marked_only:
-                self._base_images[tab] = None
-
-            self._marked_images[tab] = None
-            self._disp_images[tab] = None
-
-    def set_size(self, new_size):
-        if new_size != self._size or new_size not in self._size_cache:
-            logging.info(f"StateImageManager resized to {new_size}")
-            self.clear_images()
-            self._size = new_size
-            if new_size in self._size_cache:
-                self._box_placer, self._box_centers, self._box_tree = self._size_cache[new_size]
-            else:
-                self._box_placer, self._box_centers, self._box_tree = self._calc_dims()
-                self._size_cache[new_size] = (self._box_placer, self._box_centers, self._box_tree)
-
-    def _get_state_at(self, x, y):
-        pos = np.array([x, y])
-        closest_ind = self._box_tree.query(pos)[1]
-        closest_state = self.all_states[closest_ind]
-        layer = self.layers_per_state[closest_state]
-        state_size = self._box_sizes[layer]
-        closest_center = np.array(self._box_centers[closest_ind])
-        dist = np.linalg.norm(pos - closest_center)
-        if dist < state_size / 2:
-            return closest_state
-        return None
-
-    def mouse_move(self, x, y, tab):
-        """
-        Update mouseovered state.
-        If it changes, invalidate display images.
-        """
-        new_mo_state = self._get_state_at(x, y)
-        if not (self.mouseovered is new_mo_state):
-            self.mouseovered = new_mo_state
-            self.clear_images(marked_only=True)
-            return True
-        return False
-
-    def mouse_click(self, x, y, tab):
-        new_click_state = self._get_state_at(x, y)
-        if new_click_state is None:
-            return False
-        self._toggle_selected(new_click_state)
-        return True
-
-    def _toggle_selected(self, state):
-        """
-        Toggle the selected state.
-        :param state:  The state to toggle.
-        """
-        if state in self.selected:
-            self.selected.remove(state)
-        else:
-            self.selected.append(state)
-        self.clear_images(marked_only=True)
-        self._app.toggle_stop_state(state)  # internal change, need to tell the app
-
-    def clear_selected(self):
-        """
-        externally cleared (not from user clicks)
-        """
-        n_selected = len(self.selected)
-        self.selected = []
-        if n_selected > 0:
-            logging.info(f"Cleared {n_selected} selected states.")
-            self.clear_images(marked_only=True)
-
-    def _calc_dims(self):
-        """
-        Calculate state layout.
-        """
-        # Place all game states into the image region
-        box_placer, _, _ = get_box_placer(self._size,
-                                          self.all_states,
-                                          box_sizes=self._box_sizes,
-                                          layer_vpad_px=1,
-                                          layer_bar_w=1,
-                                          player=self._env.player, key_size=self._total_key_size)
-
-        # Swap state positions so wins are on the right, losses on the left, draws in the middle, etc.
-        terminal_lut = {state: state.check_endstate() for state in self.all_states}
-        tree_opt = SimpleTreeOptimizer(image_size=self._size,
-                                       states_by_layer=self.states_by_layer,
-                                       state_positions=box_placer.box_positions,
-                                       terminal=terminal_lut)
-        new_positions = tree_opt.get_new_positions()
-        box_placer.box_positions = new_positions
-
-        # Make a KD tree to see which box the mouse is nearest.
-        box_centers = []
-        for state in self.all_states:
-            pos = box_placer.box_positions[state]
-            box_centers.append(((pos['x'][0] + pos['x'][1]) / 2,
-                                (pos['y'][0] + pos['y'][1]) / 2))
-        box_centers = np.array(box_centers)
-        box_tree = KDTree(box_centers)
-
-        # now we can calculate the position of the color key bounding box
-        # height is highest y of state boxes in row 1 (second row)
-        layer1_states = self.states_by_layer[1]
-        # box_placer.box_positions[layer1_states[0]['id']]
-
-        y_pad = box_placer.grid_shapes[1]['box_side_len']//3
-
-        y_tops = [box_placer.box_positions[state_info['id']]['y'][0] for state_info in layer1_states]
-        ck_height = np.min(y_tops) - y_pad
-
-        # Update the key heights
-        logging.info("Updating key height from %i to %i" % (self._key_sizes['color'][1], ck_height))
-        self._key_sizes['color'] = (self._key_sizes['color'][0], ck_height)
-        self._key_sizes['state'] = (self._key_sizes['state'][0], ck_height)
-                                                          
-        
-        # create the state key
-        self._state_key = StateKey(size = self._key_sizes['state'],)
-        self._state_key_pos = (self._size[0] - self._key_sizes['color'][0] -self._key_sizes['state'][0] -self._key_h_pad,  0)
-
-        return box_placer, box_centers, box_tree
+        self._bg_color = bg_color if bg_color is not None else COLOR_BG
+        self._embed = embedding
+        self._layout = LAYOUT['state_embedding']
+        self._state_icons = self._get_state_icons()
+        self._base_image = None  # Base image for the content page, used for mouseover and marking.
+        self._marked_image = None
+        self._key_info = key_info  # Information about the keys to draw, e.g., sizes, positions.
+        self._cur_state = None  # The state the algorithm is currently on, if set.
+        self._cur_box = None  # The box for the current state, if set.
 
     def _get_state_icons(self):
-        artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in SPACE_SIZES]
-        images = {state['id']: artists[layer_num].get_image(
-            state['id']) for layer_num, state_list in enumerate(self.states_by_layer) for state in state_list}
-        box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
-        return images, box_sizes
+        images = {state['id']: self._embed.artists[layer_num].get_image(
+            state['id']) for layer_num, state_list in enumerate(self._embed.states_by_layer) for state in state_list}
+        return images
+
+    def _draw_base(self):
+        size = self._embed.size
+        logging.info(f"Regenerating base image.")
+        img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+        img[:] = self._bg_color
+        img = self.box_placer.draw(images=self._state_icons, colors=None, show_bars=False, dest=img)
+        return img
 
     def set_current_state(self, state=None):
         old_cur_state = self._cur_state
@@ -243,45 +69,11 @@ class StateImageManager(ABC):
                 (old_cur_state != state):
             self.clear_images(marked_only=True)
 
-    def get_tab_img(self, tab, annotated=True):
-        if annotated:
-            if self._disp_images[tab] is None:
-                self._disp_images[tab] = self.draw_annotated(tab)
-            return self._disp_images[tab]
-        else:
-            if self._marked_images[tab] is None:
-                self._marked_images[tab] = self.draw_marked(tab)
-            return self._marked_images[tab]
-
-    @abstractmethod
-    def draw_base(self, tab):
-        """
-        Draw the base image for a tab.
-        :param tab:  The tab to draw.
-        :return:  The base image for the tab.
-        """
-        pass
-
-    @abstractmethod
-    def draw_marked(self, tab):
-        """
-        Draw the images with the selected/mouseovered states marked.
-        :param tab:  The tab to draw.
-        :return:  The annotated image for the tab.
-        """
-        pass
-
-    @abstractmethod
-    def draw_annotated(self, tab):
-        """
-        Draw the images with the selected/mouseovered states marked, and any additional annotations.
-        :param tab:  The tab to draw.
-        :return:  The annotated image for the tab.
-        """
-        pass
+    def get_tab_frame(self, annotated=True, selected=[]):
+        return super().get_tab_frame(annotated)
 
 
-class ValueFunctionSIM(StateImageManager):
+class ValueFunctionContentPage(FullStateContentPage):
     """
     State Image Manager for representing value funcitons / updates.
     Assigns colors to values, linearly interpolating the range.
@@ -290,7 +82,7 @@ class ValueFunctionSIM(StateImageManager):
     All states are initially visible, values are updated, etc.
     """
 
-    def __init__(self, app, env, tabs, value_ranges, colormap_names, bg_colors, key_sizes):
+    def __init__(self, app, env, alg):
         """
         :param env:  The environment to use.
         :param tabs:  list of strings, names of tabs (for dict references, not display)
@@ -305,8 +97,9 @@ class ValueFunctionSIM(StateImageManager):
 
         """
 
-        super().__init__(app, env, tabs, key_sizes)
-        self._cmaps = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
+        super().__init__(app, env)
+        # colormap for value function representation:
+        self._cmap = {tab: plt.get_cmap(colormap_names[tab]) for tab in tabs if tab != 'states'}
         ck_width, ck_height = key_sizes['color']
         self._ranges = value_ranges
         self._bg_colors = bg_colors
@@ -315,9 +108,9 @@ class ValueFunctionSIM(StateImageManager):
         self._color_keys = {tab: ColorKey(size=(ck_width, ck_height),
                                           cmap=self._cmaps[tab],
                                           range=self._ranges[tab])
-                            for tab in self.tabs if tab not in['results', 'states']}
+                            for tab in self.tabs if tab not in ['results', 'states']}
         self._color_keys['results'] = ProbabilityColorKey(size=(ck_width, ck_height))
-       
+
         self._values = {}
         self.reset_values()
 
@@ -400,7 +193,7 @@ class ValueFunctionSIM(StateImageManager):
             state_colors = {state: self.get_color(tab, self._values[tab].get(state, None)) for state in self.all_states}
             img = self._box_placer.draw(images=None, colors=state_colors, show_bars=False, dest=img)
             # Add a vertical line between the state key and the color key:
-            # v_line_x = self._size[0] - self._key_sizes['color'][0] 
+            # v_line_x = self._size[0] - self._key_sizes['color'][0]
             # v_line_bottom = self._key_sizes['color'][1]
             # img[0:v_line_bottom, v_line_x:v_line_x + 1] = COLOR_LINES
 
@@ -434,11 +227,11 @@ class ValueFunctionSIM(StateImageManager):
         if tab in self._color_keys:
             self._color_keys[tab].draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT,
                                        indicate_value=indicated_value)
-            
+
         # Draw the state key if not the state tab
         if self.mouseovered is not None:
             self._state_key.draw(img, self.mouseovered, pos=self._state_key_pos)
-            
+
         # Draw the state the algorithm is currently on, if set.
         if self._cur_state is not None:
             self._box_placer.draw_box(image=img,
@@ -455,7 +248,7 @@ class ValueFunctionSIM(StateImageManager):
         return img
 
 
-class PolicyEvalSIM(ValueFunctionSIM):
+class PolicyEvalSIM(FullStateContentPage):
     def __init__(self, app, env):
 
         tabs = ['states', 'values', 'updates']
@@ -470,32 +263,39 @@ class PolicyEvalSIM(ValueFunctionSIM):
         super().__init__(app, env, tabs, value_ranges, colormap_names, bg_colors, key_sizes)
 
     def get_state_update_order(self):
-        if self._box_placer is None:
+        if self.box_placer is None:
             logging.info("Warning: Box placer not initialized, cannot get update order.")
             return self.updatable_states
-        update_order = sorted(self.updatable_states, key=lambda s: self._box_placer.box_positions[s]['x'][0])
+        update_order = sorted(self.updatable_states, key=lambda s: self.box_placer.box_positions[s]['x'][0])
         return update_order
 
 
+'''
 class SimTester(object):
     """
     Simple TK app with 3 tabs, 1 frame in each (the state image).
     """
 
-    def __init__(self, size, env):
+    def __init__(self, size, env,player_policy):
         # args for Policy Eval tabs:
         self._start_time = time.perf_counter()
         self.current_tab_ind = 0
+        self._sim = PolicyEvalSIM(self, env)
+
         self._init_tk(size)
         self._init_values(env)
         self._init_tabs()
-        self._play()
+        self._player_mark = env.player
+        self._player_policy=player_policy
+        self._opp_policy = env.pi_opp
+        self._results = ResultSet(self._player_mark)
+        self._play(env)
 
-    def _play(self):
-        rs = ResultSet(self._env.player)
-        for _ in range(n):
-            match = Match(self._env.player, self._env.opponent)
-            rs.add_trace(match.play_and_trace(order=0, verbose=False))
+    def _play(self,env):
+        for _ in range(100):
+            match = Match(self._player_policy, self._opp_policy)
+            self._sim.add_result_trace(match.play_and_trace(order=0, verbose=False))
+        logging.info(f"Played %i matches." % (self._results.get_summary()['games']))
 
 
     def toggle_stop_state(self, state):
@@ -503,7 +303,6 @@ class SimTester(object):
 
     def _init_values(self, env):
 
-        self._sim = PolicyEvalSIM(self, env)
         self._tabs = self._sim.tabs
         vals = []
 
@@ -600,12 +399,14 @@ def test_state_image_manager(init_size=(1100, 980)):
     AGENT_MARK = Mark.X
     OPPONENT_MARK = Mark.O
     opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=2)
+    player_policy = HeuristicPlayer(mark=AGENT_MARK, n_rules=1)
     env = Environment(opp_policy, AGENT_MARK)
 
-    window = SimTester(init_size, env)
+    window = SimTester(init_size, env, player_policy=player_policy)
     window.start()
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     test_state_image_manager()
+'''

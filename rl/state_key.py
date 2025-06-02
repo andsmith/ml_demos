@@ -9,7 +9,6 @@ import cv2
 from drawing import GameStateArtist
 from tic_tac_toe import Game, Mark, Result
 
-from colors import COLOR_BG
 class StateKey(object):
     def __init__(self, size):
         self._size=None
@@ -48,9 +47,10 @@ def test_state_key():
     size = (170, 70)
     #size = (170, 150)
 
+    from colors import COLOR_SCHEME
 
     img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-    img[:] = COLOR_BG
+    img[:] = COLOR_SCHEME['bg']
 
     sk = StateKey(size)
 

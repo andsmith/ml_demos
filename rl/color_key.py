@@ -8,7 +8,7 @@ Show a spectrum with all colors, in order, print axis w/ticks under it.
 import numpy as np
 import cv2
 import logging
-from colors import COLOR_BG, COLOR_LINES
+from colors import COLOR_SCHEME
 import matplotlib.pyplot as plt
 
 from util import get_font_scale
@@ -268,7 +268,7 @@ def test_color_key():
         range = (-1.0, 1.0)
         ck = ColorKey(size=box_size, cmap=cmap, range=(-1.0, 1.0))
 
-        ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_LINES, indicate_value=indicated[i])
+        ck.draw(img, line_color=COLOR_SCHEME['lines'], text_color=COLOR_SCHEME['text'], indicate_value=indicated[i])
         keys.append(img)
         keys.append(np.zeros((10, box_w, 3), dtype=np.uint8))  # add a spacer between keys
 
@@ -283,7 +283,9 @@ def test_color_key():
 def test_probability_color_key():
     """
     Test the ProbabilityColorKey class.
-    """
+    """ 
+    COLOR_LINES = COLOR_SCHEME['lines']
+    COLOR_TEXT = COLOR_SCHEME['text']
     box_w = 300
     box_h = 60
     box_size = (box_w, box_h)
@@ -293,12 +295,12 @@ def test_probability_color_key():
 
     ck = ProbabilityColorKey(size=box_size)
     img = img_blank.copy()
-    imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_LINES))
+    imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT))
 
     for prob in[0.0, 0.25, 0.1234123512315, .9999, 1.0]:
         print(f"Drawing color key for probability {prob:.4f}")
         img = img_blank.copy()
-        imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_LINES, indicate_value=prob))
+        imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT, indicate_value=prob))
         
     img = np.concatenate(imgs, axis=0)
     cv2.imshow("Probability Color Key", img[:, :, ::-1])

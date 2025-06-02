@@ -3,7 +3,7 @@ from tic_tac_toe import Game
 from game_base import Mark, Result
 import numpy as np
 import cv2
-from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW
+from colors import COLOR_SCHEME
 from drawing import GameStateArtist
 
 import matplotlib.pyplot as plt
@@ -22,7 +22,7 @@ def test_grid_sizes():
     img_h_px = test_size_px * space_sizes.shape[1]
     img_w_px = test_size_px * space_sizes.shape[0]
     img = np.zeros((img_h_px, img_w_px, 3), dtype=np.uint8)
-    img[:, :] = COLOR_BG
+    img[:, :] = COLOR_SCHEME['bg']
     # Fill each grid with as many random game states as will fit, in rows and columns
     for test_row in range(space_sizes.shape[0]):
         y_top = test_row * test_size_px
@@ -69,7 +69,7 @@ def test_action_distributions():
     img_h_px = test_size_px * space_sizes.shape[0]
     img_w_px = test_size_px * space_sizes.shape[1]
     img = np.zeros((img_h_px, img_w_px, 3), dtype=np.uint8)
-    img[:, :] = COLOR_BG
+    img[:, :] = COLOR_SCHEME['bg']
     cmap = plt.get_cmap('gray')  # Use a colormap for the action distributions
     # Fill each grid with as many random game states as will fit, in rows and columns
     for test_row in range(space_sizes.shape[0]):

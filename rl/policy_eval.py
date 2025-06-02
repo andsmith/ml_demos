@@ -7,11 +7,16 @@ import layout
 from game_base import Mark, TERMINAL_REWARDS, get_reward
 from collections import OrderedDict
 import numpy as np
-from state_image_manager import PolicyEvalSIM
+from tab_content import PolicyEvalSIM
 from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
 import cv2
 from drawing import GameStateArtist
 import time
+
+from state_embedding import StateEmbedding
+from state_tab_content import  FullStateContentPage, ValueFunctionContentPage
+# TODO: import results viz tab
+
 
 class PIPhases(IntEnum):
     POLICY_EVAL = 0
@@ -20,12 +25,10 @@ class PIPhases(IntEnum):
 
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, env,alg_params): 
+    def __init__(self, app, env):  # ,alg_params):
 
-# TODO:   DemoAlg.get_options() shoudl return a dict of option types, 
-# then the alg_params dict should match it here.
-
-
+        # TODO:   DemoAlg.get_options() shoudl return a dict of option types,
+        # then the alg_params dict should match it here.
         """
         Initialize the algorithm with the app, GUI, environment, and discount factor.
 
@@ -47,14 +50,11 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.terminal_states = self._env.get_terminal_states()
 
         self._delta_v_tol = 1e-6
-        self.pi_seed = pi_seed
-        self.gamma = gamma
+        # self.pi_seed = pi_seed
+        # self.gamma = gamma
         self.reset_state()
 
         logging.info("PolicyEvalDemoAlg initialized.")
-
-    def _make_state_image_manager(self):
-        return PolicyEvalSIM(self.app,self._env)
 
     def reset_state(self):
         # start by learning v(s) for this policy:
@@ -83,9 +83,8 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         self.next_values = {}
 
-
     def _update_img_mgr(self, values=None, updates=None):
-        
+
         # Reset the image manager with the initial values.
         self._img_mgr.reset_values()
         if values is not None:
@@ -98,7 +97,6 @@ class PolicyEvalDemoAlg(DemoAlg):
             else:  # dict
                 for state, update in updates.items():
                     self._img_mgr.set_state_val(state, 'updates', update)
-
 
     def get_status(self):
         font_default = layout.LAYOUT['fonts']['status']
@@ -124,7 +122,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         else:
             status += [("", font_default),]
 
-        status +=[('N Stop States: %i' % len(self._stop_states), font_default),]
+        status += [('N Stop States: %i' % len(self._stop_states), font_default),]
 
         return status
 
@@ -139,6 +137,36 @@ class PolicyEvalDemoAlg(DemoAlg):
     @staticmethod
     def is_stub():
         return False
+
+    def get_run_control_options(self):
+        """
+        Get the run control options for the algorithm.
+        :return: A dictionary of run control options.
+        """
+        rco = OrderedDict()
+        rco['state-update'] = "state update"
+        rco['epoch-update'] = "epoch update"
+        rco['policy-update'] = "policy update"
+        rco['stops'] = "selected states"
+        return rco
+
+    @staticmethod
+    def _get_key_info(self):
+        
+        return {'color': {'size': {'height': 70, 'width': 250}},
+                'state': {'size': {'height': 70, 'width': 70}}}
+    
+    def get_tab_content(self):
+        x_offsets, key_sizes, total_key_size = self._calc_key_placement()
+        key_info = {'x_offsets': x_offsets,
+                'sizes': key_sizes,
+                'area_size': total_key_size}
+        embedding= StateEmbedding(self._env, key_size = total_key_size)
+        st = OrderedDict(('states', FullStateContentPage(self._app, self._env,embedding, bg_color=self._colors['bg'], key_info=key_info)),
+                          ('values', ValueFunctionContentPage(self._app, self._env, embedding, bg_color=self._colors['bg'], as_delta=False, key_info=key_info)),
+                          ('updates', ValueFunctionContentPage(self._app, self._env, embedding, bg_color=self._colors['bg'], as_delta=True, key_info=key_info)),)
+
+        return st
 
     def load_state(self, filename):
         """
@@ -171,18 +199,6 @@ class PolicyEvalDemoAlg(DemoAlg):
                 'policy': self.policy
             }, f)
         logging.info(f"Saved state to {state_filename}")
-
-    def get_run_control_options(self):
-        """
-        Get the run control options for the algorithm.
-        :return: A dictionary of run control options.
-        """
-        rco = OrderedDict()
-        rco['state-update'] = "state update"
-        rco['epoch-update'] = "epoch update"
-        rco['policy-update'] = "policy update"
-        rco['stops'] = "selected states"
-        return rco
 
     def _learn_loop(self):
         self.pi_convergence_iter = -1
@@ -233,7 +249,7 @@ class PolicyEvalDemoAlg(DemoAlg):
             delta = new_val - old_val
             self.next_values[state] = new_val
             self._img_mgr.set_state_val(state, 'updates', delta)
-            self._img_mgr.set_state_val(state, 'values', new_val)   
+            self._img_mgr.set_state_val(state, 'values', new_val)
 
         state_update_order = self._img_mgr.get_state_update_order()
 
@@ -274,7 +290,7 @@ class PolicyEvalDemoAlg(DemoAlg):
             if self._maybe_pause('epoch-update'):
                 return self._shutdown
 
-            #self._img_mgr.reset_values(tabs=('updates',))
+            # self._img_mgr.reset_values(tabs=('updates',))
             self.values = self.next_values
             self.next_values = {}
 
@@ -284,16 +300,14 @@ class PolicyEvalDemoAlg(DemoAlg):
             self.pe_iter += 1
 
         return self._shutdown
-            
+
     def _optimize_state_value(self, state):
         old_val = self.values[state]
         delta = np.random.randn() * 0.1  # Simulate some value change
         new_val = old_val + delta
         time.sleep(0.00001)  # Simulate some processing time
         return new_val
-    
-        
-    
+
     def _check_value_function_convergence(self):
         """
         Check if the value function has converged.
@@ -310,11 +324,8 @@ class PolicyEvalDemoAlg(DemoAlg):
                 return False
         return True
 
-
-
     def _optimize_policy(self):
         logging.info("Optimizing policy for iteration %i" % self.pi_iter)
-
 
         # Reset 'updates' tab, will be used in policy optimization as binary
         # binary, marking which states have a new action, Pi(s)=a.
@@ -323,15 +334,13 @@ class PolicyEvalDemoAlg(DemoAlg):
         for state in self.updatable_states:  # show blank squares before filling in values
             self._img_mgr.set_state_val(state, 'updates', 0.0)
 
-
-
         self.n_changes = 0
         self.next_state_ind = 0
 
         def update(state, new_action):
             old_action_dist = self.policy[state]
-            import ipdb; ipdb.set_trace()
-            
+            import ipdb
+            ipdb.set_trace()
 
             if changed:
                 self.n_changes += 1
@@ -384,18 +393,6 @@ class PolicyEvalDemoAlg(DemoAlg):
         text = "%f" % (np.random.randn(),)
         cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
         return img
-
-    @staticmethod
-    def get_state_tab_info():
-        """
-        Get the run control options for the algorithm.
-        :return: A dictionary of run control options.
-        """
-        st = OrderedDict((('states', 'Game states  '),
-                          ('values', 'Values: V(s)'),
-                          ('updates', "Updates: delta V(s)"),))
-        return st
-
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def __init__(self, app, env, gamma=0.9):
