@@ -61,7 +61,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         if panel == 'state-tabs':
             self._embedding.set_size(new_size)
             for tab in self._tabs.values():
-                tab.resize(new_size)
+                tab['tab_content'].resize(new_size)
         elif panel != 'step-visualization':
             raise ValueError("Unknown panel for resizing: %s" % panel)
 

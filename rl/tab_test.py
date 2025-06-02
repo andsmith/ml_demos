@@ -73,16 +73,26 @@ class TabTester(object):
         self._notebook.pack(fill=tk.BOTH, expand=True)
         self._notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
 
+    def _set_cur_tab(self):
+        tab_text = self._notebook.tab(self._notebook.select(), "text")
+        self._cur_tab = self._tab_names_from_texts[tab_text]
+        return self._cur_tab
+
+
     def set_tabs(self, tab_content):
 
         self._tabs =tab_content
+
         self._frames = {}
         self._labels = {}
+        self._tab_names_from_texts = {}
 
         for tab_name in tab_content:
+            tab_text = tab_content[tab_name]['disp_text']
             frame = tk.Frame(self._notebook, bg=tk_color_from_rgb(COLOR_SCHEME['bg']))
-            self._notebook.add(frame, text=tab_name)
+            self._notebook.add(frame, text=tab_text)
             self._frames[tab_name] = frame
+            self._tab_names_from_texts[tab_text] = tab_name
 
             img = Image.new('RGB', self._img_size, color=COLOR_SCHEME['bg'])
             label = tk.Label(frame, image=ImageTk.PhotoImage(img))
@@ -101,54 +111,43 @@ class TabTester(object):
         """
         Handle the resize event for the main window.
         """
-        print("\n\nFRAME RESIZE EVENT", event.width, event.height)
-        new_size = (event.width, event.height)
-        if self._img_size is None or (self._img_size != new_size):
-            logging.info("Resizing main window to %s" % str(new_size))
-            self._img_size = new_size
-            self._alg.resize(new_size)
-            self.refresh_images()
-
-
+        pass
+    
     def on_tab_resize(self, event):
         new_tab_size = (event.width, event.height)
         if self._tab_img_size is None or   (self._tab_img_size != new_tab_size):
             logging.info("Resizing tab images to %s" % str(new_tab_size))
             self._tab_img_size = new_tab_size
-
-
             self._alg.resize('state-tabs', new_tab_size)
             self.refresh_images()
             
     def on_tab_change(self, event):
-        logging.info("Tab changed to %s" % self._notebook.tab(self._notebook.select(), "text"))
-        self._cur_tab = self._notebook.tab(self._notebook.select(), "text")
+        self._set_cur_tab()
+        logging.info("Tab changed to: %s" % self._cur_tab)
         self.refresh_images()
 
     def on_mouse_leave(self, event):
         """
         Handle mouse leave events for the current tab.
         """
-        tab = self._tabs[self._cur_tab]
+        tab = self._tabs[self._set_cur_tab()]['tab_content']
         if tab.mouse_leave():
             self.refresh_images()
 
     def on_mouse_move(self, event):
-        tab = self._tabs[self._cur_tab]
+        tab = self._tabs[self._set_cur_tab()]['tab_content']
         if tab.mouse_move((event.x, event.y)):
             self.refresh_images()
 
     def on_mouse_click(self, event):
-        logging.info("Mouse clicked in %s at (%d, %d)" % (self._cur_tab, event.x, event.y))
-        tab = self._tabs[self._cur_tab]
+        tab = self._tabs[self._set_cur_tab()]['tab_content']
+        logging.info("Mouse clicked at (%d, %d) in tab: %s" % (event.x, event.y, self._cur_tab))
         box_id = tab.mouse_click((event.x, event.y))
         if box_id is not None:
             self.refresh_images()
 
     def _render_frame(self, tab_name):
-        logging.info("Rendering frame for tab: %s" % tab_name)
-        tab = self._tabs[tab_name]
-        # Draw the selected boxes:
+        tab = self._tabs[self._set_cur_tab()]['tab_content']
         frame=tab.get_tab_frame(self._tab_img_size, annotated=True)
 
         return frame

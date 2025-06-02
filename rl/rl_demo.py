@@ -65,17 +65,14 @@ class RLDemoApp(object):
         self._ticks_skipped = 0
         self._init_alg_panels()     
 
-    def toggle_selection(self, state):
-        """
-        Toggle the selection of a state.
-        :param state: The state to toggle.
-        """
-        if state in self.selected:
-            self.selected.remove(state)
+    def toggle_selected_state(self, state_id):
+        if state_id in self.selected:
+            self.selected.remove(state_id)
         else:
-            self.selected.append(state)
+            self.selected.append(state_id)
+        self._status_control_panel.refresh_status()
 
-        logging.info("Changed select of state to:  %s\n%s" % (state in self.selected, state))
+        print(f"Toggled selection for state {state_id}, now selected: {state_id in self.selected}, Total selected: {len(self.selected)}")   
 
     def _init_tk(self):
         self.root = Tk()
@@ -186,10 +183,6 @@ class RLDemoApp(object):
 
     def set_control_point(self, control_point):
         self._status_control_panel.set_run_control_setting(control_point)
-
-    def toggle_stop_state(self, state):
-        self._alg.toggle_stop_state(state)
-        self._status_control_panel.refresh_status()
 
     def clear_stop_states(self):
         self._alg.clear_stop_states()

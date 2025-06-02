@@ -60,12 +60,7 @@ class TabPanel(AlgDepPanel):
         :param resize_callback:  function to call to resize the panel when the tab changes.
             Whoever makes the tab images needs to know the new size, etc.
         """
-        self._tab_content = None  # dict with:
-        #    'names_in_order':  (list),
-        #    'display_names' (dict),
-        #    'content':  (dict {name:TabContentPage, ...})
-        
-        self._tabs = {}  # (tab_name: (tab_frame, img_label))
+        self._tabs = OrderedDict()  # (tab_name: (tab_frame, img_label))
         self._tab_image_size = None
 
         #  Selecting states is common across all tabs, changing in one changes in all, etc.
@@ -108,19 +103,24 @@ class TabPanel(AlgDepPanel):
     def set_tabs(self, tab_content):
         """
         Set the tabs for the panel.
+           * add 'frame' and 'label' keys to each tab in the tab_content dict.
+
         :param tab_info: (see __init__)
         :param resize_callback: function to call to resize the panel when the tab changes.
            Whoever makes the tab imges needs to know the new size, etc.
         """
-        self._tab_content = tab_content
+
+        # Clear old tabs' images and frames:
+        for old_tab_name in self._tabs.values():
+            self._tabs[old_tab_name]['label'].destroy()
+            self._tabs[old_tab_name]['frame'].destroy()
+        
+        # Set new tabs:
+        self._tabs = tab_content
         names = [name for name in tab_content.keys()]
         disp_names = {tab_name:tab_content[tab_name]['disp_text'] for tab_name in names}
         self._tab_name_by_disp = {disp_names[tab_name]: tab_name for tab_name in names}
-        # Clear old tabs:
-        for tab, img_label in self._tabs.values():
-            tab.destroy()
-            img_label.destroy()
-        self._tabs = {}
+
         # Add new tabs:
         for tab_name in names:
             tab_disp_name = disp_names[tab_name]
@@ -135,11 +135,14 @@ class TabPanel(AlgDepPanel):
             img_label.bind("<Motion>", lambda event: self._on_mouse_move(event, tab_name))
             # Bind mouse-out events
             img_label.bind("<Leave>", lambda event: self._on_mouse_leave(event, tab_name))
+            # Bind resize events to the tab frame:
+            tab_frame.bind("<Configure>", self.on_tab_resize)
 
             # Add the tab to the notebook:
             self._notebook.add(tab_frame, text=tab_disp_name)
             # Add the tab to the tabs dictionary:
-            self._tabs[tab_name] = (tab_frame, img_label)
+            self._tabs[tab_name]['frame'] = tab_frame
+            self._tabs[tab_name]['label'] = img_label
 
         # get the current tab:
         self.cur_tab = self._tab_name_by_disp[self._notebook.tab(self._notebook.select(), "text")]
@@ -149,24 +152,26 @@ class TabPanel(AlgDepPanel):
         frame_size = self._frame.winfo_width(), self._frame.winfo_height()
         return frame_size
 
-    def _on_resize(self, event):
-        # Get the new size of the tap images (use the current tab):
-        tab_frame = self._tabs[self.cur_tab][0]
-        tab_frame.update_idletasks()
-        super()._on_resize(event)
-        self.tab_image_size = tab_frame.winfo_width(), tab_frame.winfo_height()
-        self.refresh_images(is_paused=self._alg.paused)
+    def on_tab_resize(self, event):
+        new_tab_image_size = (event.width, event.height)
+        if self._tab_image_size is None or   (self._tab_image_size != new_tab_image_size):
+            logging.info("Resizing tab images to %s" % str(new_tab_image_size))
+            self._tab_image_size = new_tab_image_size
+            self._alg.resize('state-tabs', new_tab_image_size)
+            self.refresh_images(is_paused=self._alg.paused)
 
-    # @LPT.time_function
+    def _on_resize(self, event):
+        pass
+        
     def refresh_images(self, is_paused):
         """
         Get new image from the app, set the image for the current tab.
         """
         if self._tab_image_size is None:
             return
-        new_img = self._tab_content[self.cur_tab]['content'].get_tab_frame(self._tab_image_size, is_paused=is_paused)
+        new_img = self._tabs[self.cur_tab]['tab_content'].get_tab_frame(self._tab_image_size, annotated=is_paused)
         new_img = ImageTk.PhotoImage(image=Image.fromarray(new_img))
-        label = self._tabs[self.cur_tab][1]
+        label = self._tabs[self.cur_tab]['label']
         label.config(image=new_img)
         label.image = new_img
 
@@ -180,20 +185,20 @@ class TabPanel(AlgDepPanel):
 
     def _on_mouse_click(self, event, tab):
         #logging.info("Mouse click at (%d, %d) on tab %s" % (event.x, event.y, tab))
-        content_page = self._tab_content['content'][tab]
-        if content_page.mouse_click(event):
+        content_page = self._tabs[tab]['tab_content']
+        if content_page.mouse_click((event.x, event.y)):
             self.refresh_images(is_paused=self._alg.paused)
 
     def _on_mouse_move(self, event, tab):
         #logging.info("Mouse move at (%d, %d) on tab %s" % (event.x, event.y, tab))
-        content_page = self._tab_content['content'][tab]
-        if content_page.mouse_move(event):
+        content_page = self._tabs[tab]['tab_content']
+        if content_page.mouse_move((event.x, event.y)):
             self.refresh_images(is_paused=self._alg.paused)
 
     def _on_mouse_leave(self, event, tab):
         #logging.info("Mouse leave on tab %s" % tab)
-        content_page = self._tab_content['content'][tab]
-        if content_page.mouse_leave(event):
+        content_page = self._tabs[tab]['tab_content']
+        if content_page.mouse_leave():
             self.refresh_images(is_paused=self._alg.paused)
 
 

@@ -95,7 +95,7 @@ class DemoAlg(ABC):
         do_pause = self._run_control[control_point]
 
         if 'stops' in self._run_control and self._run_control['stops']:
-            if self.state is not None and self.state in self.app.selected_states:
+            if self.state is not None and self.state in self.app.selected:
                 do_pause = True
                 logging.info("Stopping at user-set stop state: %s" % self.state)
 
@@ -137,7 +137,9 @@ class DemoAlg(ABC):
     @abstractmethod
     def _make_tabs(self, ):
         """
-        :return: ordered dict of tab_name: TabContentBage pairs.
+        :return: ordered dict( ((tab_name, {'disp_text': "Tab 1 Name",
+                                            'tab_content': TabContentPage}),
+                                 ...))
         """
         pass
 
@@ -267,7 +269,7 @@ class DemoAlg(ABC):
         elif panel == 'state-tabs':
             self._state_img_size = new_size
             for tab in self._tabs:
-                self._tabs[tab].resize(new_size)
+                self._tabs[tab]['tab_content'].resize(new_size)
         else:
             raise ValueError(f"Unknown panel type: {panel}. Expected 'state-tabs' or 'step-visualization'.")
 
