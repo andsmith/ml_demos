@@ -62,7 +62,7 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         rco['frame-update'] = "Frame update"
         return rco
 
-    def get_state_tab_info(self):
+    def get_tab_info(self):
         """
         Get the run control options for the algorithm.
         :return: A dictionary of run control options.
@@ -137,11 +137,9 @@ class TestDemoAlg(PolicyEvalDemoAlg):
         # LPT.reset(enable=False, burn_in=4, display_after=5)
 
         while not self._shutdown:
-            print("Outer")
             self.pe_iter += 1
             time.sleep(.005)
             for ind in range(self._image_data.shape[0]):
-                print("Inner")
                 self.next_state_ind = ind
                 self._image_data[ind, :2] += self._circle_v[ind, :]
                 if self._image_data[ind, 0] < 0 or self._image_data[ind, 0] > 1:

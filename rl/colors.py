@@ -22,7 +22,8 @@ _COLOR_FUNC_BG = _SKY_BLUE
 
 # UI colors
 UI_COLORS = {'selected': _NEON_RED,
-             'mouseovered': _NEON_GREEN}
+             'mouseovered': _NEON_GREEN,
+             'current_state': _NEON_GREEN,}
 
 COLOR_SCHEME = {'bg':  _COLOR_BG,
                 'lines': _COLOR_LINES,

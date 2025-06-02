@@ -33,6 +33,8 @@ class SelectionPanel(Panel):
         self.cur_alg_name = alg_types[0].get_name()  # selected algorithm type
         self._pending_alg_name = None  # algorithm to be started after "RESET" button is pressed
 
+        super().__init__(app=app, bbox_rel=bbox_rel, margin_rel=margin_rel)
+        # Change colors after SUPER call
         self._color_lines = tk_color_from_rgb(COLOR_LINES)
         self._color_bg = tk_color_from_rgb(COLOR_BG)
         self._color_text = tk_color_from_rgb(COLOR_TEXT)
@@ -40,7 +42,6 @@ class SelectionPanel(Panel):
         self.opp_n_rules = 2  # number of rules for heuristic opponent(0-6)
         self._pending_opp_n_rules = None
 
-        super().__init__(app=app, bbox_rel=bbox_rel, margin_rel=margin_rel)
 
     def _init_widgets(self):
         self._init_title()

@@ -10,12 +10,11 @@ import cv2
 import logging
 from colors import COLOR_SCHEME
 import matplotlib.pyplot as plt
-
+from gui_base import Key
 from util import get_font_scale
 
 
-
-class ColorKey(object):
+class ColorKey(Key):
     """
 
         +---------------------------------+
@@ -29,7 +28,7 @@ class ColorKey(object):
 
     """
 
-    def __init__(self, cmap, range, size, draw_params={}):
+    def __init__(self, size, cmap, range, x_offset=0):
         """
         Create a color key object.
         :param size: width, height
@@ -37,7 +36,7 @@ class ColorKey(object):
         :param range: Range of values for the color key.
         :param draw_params: Parameters for drawing the color key.
         """
-        self.size = size
+        super().__init__(size=size, x_offset=x_offset)
         self.cmap = cmap
         self.range = range
         self.draw_params = {'axis_width_frac': 1./30,
@@ -47,21 +46,22 @@ class ColorKey(object):
                             'tick_font': {'big': cv2.FONT_HERSHEY_COMPLEX, 'small': cv2.FONT_HERSHEY_SIMPLEX},
                             'pad_x_frac': .08,  # allow for axis labels to be centered under spectrum endpoints
                             'spacing_y_frac': .15,  # top, axis, ticks, bottom
-
+                            'line_color': COLOR_SCHEME['lines'],
+                            'text_color': COLOR_SCHEME['text'],
                             }
-        self.draw_params.update(draw_params)
+        # self.draw_params.update(draw_params)
 
     def _get_font(self, v_space):
         if v_space > 12:
             return self.draw_params['tick_font']['big']
         else:
             return self.draw_params['tick_font']['small']
-        
+
     def map_color(self, value):
         val_norm = (value - self.range[0]) / (self.range[1] - self.range[0])
         return np.array(self.cmap(val_norm)[:3])  # returns RGBA, we use RGB
-            
-    def draw(self, img, line_color, text_color, indicate_value=None):
+
+    def draw(self, img,  indicate_value=None):
         """
         Draw the color key on the given image in the upper right (TODO: make this configurable).
         :param img: Image to draw on.
@@ -71,10 +71,9 @@ class ColorKey(object):
         """
         bkg_color = tuple(img[0, 0].tolist())
 
-        left, right = img.shape[1] - self.size[0], img.shape[1]
-        top, bottom = 0, self.size[1]
-        h = bottom - top
-        w = right - left
+        left, top = self._get_draw_pos(img)
+        right, bottom = left + self.size[0], top + self.size[1]
+        w, h = self.size
         space_x = max(2, int(self.draw_params['pad_x_frac'] * w))  # space on left & right of spectrum
         space_y = max(2, int(self.draw_params['spacing_y_frac'] * h))  # between top & spectrum,
         spectrum_space = max(3, int(space_y / 1.5))  # space between axis and spectrum
@@ -90,8 +89,7 @@ class ColorKey(object):
         spectrum_bottom = spectrum_top + spectrum_height
         axis_y = spectrum_bottom + spectrum_space
 
-
-        spectrum_x = (left + space_x, right -space_x)
+        spectrum_x = (left + space_x, right - space_x)
         spectrum_y = (spectrum_top, spectrum_bottom)
 
         tick_top = axis_y
@@ -120,8 +118,7 @@ class ColorKey(object):
 
         # Draw axis lines
         axis_width = max(2, int(self.draw_params['axis_width_frac'] * h))
-        img[axis_y: axis_y + axis_width, spectrum_x[0]:spectrum_x[1]] = line_color
-
+        img[axis_y: axis_y + axis_width, spectrum_x[0]:spectrum_x[1]] = self.draw_params['line_color']
 
         if indicate_value is None:
             # only show ticks if no value is to be indicated
@@ -129,7 +126,7 @@ class ColorKey(object):
                 [self.range[0], (self.range[0]+self.range[1])/2, self.range[1]]
         else:
             ticks = []
-        
+
         tick_width = axis_width
         num_ticks = len(ticks)
 
@@ -145,12 +142,12 @@ class ColorKey(object):
                 text_x = right-2 - width
 
             if bg_color is not None:
-                # Expand box a bit 
-                img[tick_label_top-1:tick_label_bottom+1, text_x-1:text_x + width+1 ] = bg_color
+                # Expand box a bit
+                img[tick_label_top-1:tick_label_bottom+1, text_x-1:text_x + width+1] = bg_color
 
             cv2.putText(img, string, (text_x, tick_label_bottom),
                         font, font_scale, color, thickness, lineType=cv2.LINE_AA)
-            
+
             return text_x, text_x + width
 
         for i in range(num_ticks):
@@ -164,11 +161,11 @@ class ColorKey(object):
             elif i == 0:
                 shift = tick_left - spectrum_x[0]
                 tick_right, tick_left = tick_right-shift, tick_left-shift
-            img[tick_top:tick_bottom, tick_left:tick_right] = line_color
+            img[tick_top:tick_bottom, tick_left:tick_right] = self.draw_params['line_color']
             if indicate_value is None:
                 label_value = self.range[0] + (self.range[1] - self.range[0]) * i / (num_ticks - 1)
                 label_text = f"{label_value:.1f}"
-                draw_label_at(label_text, tick_x, text_color)
+                draw_label_at(label_text, tick_x,  color=self.draw_params['text_color'])
 
         if indicate_value is not None:
 
@@ -183,15 +180,15 @@ class ColorKey(object):
             # make alternating black and white:
             black, white = (0, 0, 0), (255, 255, 255)
             for i in range(line_h):
-                if (i //  dot_size) % 2 ==1:
+                if (i // dot_size) % 2 == 1:
                     ind_line[i, :] = black
                 else:
                     ind_line[i, :] = white
 
             # figure out where it goes
             ind_val_norm = float((indicate_value - self.range[0]) / (self.range[1] - self.range[0]))
-            ind_x = int(spectrum_width * ind_val_norm) 
-            if ind_x <0:
+            ind_x = int(spectrum_width * ind_val_norm)
+            if ind_x < 0:
                 ind_line_x = spectrum_x[0] - line_w*2  # move it to the left of the spectrum
             elif ind_x > spectrum_width:
                 ind_line_x = spectrum_x[1] + line_w*2  # move it to the right of the spectrum
@@ -211,11 +208,12 @@ class ColorKey(object):
                 ind_x = spectrum_width - 1
 
             ind_label_text = f"{indicate_value:.3f}"
-            line_x_left, line_x_right = draw_label_at(ind_label_text, spectrum_x[0] + ind_x, color=text_color, bg_color=bkg_color)
+            line_x_left, line_x_right = draw_label_at(
+                ind_label_text, spectrum_x[0] + ind_x, color=self.draw_params['text_color'], bg_color=bkg_color)
             if line_x_left < left + space_x:
                 line_x_left += line_w*2
             elif line_x_right > right - space_x:
-                line_x_right -=  line_w*2
+                line_x_right -= line_w*2
 
             line_length = line_x_right - line_x_left
             line_height = line_w  # same as the vertical line width
@@ -223,13 +221,12 @@ class ColorKey(object):
             ind_line = np.zeros((line_height, line_length, 3), dtype=np.uint8)
             # make alternating black and white:
             for i in range(line_length):
-                if (i //  dot_size) % 2 ==1:
+                if (i // dot_size) % 2 == 1:
                     ind_line[:, i] = black
                 else:
                     ind_line[:, i] = white
             # place the horizontal line above the label
             img[line_bottom:line_bottom+line_height, line_x_left:line_x_right] = ind_line
-        
 
         return img
 
@@ -238,27 +235,22 @@ class ProbabilityColorKey(ColorKey):
     """
     Uses 'gray' colormap, range [0, 1] and inverts rgb values (so dark is 1.0)
     """
-    def __init__(self, size, draw_params={}):
-        """
-        Create a probability color key object.
-        :param size: width, height
-        :param range: Range of values for the color key.
-        :param draw_params: Parameters for drawing the color key.
-        """
+
+    def __init__(self, size, x_offset=0):
         cmap = plt.get_cmap('gray')
-        super().__init__(cmap=cmap, range=(0.,1.), size=size, draw_params=draw_params)
+        super().__init__(cmap=cmap, range=(0., 1.), size=size, x_offset=x_offset)
 
     def map_color(self, value):
         return super().map_color(1.0 - value)  # invert the color for probabilities
-    
-    
+
+
 def test_color_key():
     """
     Test the ColorKey class.
     """
     box_w = 400
     keys = []
-    indicated = [-1.05, -1.0, -0.75,None,  0.0, 0.5, 1.0, 1.05]
+    indicated = [-1.05, -1.0, -0.75, None,  0.0, 0.5, 1.0, 1.05]
     for i, box_h in enumerate([40, 50, 60, 70, 70, 100, 120, 150]):
 
         box_size = (box_w, box_h)
@@ -268,7 +260,7 @@ def test_color_key():
         range = (-1.0, 1.0)
         ck = ColorKey(size=box_size, cmap=cmap, range=(-1.0, 1.0))
 
-        ck.draw(img, line_color=COLOR_SCHEME['lines'], text_color=COLOR_SCHEME['text'], indicate_value=indicated[i])
+        ck.draw(img, indicate_value=indicated[i])
         keys.append(img)
         keys.append(np.zeros((10, box_w, 3), dtype=np.uint8))  # add a spacer between keys
 
@@ -280,10 +272,11 @@ def test_color_key():
     cv2.imshow("Color Key", all_keys_img[:, :, ::-1])
     cv2.waitKey(0)
 
+
 def test_probability_color_key():
     """
     Test the ProbabilityColorKey class.
-    """ 
+    """
     COLOR_LINES = COLOR_SCHEME['lines']
     COLOR_TEXT = COLOR_SCHEME['text']
     box_w = 300
@@ -295,18 +288,19 @@ def test_probability_color_key():
 
     ck = ProbabilityColorKey(size=box_size)
     img = img_blank.copy()
-    imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT))
+    imgs.append(ck.draw(img))
 
-    for prob in[0.0, 0.25, 0.1234123512315, .9999, 1.0]:
+    for prob in [0.0, 0.25, 0.1234123512315, .9999, 1.0]:
         print(f"Drawing color key for probability {prob:.4f}")
         img = img_blank.copy()
-        imgs.append(ck.draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT, indicate_value=prob))
-        
+        imgs.append(ck.draw(img, indicate_value=prob))
+
     img = np.concatenate(imgs, axis=0)
     cv2.imshow("Probability Color Key", img[:, :, ::-1])
-    cv2.waitKey(0)  
+    cv2.waitKey(0)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     test_probability_color_key()
+    test_color_key()

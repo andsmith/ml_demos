@@ -91,10 +91,10 @@ class RLDemoApp(object):
 
     def _init_alg_panels(self):
         self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=self._selection_panel.opp_n_rules)
-        self._env = Environment(self._opp_policy, AGENT_MARK)
+        self.env = Environment(self._opp_policy, AGENT_MARK)
         
         alg_ind = self._get_alg_ind(self._selection_panel.cur_alg_name)
-        self._alg = ALGORITHMS[alg_ind](self, self._env)
+        self._alg = ALGORITHMS[alg_ind](self, self.env)
         self._init_ctrl_point = self._alg.get_init_control()  # first control point
 
         # Create panels that need to know about the algorithm:
@@ -115,7 +115,7 @@ class RLDemoApp(object):
         # Get and start the new algorithm.
         logging.info("Starting new algorithm: %s", alg_name)
         alg_ind = self._get_alg_ind(alg_name)
-        self._alg = ALGORITHMS[alg_ind](self, self._env)
+        self._alg = ALGORITHMS[alg_ind](self, self.env)
 
         self.start_alg()
         # Update the panels with the new algorithm.
@@ -176,7 +176,7 @@ class RLDemoApp(object):
             with open(filename, 'rb') as f:
                 alg_name = pickle.load(f)
             alg_ind = self._get_alg_ind(alg_name)
-            self._alg = ALGORITHMS[alg_ind](self, self._env)
+            self._alg = ALGORITHMS[alg_ind](self, self.env)
             self._init_ctrl_point = self._alg.get_init_control()  
             self._alg.load_state(filename)
             logging.info(f"State loaded from {filename}")
@@ -203,7 +203,7 @@ class RLDemoApp(object):
         :param n_rules: The number of rules for the opponent policy.
         """
         self._opp_policy = HeuristicPlayer(mark=OPPONENT_MARK, n_rules=n_rules)
-        self._env.set_opp_policy(self._opp_policy)
+        self.env.set_opp_policy(self._opp_policy)
 
     def reset_state(self):
         logging.info("Resetting demo state.")

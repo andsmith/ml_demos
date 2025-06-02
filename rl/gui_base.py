@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import logging
 import tkinter as tk
-from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
+from colors import COLOR_SCHEME
 from abc import ABC, abstractmethod
 from layout import WIN_SIZE
 from util import tk_color_from_rgb
@@ -20,14 +20,13 @@ class Panel(ABC):
         """
         self.app = app
         self._bbox_rel = bbox_rel
-        self._bg_color = tk_color_from_rgb(COLOR_BG)
-        self._bg_color_rgb = COLOR_BG
-        self._text_color = tk_color_from_rgb(COLOR_TEXT)
-        self._line_color = tk_color_from_rgb(COLOR_LINES) 
+        self._bg_color = tk_color_from_rgb(COLOR_SCHEME['bg'])
+        self._text_color = tk_color_from_rgb(COLOR_SCHEME['text'])
+        self._line_color = tk_color_from_rgb(COLOR_SCHEME['lines'])
         self._frame = tk.Frame(master=self.app.root, bg=self._bg_color)
-        
+
         y_margin = margin_rel / (WIN_SIZE[1] / WIN_SIZE[0])
-        
+
         self._frame.place(relx=self._bbox_rel['x_rel'][0]+margin_rel, rely=self._bbox_rel['y_rel'][0]+y_margin,
                           relwidth=self._bbox_rel['x_rel'][1] - self._bbox_rel['x_rel'][0] - margin_rel*2,
                           relheight=self._bbox_rel['y_rel'][1] - self._bbox_rel['y_rel'][0] - y_margin*2)
@@ -75,3 +74,41 @@ class Panel(ABC):
         :return: The size of the panel as a tuple (width, height).
         """
         return self._frame.winfo_width(), self._frame.winfo_height()
+
+
+class Key(ABC):
+    """
+    Keys go in a row at the top right of tab content panels.
+    They are used to indicate the meaning of colors, etc, under the mouse.
+    """
+
+    def __init__(self, size, x_offset=0):
+        """
+        Initialize the key with a color map, range, size, and optional drawing parameters.
+        :param size: The size of the key in pixels (width, height).
+        :param x_offset: how far LEFT of the image edge to draw the key.
+        """
+        self.size = size
+        self._x_offset = x_offset
+
+    def _get_draw_pos(self, img, center_width=None):
+        """
+        Get the position to draw the key on the given image.
+        :param img: The image to draw on.
+        :param center_width: The image to be drawn is narrower than self.size[0], so center it in the key.
+        :return: The position to draw the key as (x, y).
+        """
+        y_top = 0
+        x_left = img.shape[1] + self._x_offset
+        if center_width is not None:
+            pad = (self.size[0] - center_width) // 2
+            x_left += pad
+        return x_left, y_top
+
+    @abstractmethod
+    def draw(self, img, indicate_value=None):
+        """
+        Draw the key on the given image.
+        If a value is indicated, represent it appropriately.
+        """
+        pass

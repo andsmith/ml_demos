@@ -312,6 +312,7 @@ class FixedCellBoxOrganizer(BoxOrganizer):
 
         extra_height = usable_height - np.sum(layer_heights)
         adding_to = np.ones(n_layers, dtype=bool)  # which layers are still getting extra space
+        adding_to[0] = False  # don't add to the first layer, it's already oversized for the keys
         while extra_height > 0:
             n_req = np.sum(layer_row_counts[adding_to])
             while n_req > extra_height and np.sum(adding_to) >= 1:
@@ -450,6 +451,7 @@ class FixedCellWithKey(FixedCellBoxOrganizer):
 
     def _calc_layer_spacing(self):
         layer_heights, layer_row_counts, usable_height = self._calc_layer_heights()
+
         if layer_heights[0] < self._min_key_h:
             extra = min(usable_height, self._min_key_h - layer_heights[0])
             logging.info("Adding %d pixels to the first layer to make room for the color key." % extra)
@@ -481,12 +483,13 @@ class FixedCellWithKey(FixedCellBoxOrganizer):
 
     def _draw_layer_bars(self, image):
         # draw a vertical line between the top row and the color key area.
-        line_x = self.key_bbox['x'][0]
-        line_y_top = self.key_bbox['y'][0]
-        line_y_bottom = self.layer_spacing[0]['bar_y'][0]
-        line_x_left = line_x - self._layer_bar_w//2
-        line_x_right = line_x_left + self._layer_bar_w
-        image[line_y_top:line_y_bottom, line_x_left:line_x_right] = self._line_color
+        if False:
+            line_x = self.key_bbox['x'][0]
+            line_y_top = self.key_bbox['y'][0]
+            line_y_bottom = self.layer_spacing[0]['bar_y'][0]
+            line_x_left = line_x - self._layer_bar_w//2
+            line_x_right = line_x_left + self._layer_bar_w
+            image[line_y_top:line_y_bottom, line_x_left:line_x_right] = self._line_color
         return super()._draw_layer_bars(image)
 
 

@@ -18,10 +18,8 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                      'state-tabs': {'x_rel': (MID_X, 1.0),
                                     'y_rel': (0.0, 1.0)}
                      },
-
           'state_embedding': {  # a kind of TabContentPage showing all RL states
               'space_sizes': [7, 2, 2, 2, 2, 3]},  # sizes of the spaces between states in pixels
-
           'margin_rel': .0025,  # margin between frames in relative coordinates
 
           'fonts': {'panel_title': ('Helvetica', 16, 'underline'),
@@ -47,7 +45,6 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   'bar_w_frac': 0.5,  # fraction of font scale for bar graph
                   'graph_width_frac': 0.4,  # fraction of the summary area width for the bar graph
                   'graph_indent_frac': 0.1},
-
     'match_area': {
                   'trace_size': (90, 380),  # w,h in pixels
                   'trace_pad_frac': .025,  # between traces, frac of trace width
@@ -61,7 +58,9 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   # fraction of image side length to use as padding between images and text, etc.
                   "pad_frac": 0.2,
                   'font': cv2.FONT_HERSHEY_SIMPLEX,
-                  'colors': COLOR_SCHEME}}}
+                  'colors': COLOR_SCHEME}},
+
+          'keys': {'h_pad_px': 60}}
 
 TITLE_INDENT = 5
 

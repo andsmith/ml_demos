@@ -15,6 +15,7 @@ import logging
 from scipy.spatial import KDTree
 import cv2
 
+
 class MouseBoxManager(object):
     """
     Manages mouse interaction with bounding boxes in an image.
@@ -51,7 +52,6 @@ class MouseBoxManager(object):
         """
         self.bboxes = bboxes
         box_order = [box_id for box_id in bboxes]
-
         box_centers = []
         box_wh = []
         self._box_ids = []
@@ -76,7 +76,8 @@ class MouseBoxManager(object):
         :return: The box ID if found, otherwise None.
         """
         if self._box_tree is None:
-            return None
+            return None, None
+
         pt = np.array(pos_xy)
         # Find the nearest box center
         _, ind = self._box_tree.query(pt)
@@ -137,29 +138,31 @@ class MouseBoxManager(object):
         """
         self.pos_xy = pos_xy
         self.active = True
-
-        if self._box_tree is None:
-            return False
         return self.get_box_at(pos_xy)
 
-    def render_state(self, img, selected_ids,thickness=1):
+    def mark_box(self, img, box_id, color, thickness=1):
+        if box_id in self.bboxes:
+            bbox = self.bboxes[box_id]
+            self._draw_box(img, bbox, color, thickness=thickness)
+
+    def render_state(self, img, selected_ids, thickness=1):
         """
         Draw boxes around the states in the image.
         """
-        def _draw_box(bbox, color):
-            p0 = bbox['x'][0], bbox['y'][0]
-            p1 = bbox['x'][1], bbox['y'][1]
-            cv2.rectangle(img, p0, p1, color, thickness=thickness, lineType=cv2.LINE_AA)
 
         for box_id in selected_ids:
             if box_id in self.bboxes:
                 bbox = self.bboxes[box_id]
-                _draw_box(bbox, UI_COLORS['selected'])
+                self._draw_box(img, bbox, UI_COLORS['selected'])
 
         if self.mouseover_id is not None:
             bbox = self.bboxes[self.mouseover_id]
-            _draw_box(bbox, UI_COLORS['mouseovered'])
-        
+            self._draw_box(img, bbox, UI_COLORS['mouseovered'])
+
+    def _draw_box(self, img, bbox, color, thickness=1):
+        p0 = bbox['x'][0]-1, bbox['y'][0]-1
+        p1 = bbox['x'][1], bbox['y'][1]
+        cv2.rectangle(img, p0, p1, color, thickness=thickness)
 
 
 class MSMTester(object):
@@ -225,7 +228,7 @@ class MSMTester(object):
             self._selected_ids.remove(box_id)
         else:
             self._selected_ids.append(box_id)
-        logging.info("Toggled selection for box %s, now selected: %s" % (box_id,box_id in  self._selected_ids))
+        logging.info("Toggled selection for box %s, now selected: %s" % (box_id, box_id in self._selected_ids))
 
     def _get_bbox_grid(self, box_size):
         bboxes = {}
@@ -249,7 +252,7 @@ class MSMTester(object):
     def _calc_boxes(self):
         """
         """
-        
+
         bboxes, _ = self._get_bbox_grid(self._box_size)
         colors = {box_id: (np.random.randint(90, 256),
                            np.random.randint(90, 256),
@@ -306,7 +309,6 @@ class MSMTester(object):
         self._notebook.bind("<<NotebookTabChanged>>", self.on_tab_change)
         self._cur_tab = self._tab_names[0]
         self._notebook.select(self._frames[self._cur_tab])
-        
 
     def on_tab_resize(self, event):
         new_tab_size = (event.width, event.height)
@@ -328,24 +330,21 @@ class MSMTester(object):
         msm = self._msms[self._cur_tab]
         if msm.mouse_leave():
             self.refresh_images()
-            
+
     def on_mouse_move(self, event):
-        print(f"Mouse moved in {self._cur_tab} at ({event.x}, {event.y})")
         msm = self._msms[self._cur_tab]
         if msm.mouse_move((event.x, event.y)):
             self.refresh_images()
 
     def on_mouse_click(self, event):
-        logging.info("Mouse clicked in %s at (%d, %d)" % (self._cur_tab, event.x, event.y))
         msm = self._msms[self._cur_tab]
-        #import ipdb; ipdb.set_trace()
+        # import ipdb; ipdb.set_trace()
         box_id, _ = msm.mouse_click((event.x, event.y))
         if box_id is not None:
             self.toggle_selected(box_id)
             self.refresh_images()
 
     def _render_frame(self, tab_name):
-        logging.info("Rendering frame for tab: %s" % tab_name)
         frame = self._base_img[tab_name].copy()
         msm = self._msms[tab_name]
         # Draw the selected boxes:

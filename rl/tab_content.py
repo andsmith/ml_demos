@@ -50,41 +50,43 @@ class TabContentPage(ABC):
     breakpoints in the algorithm loop.
     """
 
-    def __init__(self, app, env, key_info):
+    def __init__(self, alg, keys):
         """
         :param app:  The application instance, used to notify about state changes.
         :param env:  The environment to use.
         :param mouse_manager:  A MouseStateManager (if interactive)
-        :param key_info:  dict: 
+        :param keys:  dict: 
             - 'sizes': {'key_name': {'width': int, 'height': int}, ...}
             - 'x_offsets' : {'key_name': int, ...]  plot key_name at x coordinate (img_width - x_offset[key_name])
             - 'size': (width, height) of all keys)
         """
-        self._app = app
+        self._alg = alg
+        self._app = alg.app
         self._size = None
-        self._env = env
+        self._env = alg.app.env
         self._cur_box = None 
-        self._mouse_manager = MouseBoxManager(app)
-        self._key_info = key_info
+        self._mouse_manager = MouseBoxManager(self._app)
 
+        self._keys=keys
         
         # Base images for states/values, updated as algorithm runs.
         self._base_image = None
         self._marked_image = None
         self._disp_image = None
+        self._displayed_states = {}  # states currently being rendered, draw boxes if app says they're selected, etc.
+        self._blank_frame = self._make_blank()
 
-        self._displayed_states = []  # states currently being rendered, draw boxes if app says they're selected, etc.
+    
+    def resize(self, new_size):
+        if self._size is None or (new_size is not None and self._size != new_size):
+            self._size = new_size
+            self.clear_images()
 
-    def set_boxes(self, boxes):
-        """
-        Set the bounding boxes for the states in the image.
-        :param boxes:  dict of {state: {'x': [x0, x1], 'y': [y0, y1]}}
-        """
-        self._mouse_manager.set_boxes(boxes)
-        for box in boxes.values():
-            if box is not None:
-                self._displayed_states.append(box['id'])
-
+    def _make_blank(self):
+        img = np.zeros((100,300,3), dtype=np.uint8)
+        img[:] = COLOR_SCHEME['bg']
+        cv2.putText(img, "No data to display", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), thickness=1, lineType=cv2.LINE_AA)
+        return img
 
     def clear_images(self,  marked_only=False):
         if not marked_only:
@@ -97,23 +99,38 @@ class TabContentPage(ABC):
         self._size = new_size
         self.clear_images()
 
-    def mouse_move(self, x, y):
-        changed = self._mouse_manager.mouse_move((x,y))
+    def mouse_move(self, pos_xy):
+        changed = self._mouse_manager.mouse_move(pos_xy)
         if changed:
             self.clear_images(marked_only=True)
+            return True
+        return False
+    
+    def mouse_leave(self):
+        if self._mouse_manager.mouse_leave():
+            self.clear_images(marked_only=True)
+            return True
+        return False
 
-    def mouse_click(self, x, y):
+    def mouse_click(self,pos_xy):
         """
         For state embedding images, just tell the tab panel which
         """
-        toggled = self._mouse_manager.mouse_click((x, y))
+        toggled,_ = self._mouse_manager.mouse_click(pos_xy)
         if toggled is not None:
             self._app.toggle_selected_state(toggled)
             self.clear_images(marked_only=True)
+            return toggled
+        return None
 
     def get_tab_frame(self, size,annotated=True):
+
+        if size is None:
+            return self._blank_frame
+        
         if annotated:
             if self._check_invalid(self._disp_image, size):
+
                 self._disp_image= self._draw_annotated()
             return self._disp_image
         else:
@@ -134,6 +151,16 @@ class TabContentPage(ABC):
         """
         pass
 
+        
+
+    @abstractmethod
+    def _get_key_value(self, key_name):
+        """
+        See what the mouse is over, the state of the algorithm, etc, to determine the value the
+        keys should be indicating.
+        """
+        pass
+
     def _draw_marked(self):
         """
         Mark selected states (from the app) and mouseovered state on the base image using the mouse manager.
@@ -148,34 +175,24 @@ class TabContentPage(ABC):
         
         img = self._base_image.copy()
 
-        if self._mouse_manager.mouseover_id is not None:
+        # Draw the boxes for mouseovered & selected states.
+        selected = [s for s in self._app.selected if s in self._displayed_states]
+        self._mouse_manager.render_state(img, selected_ids=selected, thickness=1)
+        
+        # Draw the state the algorithm is currently on, if set (& displayed)
+        if self._alg.state is not None and self._alg.state in self._displayed_states:
+            self._mouse_manager.mark_box(img, self._alg.state, color=UI_COLORS['current_state'], thickness=2)
+        
+        # Draw all keys.
+        for key_name, key in self._keys.items():
+            key_value = self._get_key_value(key_name)
+            key.draw(img,indicate_value = key_value)
 
-
-
-        # Indicate mouseovered state with a box.
-        if self.mouseovered is not None:
-            self.box_placer.draw_box(image=img,
-                                     state_id=self.mouseovered,
-                                     color=NEON_GREEN,
-                                     thickness=1)
-            if tab in self._color_keys:
-                indicated_value = self._values[tab].get(self.mouseovered, None)
-
-        # Draw the color key if applicable.
-        if tab in self._color_keys:
-            self._color_keys[tab].draw(img, line_color=COLOR_LINES, text_color=COLOR_TEXT,
-                                       indicate_value=indicated_value)
-
-        # Draw the state key if not the state tab
-        if self.mouseovered is not None:
-            self._state_key.draw(img, self.mouseovered, pos=self._state_key_pos)
-
-        # Draw the state the algorithm is currently on, if set.
-        if self._cur_state is not None:
-            self.box_placer.draw_box(image=img,
-                                     state_id=self._cur_state,
-                                     color=NEON_GREEN,
-                                     thickness=2)
+        # draw a box around the key area
+        tks = self._alg._total_key_size
+        img[tks[1],img.shape[1]-tks[0]:] = COLOR_SCHEME['lines']
+        img[:tks[1], img.shape[1]-tks[0]] = COLOR_SCHEME['lines']
+    
         return img
 
     def _draw_annotated(self):

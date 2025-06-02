@@ -84,7 +84,7 @@ class TabPanel(AlgDepPanel):
         """
         super().change_algorithm(alg)
         
-        tab_content = alg.get_tab_content()
+        tab_content = alg.get_tabs()
         if tab_content is not None:
             self.set_tabs(tab_content)
 

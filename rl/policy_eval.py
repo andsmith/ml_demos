@@ -7,14 +7,14 @@ import layout
 from game_base import Mark, TERMINAL_REWARDS, get_reward
 from collections import OrderedDict
 import numpy as np
-from tab_content import PolicyEvalSIM
-from colors import COLOR_BG, COLOR_DRAW, COLOR_LINES, COLOR_TEXT
+from colors import COLOR_SCHEME
 import cv2
 from drawing import GameStateArtist
 import time
-
+from state_key import StateKey
+from color_key import ColorKey, ProbabilityColorKey
 from state_embedding import StateEmbedding
-from state_tab_content import  FullStateContentPage, ValueFunctionContentPage
+from state_tab_content import FullStateContentPage  # , ValueFunctionContentPage
 # TODO: import results viz tab
 
 
@@ -25,7 +25,7 @@ class PIPhases(IntEnum):
 
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, env):  # ,alg_params):
+    def __init__(self, app, pi_seed):  # ,alg_params):
 
         # TODO:   DemoAlg.get_options() shoudl return a dict of option types,
         # then the alg_params dict should match it here.
@@ -41,20 +41,29 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         :param gamma: The discount factor (default is 0.9).
         """
-        super().__init__(app=app, env=env)
-        self._colors = {'bg': COLOR_BG,
-                        'lines': COLOR_LINES,
-                        'text': COLOR_TEXT}
-
-        self.updatable_states = self._env.get_nonterminal_states()
-        self.terminal_states = self._env.get_terminal_states()
-
+        self.app = app
+        self.env = app.env
+        self._embedding = self._make_embedding()
+        
+        super().__init__(app=app)
+        self.updatable_states = self.app.env.get_nonterminal_states()
+        self.terminal_states = self.app.env.get_terminal_states()
+        self._viz_img_size = None
         self._delta_v_tol = 1e-6
-        # self.pi_seed = pi_seed
+        self.pi_seed = pi_seed
         # self.gamma = gamma
         self.reset_state()
 
         logging.info("PolicyEvalDemoAlg initialized.")
+
+    def resize(self, panel, new_size):
+        super().resize(panel, new_size)
+        if panel == 'state-tabs':
+            self._embedding.set_size(new_size)
+            for tab in self._tabs.values():
+                tab.resize(new_size)
+        elif panel != 'step-visualization':
+            raise ValueError("Unknown panel for resizing: %s" % panel)
 
     def reset_state(self):
         # start by learning v(s) for this policy:
@@ -79,10 +88,10 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.values = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self.values.update({state: 0.0 for state in self.updatable_states})
 
-        self._update_img_mgr(values=self.values, updates=0.0)
+        # self._update_img_mgr(values=self.values, updates=0.0)
 
         self.next_values = {}
-
+    '''''
     def _update_img_mgr(self, values=None, updates=None):
 
         # Reset the image manager with the initial values.
@@ -97,6 +106,7 @@ class PolicyEvalDemoAlg(DemoAlg):
             else:  # dict
                 for state, update in updates.items():
                     self._img_mgr.set_state_val(state, 'updates', update)
+    '''
 
     def get_status(self):
         font_default = layout.LAYOUT['fonts']['status']
@@ -150,24 +160,34 @@ class PolicyEvalDemoAlg(DemoAlg):
         rco['stops'] = "selected states"
         return rco
 
-    @staticmethod
-    def _get_key_info(self):
-        
-        return {'color': {'size': {'height': 70, 'width': 250}},
-                'state': {'size': {'height': 70, 'width': 70}}}
+    def _make_embedding(self):
+        """
+        Need the key size to determine the embedding size.
+        """
+        self._key_sizes = OrderedDict((('state', {'height': 80, 'width': 80}),
+                                       ('color', {'height': 80, 'width': 250})))
+        self._x_offsets, self._key_sizes, self._total_key_size = self._calc_key_placement(self._key_sizes)
+        embedding = StateEmbedding(self.app.env, key_size=self._total_key_size)
+        return embedding
+
+    def _make_tabs(self):
+        state_key = StateKey(size=self._key_sizes['state'], x_offset=self._x_offsets['state'])
+        # value_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
+        # delta_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
+        # prob_color_key = ProbabilityColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
+        full_key_dict = OrderedDict((('state', state_key),))
+        # values_key_dict
+        # updates_key_dict
+
+        tabs = OrderedDict((('state', FullStateContentPage(self, self._embedding, keys=full_key_dict)),))
+        # ('values', ValueFunctionContentPage(self,  embedding, as_delta=False, keys = [state_key,value_color_key])),
+        # ('updates', ValueFunctionContentPage(self, embedding, as_delta=True, keys = [state_key, delta_color_key]))
+
+        return tabs
+
+    def get_tabs(self):
+        return self._tabs
     
-    def get_tab_content(self):
-        x_offsets, key_sizes, total_key_size = self._calc_key_placement()
-        key_info = {'x_offsets': x_offsets,
-                'sizes': key_sizes,
-                'area_size': total_key_size}
-        embedding= StateEmbedding(self._env, key_size = total_key_size)
-        st = OrderedDict(('states', FullStateContentPage(self._app, self._env,embedding, bg_color=self._colors['bg'], key_info=key_info)),
-                          ('values', ValueFunctionContentPage(self._app, self._env, embedding, bg_color=self._colors['bg'], as_delta=False, key_info=key_info)),
-                          ('updates', ValueFunctionContentPage(self._app, self._env, embedding, bg_color=self._colors['bg'], as_delta=True, key_info=key_info)),)
-
-        return st
-
     def load_state(self, filename):
         """
         Load the state from a file.
@@ -241,17 +261,17 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         :returns: shutdown status
         """
-        self._img_mgr.set_range('updates', (-1.0, 1.0))
-        self._img_mgr.reset_values(tabs=('updates'))
+        # self._img_mgr.set_range('updates', (-1.0, 1.0))
+        # self._img_mgr.reset_values(tabs=('updates'))
 
         def update(state, new_val):
             old_val = self.values[state]
             delta = new_val - old_val
             self.next_values[state] = new_val
-            self._img_mgr.set_state_val(state, 'updates', delta)
-            self._img_mgr.set_state_val(state, 'values', new_val)
+            # self._img_mgr.set_state_val(state, 'updates', delta)
+            # self._img_mgr.set_state_val(state, 'values', new_val)
 
-        state_update_order = self._img_mgr.get_state_update_order()
+        state_update_order = self.updatable_states  # self._img_mgr.get_state_update_order()
 
         self.pe_iter = 0
         self.pe_converged = False
@@ -261,8 +281,8 @@ class PolicyEvalDemoAlg(DemoAlg):
         while not self._shutdown:
 
             # reset updates tab so blank spaces show before filling in values (because this is model-based RL).
-            for state in self.updatable_states:
-                self._img_mgr.set_state_val(state, 'updates', 0.0)
+            # for state in self.updatable_states:
+            #    self._img_mgr.set_state_val(state, 'updates', 0.0)
 
             # One epoch:
             self.next_state_ind = 0
@@ -277,8 +297,8 @@ class PolicyEvalDemoAlg(DemoAlg):
             if self._shutdown:
                 return True
 
-            for state in state_update_order:
-                self._img_mgr.set_state_val(state, 'values', self.next_values[state])
+            # for state in state_update_order:
+            #    self._img_mgr.set_state_val(state, 'values', self.next_values[state])
 
             self.pe_converged = self._check_value_function_convergence()
             if self.pe_converged:
@@ -329,26 +349,25 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         # Reset 'updates' tab, will be used in policy optimization as binary
         # binary, marking which states have a new action, Pi(s)=a.
-        self._img_mgr.set_range('updates', (0.0, 1.0))
-        self._img_mgr.reset_values(tabs=('updates'))
-        for state in self.updatable_states:  # show blank squares before filling in values
-            self._img_mgr.set_state_val(state, 'updates', 0.0)
+        # self._img_mgr.set_range('updates', (0.0, 1.0))
+        # self._img_mgr.reset_values(tabs=('updates'))
+        # for state in self.updatable_states:  # show blank squares before filling in values
+        #    self._img_mgr.set_state_val(state, 'updates', 0.0)
 
         self.n_changes = 0
         self.next_state_ind = 0
 
         def update(state, new_action):
             old_action_dist = self.policy[state]
-            import ipdb
-            ipdb.set_trace()
 
+            changed = False
             if changed:
                 self.n_changes += 1
-                self._img_mgr.set_state_val(state, 'updates', 1.0)
-            else:
-                self._img_mgr.set_state_val(state, 'updates', 0.0)
+                # self._img_mgr.set_state_val(state, 'updates', 1.0)
+            # else:
+            #    self._img_mgr.set_state_val(state, 'updates', 0.0)
 
-        state_update_order = self._img_mgr.get_state_update_order()
+        # state_update_order = self._img_mgr.get_state_update_order()
 
         while not self._shutdown and self.next_state_ind < len(self.updatable_states):
             self.state = state_update_order[self.next_state_ind]
@@ -363,7 +382,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         self.state = None  # clear so nothing is highlighted.
         return self._shutdown, self.n_changes
-
+    '''
     def get_state_image(self, size, tab_name, is_paused):
         self._img_mgr.set_size(size)
         if self.state is not None:
@@ -372,6 +391,7 @@ class PolicyEvalDemoAlg(DemoAlg):
             self._img_mgr.set_current_state()
         img = self._img_mgr.get_tab_img(tab=tab_name, annotated=is_paused)
         return img
+    '''
 
     def get_viz_image(self, size, control_point, is_paused):
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
@@ -393,6 +413,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         text = "%f" % (np.random.randn(),)
         cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, self._colors['text'], 1, cv2.LINE_AA)
         return img
+
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
     def __init__(self, app, env, gamma=0.9):

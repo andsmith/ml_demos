@@ -25,85 +25,51 @@ class DemoAlg(ABC):
         - state/value/update visualization.
     """
 
-    def __init__(self, app, env):
+    def __init__(self, app):
         """
         :param app: The main app object.
         :param advance_event: Event to signal when the algorithm should advance.
         """
+        if self.is_stub():
+            raise RuntimeError("This is a stub class. It should not be instantiated directly.")
+
         self.app = app
-
-        self._env = env
-        self._content = self._make_content_manager()  # Get the state/viz image manager for this algorithm.
-
         self._go_signal = None  # Used to signal the algorithm to advance/continue.
         self._run_control = {option: True for option in self.get_run_control_options()}  # start all options on
-
         self.paused = True
         self._shutdown = False
         self._learn_thread = None
 
+        self._viz_img_size = None  # Size of the visualization image, set when the step-visualization panel is resized.
+        self._state_img_size = None  # Size of the state image, set when the state-tabs panel is resized.   
+
         # The current state being processed by the algorithm, set before pausing so visualization can show it.
         self.state = None
 
-        self.current_ctrl_pt = self.get_init_control()  # The current control point for the algorithm.
-        if self.is_stub():
-            raise RuntimeError("This is a stub class. It should not be instantiated directly.")
+        # The current control point for the algorithm.
+        self.current_ctrl_pt = self.get_init_control()  
+        self._tabs = self._make_tabs()
 
-        self._stop_states = []  # user-set breakpoints, states where the algorithm should pause.
 
-    def get_content_manager(self):
-        return self._content
-    
-    @staticmethod
-    @abstractmethod
-    def _get_key_info(self):
-        """
-        Return layout of the key area (upper right) for content tabs.
-        :return:  dict('key1_name': {
-                            'size': {
-                                'width': w, 'height': h}},
-                        ... })
-        """
-        pass
-
-    def _calc_key_placement(self):
+    def _calc_key_placement(self,key_sizes, key_spacing=None):
         # Full State Tab just uses the state key, on the left in the key area, so sum up the space for the other keys
-        keys = self._get_key_info()
-
-        key_spacing = LAYOUT['key_h_pad']
-        total_key_height = np.max([k_size['height'] for k_size in keys['sizes'].values()]) + \
-            key_spacing * (len(keys['sizes']) - 1)  # no space on
-
-        total_key_width = np.sum([k_size['width'] for k_size in keys['sizes'].values()]) + \
-            key_spacing * (len(keys['sizes']) - 1)
+        
+        key_spacing = LAYOUT['keys']['h_pad_px'] if key_spacing is None else key_spacing
+        total_key_height = np.max([k_size['height'] for k_size in key_sizes.values()]) 
+        total_key_width = np.sum([k_size['width'] for k_size in key_sizes.values()]) + \
+            key_spacing * (len(key_sizes) - 1)
         
         x = - total_key_width
         x_offsets = {}
-        key_sizes = {}
-        for key_name, k_size in keys['sizes'].items():
+
+        for key_name, k_size in key_sizes.items():
             x_offsets[key_name] = x
             key_sizes[key_name] = (k_size['width'], total_key_height)
             x += k_size['width'] + key_spacing
             
         total_key_size = (total_key_width, total_key_height)
+
         return x_offsets, key_sizes, total_key_size
-
-    def toggle_stop_state(self, state):
-        if state in self._stop_states:
-            self._stop_states.remove(state)
-            logging.info("Removed stop state: %s" % state)
-        else:
-            self._stop_states.append(state)
-            logging.info("Added stop state: %s" % state)
-
-    def clear_stop_states(self):
-        self._stop_states = []
-        logging.info("Cleared all stop states.")
-        if self._img_mgr is not None:
-            self._img_mgr.clear_selected()
-
-    def get_stop_states(self):
-        return self._stop_states
 
     def advance(self):
         """
@@ -129,7 +95,7 @@ class DemoAlg(ABC):
         do_pause = self._run_control[control_point]
 
         if 'stops' in self._run_control and self._run_control['stops']:
-            if self.state is not None and self.state in self._stop_states:
+            if self.state is not None and self.state in self.app.selected_states:
                 do_pause = True
                 logging.info("Stopping at user-set stop state: %s" % self.state)
 
@@ -168,12 +134,10 @@ class DemoAlg(ABC):
         """
         pass
 
-    @staticmethod
     @abstractmethod
-    def get_tab_content():
+    def _make_tabs(self, ):
         """
-        ordered dict of {tab_name: TabContentPage object} for the state image panel.
-        :return: A dictionary of tab names and their display names.
+        :return: ordered dict of tab_name: TabContentBage pairs.
         """
         pass
 
@@ -266,17 +230,6 @@ class DemoAlg(ABC):
         pass
 
     @abstractmethod
-    def get_state_image(self, size, tab_name, is_paused):
-        """
-        Get the state image for the given tab.
-        :param size: (width, height) tuple for the image size.
-        :param tab_name: The name of the tab.
-        :param is_paused: Whether the algorithm is paused or not.
-        :return: The state image for the given tab.
-        """
-        pass
-
-    @abstractmethod
     def get_viz_image(self, size, control_point, is_paused):
         """
         Get the visualization image for the given tab.
@@ -301,3 +254,21 @@ class DemoAlg(ABC):
         """
         print("Marking file type: ", self.get_name())
         pickle.dump(self.get_name(), file)
+
+    def resize(self, panel, new_size):
+        """
+        :param panel:  either 'state-tabs'  or  'step-visualization'
+        :param new_size:  (width, height) of the panel in pixels.
+        """
+        if panel == 'step-visualization':
+            if self._viz_img_size is None or self._viz_img_size != new_size:
+                self._viz_img_size = new_size
+                logging.info(f"Resized step-visualization panel to {new_size} pixels.")
+        elif panel == 'state-tabs':
+            self._state_img_size = new_size
+            for tab in self._tabs:
+                self._tabs[tab].resize(new_size)
+        else:
+            raise ValueError(f"Unknown panel type: {panel}. Expected 'state-tabs' or 'step-visualization'.")
+
+        

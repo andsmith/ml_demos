@@ -8,37 +8,36 @@ import numpy as np
 import cv2
 from drawing import GameStateArtist
 from tic_tac_toe import Game, Mark, Result
+from gui_base import Key
+import logging
 
-class StateKey(object):
-    def __init__(self, size):
-        self._size=None
+class StateKey(Key):
+    def __init__(self,  size, x_offset=0):
+        super().__init__(size, x_offset)
         self._state_artist = None
         self._indent = None
-        self.resize(size)
+        height = size[1]
+        space_size = height//4
+        self._state_artist = GameStateArtist(space_size=space_size)
+        self._icon_size = self._state_artist.dims['img_size']
+        if self._icon_size > height:
+            raise ValueError("Use a smaller space_size")
 
-    def resize(self,new_size):
-    
-        if self._size is None or self._size != new_size:
-            height = new_size[1]
-            space_size = height//4
-            self._state_artist = GameStateArtist(space_size=space_size)
-            self._size = new_size
-            state_img_side_len = self._state_artist.dims['img_size']
-            print("Image size:  %s,  cell_size:  %s" %(state_img_side_len, space_size))
-            v_room = height - state_img_side_len
-            h_room = new_size[0] - state_img_side_len
-            self._indent = (h_room // 2, v_room // 2)
+        logging.info("StateKey (%i x %i) initialized with icon size %d  (X offset:  %i)", size[0], size[1],self._icon_size, x_offset)
 
-    def draw(self, img, game_state, pos=(0,0)):
+    def draw(self, img, indicate_value=None):
         """
         Draw the game state in the state key.
         :param img:  The image to draw on.
-        :param game_state:  The game state to draw.
+        :param indicate_value:  A Game state object or None.
         :param pos:  Where in the image to draw the state key.
         """
-        state_img = self._state_artist.get_image(game_state)
-        img[pos[1]+self._indent[1]:pos[1]+self._indent[1] + state_img.shape[0],
-            pos[0]+self._indent[0]:pos[0]+self._indent[0] + state_img.shape[1]] = state_img
+        if indicate_value is None:
+            return
+        state_img = self._state_artist.get_image(indicate_value)
+        pos= self._get_draw_pos(img,center_width=self._icon_size)
+         
+        img[pos[1]:pos[1]+state_img.shape[0], pos[0]:pos[0]+state_img.shape[1]] = state_img
 
 
 
