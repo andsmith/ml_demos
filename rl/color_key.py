@@ -28,7 +28,7 @@ class ColorKey(Key):
 
     """
 
-    def __init__(self, size, cmap, range, x_offset=0):
+    def __init__(self, size, cmap, value_range, x_offset=None):
         """
         Create a color key object.
         :param size: width, height
@@ -38,7 +38,7 @@ class ColorKey(Key):
         """
         super().__init__(size=size, x_offset=x_offset)
         self.cmap = cmap
-        self.range = range
+        self.range = value_range
         self.draw_params = {'axis_width_frac': 1./30,
                             'tick_width_frac': 1./35,
                             'tick_height_frac': .2,
@@ -49,6 +49,9 @@ class ColorKey(Key):
                             'line_color': COLOR_SCHEME['lines'],
                             'text_color': COLOR_SCHEME['text'],
                             }
+
+        logging.info("Initialized ColorKey(%i x %i) with range %s, at x_offset %i",
+                     size[0], size[1], str(value_range), self._x_offset)
         # self.draw_params.update(draw_params)
 
     def _get_font(self, v_space):
@@ -57,8 +60,11 @@ class ColorKey(Key):
         else:
             return self.draw_params['tick_font']['small']
 
+    def norm_value(self, value):
+        return (float(value) - self.range[0]) / (self.range[1] - self.range[0])
+    
     def map_color(self, value):
-        val_norm = (value - self.range[0]) / (self.range[1] - self.range[0])
+        val_norm = self.norm_value(value)
         return np.array(self.cmap(val_norm)[:3])  # returns RGBA, we use RGB
 
     def draw(self, img,  indicate_value=None):
@@ -106,12 +112,11 @@ class ColorKey(Key):
         # Create a gradient image
         spectrum_width = spectrum_x[1] - spectrum_x[0]
         gradient = np.zeros((spectrum_height, spectrum_width, 3), dtype=np.uint8)
-        spec_values = []
-        for i in range(spectrum_width):
-            value = self.range[0] + (self.range[1] - self.range[0]) * i / (w - 1)
-            color = self.map_color(value)
-            gradient[:, i] = (color[:3] * 255).astype(np.uint8)
-            spec_values.append(value)
+        spec_values = np.linspace(self.range[0], self.range[1], spectrum_width)
+        colors = [self.map_color_uint8(value) for value in spec_values]
+        # Fill the gradient with colors
+        gradient[:] = colors
+        print("First and last colors:", colors[0], colors[-1])
 
         # Place the gradient in the image
         img[spectrum_y[0]:spectrum_y[1], spectrum_x[0]:spectrum_x[1]] = gradient
@@ -121,11 +126,21 @@ class ColorKey(Key):
         img[axis_y: axis_y + axis_width, spectrum_x[0]:spectrum_x[1]] = self.draw_params['line_color']
 
         if indicate_value is None:
-            # only show ticks if no value is to be indicated
-            ticks = [self.range[0], 0.0, self.range[1]] if self.range[0] < 0 and self.range[1] > 0 else \
-                [self.range[0], (self.range[0]+self.range[1])/2, self.range[1]]
+            if self.range[0] < 0 and self.range[1] > 0:
+                ticks = [self.range[0],
+                         0.0,
+                         self.range[1]]
+            else:
+                ticks = [self.range[0],
+                         (self.range[0]+self.range[1])/2,
+                         self.range[1]]
         else:
-            ticks = []
+            # show tick at other end of spectrum
+            mid  = (self.range[0] + self.range[1]) / 2  
+            if indicate_value < mid:
+                ticks = [ self.range[1]]
+            else:
+                ticks = [ self.range[0]]
 
         tick_width = axis_width
         num_ticks = len(ticks)
@@ -151,8 +166,8 @@ class ColorKey(Key):
             return text_x, text_x + width
 
         for i in range(num_ticks):
-            tick_x = int(spectrum_x[0] + (spectrum_x[1] - spectrum_x[0]) * i / (num_ticks - 1))
-            tick_left = tick_x - tick_width // 2
+            tick_x_pos = int(spectrum_x[0] + (spectrum_x[1] - spectrum_x[0]) * self.norm_value(ticks[i]) )
+            tick_left = tick_x_pos - tick_width // 2
             tick_right = tick_left + tick_width
             if i == num_ticks - 1:
                 # don't overrun axis
@@ -162,10 +177,10 @@ class ColorKey(Key):
                 shift = tick_left - spectrum_x[0]
                 tick_right, tick_left = tick_right-shift, tick_left-shift
             img[tick_top:tick_bottom, tick_left:tick_right] = self.draw_params['line_color']
-            if indicate_value is None:
-                label_value = self.range[0] + (self.range[1] - self.range[0]) * i / (num_ticks - 1)
-                label_text = f"{label_value:.1f}"
-                draw_label_at(label_text, tick_x,  color=self.draw_params['text_color'])
+            
+            label_value = ticks[i]
+            label_text = f"{label_value:.1f}"
+            draw_label_at(label_text, tick_x_pos,  color=self.draw_params['text_color'])
 
         if indicate_value is not None:
 
@@ -230,18 +245,120 @@ class ColorKey(Key):
 
         return img
 
+    def map_color_uint8(self, value):
+        color = self.map_color(value)
+        return (color * 255).astype(np.uint8)
+
 
 class ProbabilityColorKey(ColorKey):
     """
     Uses 'gray' colormap, range [0, 1] and inverts rgb values (so dark is 1.0)
     """
 
-    def __init__(self, size, x_offset=0):
+    def __init__(self, size, x_offset=None):
         cmap = plt.get_cmap('gray')
-        super().__init__(cmap=cmap, range=(0., 1.), size=size, x_offset=x_offset)
+        super().__init__(size=size, cmap=cmap, value_range=(0., 1.), x_offset=x_offset)
 
     def map_color(self, value):
         return super().map_color(1.0 - value)  # invert the color for probabilities
+
+
+class SelfAdjustingColorKey(ColorKey):
+    """
+    Range is intially (-1,1):
+        - when first value v is set, range changes to (min(-1, v), max(1, v)).
+        - When second value w is set (where w!=v) the range changes to (min(v, w), max(v, w)).
+        - Subsequent values expand the range.
+    """
+
+    def __init__(self, size, cmap, x_offset=None):
+        self._min_value = -1.0
+        self._max_value = 1.0
+        self._n_set = 0
+
+        super().__init__(size=size, cmap=cmap,
+                         value_range=(self._min_value, self._max_value),
+                         x_offset=x_offset)
+
+    def set_values(self, values):
+        """
+        :param values: list of values to set the color key range to.
+        :return: True if either the min or max value changed, False otherwise.
+        """
+        smallest, biggest = min(values), max(values)
+        if self._n_set == 0:
+            if smallest == biggest:
+                # just one value
+                new_min_value = min(-1.0, smallest)
+                new_max_value = max(1.0, biggest)
+            else:
+                new_min_value_min_value = min(self._min_value, smallest)
+                new_max_value = max(self._max_value, biggest)
+        changed = (self._min_value != new_min_value or
+                   self._max_value != new_max_value)
+        self._min_value = new_min_value
+        self._max_value = new_max_value
+        return changed
+
+
+def test_adjusting_color_key():
+    key_size = (300, 50)
+    img_size = (640, 480)
+    # Create a background image
+    bkg = np.zeros((img_size[1], img_size[0], 3), dtype=np.uint8)
+    x_lims = [100, img_size[0]-100]
+    y_lims = [200, 300]
+    bar_color = COLOR_SCHEME['lines']
+    bkg[:] = COLOR_SCHEME['bg']
+
+    key_img = np.zeros((key_size[1], key_size[0], 3), dtype=np.uint8)
+
+    mouse_val = [None]
+
+    def _x_val(x_pos, y_pos):
+        if y_lims[0] > y_pos or y_pos > y_lims[1]:
+            return None
+        if x_pos < x_lims[0] or x_pos > x_lims[1]:
+            return None
+        return (x_pos - x_lims[0]) / (x_lims[1] - x_lims[0]) * (sack._max_value - sack._min_value) + sack._min_value
+
+    def on_mouse(event, x, y, flags, param):
+        if event != cv2.EVENT_MOUSEMOVE:
+            return
+        print(f"Mouse at ({x}, {y})")
+        x_val = _x_val(x, y)
+        if x_val is not None:
+            mouse_val[0] = (x_val)
+        else:
+            mouse_val[0] = None
+    #  Display an image and a bar, the mouse over the bar sends its x-coordinate to the color key as
+    #  a value in the range [-100, 100].
+    win_name = "Self Adjusting Color Key Test"
+    cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(win_name, img_size[0], img_size[1])
+    cv2.setMouseCallback(win_name, on_mouse)
+
+    sack = SelfAdjustingColorKey(size=key_size, cmap=plt.get_cmap('coolwarm'))
+
+    while True:
+        frame = bkg.copy()
+        key_img[:] = COLOR_SCHEME['bg']
+        sack.draw(key_img, indicate_value=mouse_val[0])
+        if mouse_val[0] is not None:
+            color = sack.map_color_uint8(mouse_val[0])
+            print(f"Mouse value: {mouse_val[0]:.3f} -> color {color}")
+        else:
+            color = bar_color
+        frame[y_lims[0]:y_lims[1], x_lims[0]:x_lims[1]] = color
+        frame[300:key_size[1]+300, 100:100+key_size[0]] = key_img
+
+        cv2.imshow(win_name, frame[:, :, ::-1])
+        k = cv2.waitKey(1)
+        if k == 27:  # ESC key
+            break
+        elif k == ord('q'):
+            break
+    cv2.destroyAllWindows()
 
 
 def test_color_key():
@@ -252,13 +369,12 @@ def test_color_key():
     keys = []
     indicated = [-1.05, -1.0, -0.75, None,  0.0, 0.5, 1.0, 1.05]
     for i, box_h in enumerate([40, 50, 60, 70, 70, 100, 120, 150]):
-
         box_size = (box_w, box_h)
         img = np.zeros((box_h, box_w, 3), dtype=np.uint8)
         img[:] = (127, 127, 127)
         cmap = plt.get_cmap('coolwarm')
-        range = (-1.0, 1.0)
-        ck = ColorKey(size=box_size, cmap=cmap, range=(-1.0, 1.0))
+        # import ipdb ; ipdb.set_trace()
+        ck = ColorKey(size=box_size, cmap=cmap, value_range=(-1.0, 1.0))
 
         ck.draw(img, indicate_value=indicated[i])
         keys.append(img)
@@ -302,5 +418,6 @@ def test_probability_color_key():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    test_probability_color_key()
-    test_color_key()
+    # test_color_key()
+    # test_probability_color_key()
+    test_adjusting_color_key()
