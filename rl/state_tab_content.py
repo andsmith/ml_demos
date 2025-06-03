@@ -82,12 +82,48 @@ class FullStateContentPage(TabContentPage):
             self.clear_images(marked_only=True)
 
     def _get_key_value(self, key_name):
+        """
+        Subclasses with additional/different keys should override this.
+        """
         if key_name=='state':
             return self._mouse_manager.mouseover_id
         else:
             raise ValueError(f"Unknown key name: {key_name}. Only 'state' is supported in FullStateContentPage.")
         
-            
+
+class ValueFunctionContentPage(FullStateContentPage):
+    def __init__(self, alg, embedding, keys, bg_color=None):
+        """
+        :param app:  The application instance.
+        :param env:  The environment to use.
+        :param tabs:  list of strings, names of tabs (for dict references, not display)
+        :param value_ranges:  dict(tab_name: (min, max)) for each tab (defaults to (-1, 1))
+        :param colormap_names:  dict(tab_name: colormap name) for each tab (defaults to 'viridis')
+        :param bg_colors:  dict(tab_name: color) for each tab (defaults COLOR_BG for states, SKY_BLUE for values/updates)
+        :param key_sizes:  dict with 'color' and 'state' keys, each with a tuple (width, height)
+        """
+        bg_color = bg_color if bg_color is not None else COLOR_SCHEME['func_bg']
+        super().__init__(alg=alg, embedding=embedding, keys=keys, bg_color=bg_color)
+        self._values = {}
+        self._cmap = plt.get_cmap('viridis')  # Default colormap for value functions
+
+    def set_values(self, values):   
+        self._values = values
+        logging.info(f"Setting values for {len(values)} states.")
+        self.clear_images(marked_only=False)
+
+    def _get_key_value(self, key_name):
+        if key_name=='values':
+            state= self._mouse_manager.mouseover_id
+            if state is None or state not in self._values:
+                return None
+            return self._values[state]
+        elif key_name=='state':
+            return super()._get_key_value(key_name)
+        else:
+            raise ValueError(f"Unknown key name: {key_name}. Only 'state' is supported in FullStateContentPage.")
+
+
 '''
 class ValueFunctionContentPage(FullStateContentPage):
     """

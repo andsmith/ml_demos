@@ -112,14 +112,14 @@ class TabTester(object):
         Handle the resize event for the main window.
         """
         pass
-    
+
     def on_tab_resize(self, event):
         new_tab_size = (event.width, event.height)
         if self._tab_img_size is None or   (self._tab_img_size != new_tab_size):
             logging.info("Resizing tab images to %s" % str(new_tab_size))
             self._tab_img_size = new_tab_size
             self._alg.resize('state-tabs', new_tab_size)
-            self.refresh_images()
+            self.refresh_images(clear=True)
             
     def on_tab_change(self, event):
         self._set_cur_tab()
@@ -152,9 +152,12 @@ class TabTester(object):
 
         return frame
 
-    def refresh_images(self):
+    def refresh_images(self,clear=False):
         if self._img_size is None:
             return
+        tab = self._tabs[self._set_cur_tab()]['tab_content']
+        if clear:
+            tab.clear_images(marked_only=True)
         new_img = self._render_frame(self._cur_tab)
         new_img = ImageTk.PhotoImage(image=Image.fromarray(new_img))
         label = self._labels[self._cur_tab]

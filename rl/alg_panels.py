@@ -163,13 +163,19 @@ class TabPanel(AlgDepPanel):
     def _on_resize(self, event):
         pass
         
-    def refresh_images(self, is_paused):
+    def refresh_images(self, is_paused, clear=False):
         """
         Get new image from the app, set the image for the current tab.
         """
         if self._tab_image_size is None:
             return
-        new_img = self._tabs[self.cur_tab]['tab_content'].get_tab_frame(self._tab_image_size, annotated=is_paused)
+        tab =self._tabs[self.cur_tab]['tab_content']
+
+        if clear:
+            # Marking/annotations can change while a different tab is active, other interactions already update the image.
+            tab.clear_images(marked_only=True)
+
+        new_img = tab.get_tab_frame(self._tab_image_size, annotated=is_paused)
         new_img = ImageTk.PhotoImage(image=Image.fromarray(new_img))
         label = self._tabs[self.cur_tab]['label']
         label.config(image=new_img)
@@ -181,7 +187,7 @@ class TabPanel(AlgDepPanel):
         logging.info("Tab changed to %s" % self._notebook.tab(self._notebook.select(), "text"))
         # get the current tab:
         self.cur_tab = self._tab_name_by_disp[self._notebook.tab(self._notebook.select(), "text")]
-        self.refresh_images(is_paused=self._alg.paused)
+        self.refresh_images(is_paused=self._alg.paused, clear_tab=True)
 
     def _on_mouse_click(self, event, tab):
         #logging.info("Mouse click at (%d, %d) on tab %s" % (event.x, event.y, tab))

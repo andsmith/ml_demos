@@ -12,10 +12,11 @@ import cv2
 from drawing import GameStateArtist
 import time
 from state_key import StateKey
-from color_key import ColorKey, ProbabilityColorKey
+from color_key import SelfAdjustingColorKey, ProbabilityColorKey
 from state_embedding import StateEmbedding
-from state_tab_content import FullStateContentPage  # , ValueFunctionContentPage
+from state_tab_content import FullStateContentPage, ValueFunctionContentPage
 # TODO: import results viz tab
+import matplotlib.pyplot as plt
 
 
 class PIPhases(IntEnum):
@@ -91,22 +92,6 @@ class PolicyEvalDemoAlg(DemoAlg):
         # self._update_img_mgr(values=self.values, updates=0.0)
 
         self.next_values = {}
-    '''''
-    def _update_img_mgr(self, values=None, updates=None):
-
-        # Reset the image manager with the initial values.
-        self._img_mgr.reset_values()
-        if values is not None:
-            for state, value in values.items():
-                self._img_mgr.set_state_val(state, 'values', value)
-        if updates is not None:
-            if isinstance(updates, (int, float)):
-                for state in self.updatable_states:
-                    self._img_mgr.set_state_val(state, 'updates', updates)
-            else:  # dict
-                for state, update in updates.items():
-                    self._img_mgr.set_state_val(state, 'updates', update)
-    '''
 
     def get_status(self):
         font_default = layout.LAYOUT['fonts']['status']
@@ -164,6 +149,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         """
         Need the key size to determine the embedding size.
         """
+        # Only include keys that go on embedding-based images.
         self._key_sizes = OrderedDict((('state', {'height': 80, 'width': 80}),
                                        ('color', {'height': 80, 'width': 250})))
         self._x_offsets, self._key_sizes, self._total_key_size = self._calc_key_placement(self._key_sizes)
@@ -171,18 +157,27 @@ class PolicyEvalDemoAlg(DemoAlg):
         return embedding
 
     def _make_tabs(self):
-        state_key = StateKey(size=self._key_sizes['state'], x_offset=self._x_offsets['state'])
-        # value_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
+        
+        state_key = StateKey(size=self._key_sizes['state'],
+                             x_offset=self._x_offsets['state'])
+        
+        value_color_key = SelfAdjustingColorKey(size=self._key_sizes['color'],
+                                   x_offset=self._x_offsets['color'],
+                                   cmap=plt.get_cmap('viridis'))
+        
         # delta_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
         # prob_color_key = ProbabilityColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
-        full_key_dict = OrderedDict((('state', state_key),))
         # values_key_dict
         # updates_key_dict
 
         tabs = OrderedDict((('state', {'disp_text': "States",
-                                       'tab_content': FullStateContentPage(self, self._embedding, keys=full_key_dict)}),
-                            ))
-        # ('values', ValueFunctionContentPage(self,  embedding, as_delta=False, keys = [state_key,value_color_key])),
+                                       'tab_content': FullStateContentPage(self, self._embedding,
+                                                                           keys=OrderedDict((('state', state_key),)))}),
+
+                            ('values', {'disp_text': "Values",
+                                        'tab_content': ValueFunctionContentPage(self, self._embedding,
+                                                                                keys=OrderedDict((('state', state_key),
+                                                                                                 ('values', value_color_key))))})))
         # ('updates', ValueFunctionContentPage(self, embedding, as_delta=True, keys = [state_key, delta_color_key]))
 
         return tabs

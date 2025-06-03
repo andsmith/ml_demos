@@ -84,14 +84,14 @@ class Key(ABC):
     They are used to indicate the meaning of colors, etc, under the mouse.
     """
 
-    def __init__(self, size, x_offset=0):
+    def __init__(self, size, x_offset=None):
         """
         Initialize the key with a color map, range, size, and optional drawing parameters.
         :param size: The size of the key in pixels (width, height).
         :param x_offset: how far LEFT of the image edge to draw the key.
         """
         self.size = size
-        self._x_offset = x_offset
+        self._x_offset = x_offset if x_offset is not None else -size[0]
 
     def _get_draw_pos(self, img, center_width=None):
         """
