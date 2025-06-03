@@ -62,7 +62,7 @@ class ColorKey(Key):
 
     def norm_value(self, value):
         return (float(value) - self.range[0]) / (self.range[1] - self.range[0])
-    
+
     def map_color(self, value):
         val_norm = self.norm_value(value)
         return np.array(self.cmap(val_norm)[:3])  # returns RGBA, we use RGB
@@ -116,7 +116,6 @@ class ColorKey(Key):
         colors = [self.map_color_uint8(value) for value in spec_values]
         # Fill the gradient with colors
         gradient[:] = colors
-        print("First and last colors:", colors[0], colors[-1])
 
         # Place the gradient in the image
         img[spectrum_y[0]:spectrum_y[1], spectrum_x[0]:spectrum_x[1]] = gradient
@@ -125,63 +124,31 @@ class ColorKey(Key):
         axis_width = max(2, int(self.draw_params['axis_width_frac'] * h))
         img[axis_y: axis_y + axis_width, spectrum_x[0]:spectrum_x[1]] = self.draw_params['line_color']
 
-        if indicate_value is None:
-            if self.range[0] < 0 and self.range[1] > 0:
-                ticks = [self.range[0],
-                         0.0,
-                         self.range[1]]
-            else:
-                ticks = [self.range[0],
-                         (self.range[0]+self.range[1])/2,
-                         self.range[1]]
-        else:
-            # show tick at other end of spectrum
-            mid  = (self.range[0] + self.range[1]) / 2  
-            if indicate_value < mid:
-                ticks = [ self.range[1]]
-            else:
-                ticks = [ self.range[0]]
+        middle_tick_val = 0 if (self.range[0] < 0 and self.range[1] > 0) else \
+            (self.range[0] + self.range[1]) / 2.0
 
+        ticks = [self.range[0],
+                 middle_tick_val,
+                 self.range[1]]
         tick_width = axis_width
         num_ticks = len(ticks)
 
         def draw_label_at(string, x_pos, color, bg_color=None):
-
             thickness = 1 if font_scale < 2 else 2
             (width, _), _ = cv2.getTextSize(string, font, font_scale, thickness)
-
             text_x = x_pos - width // 2
             if text_x < left+2:
                 text_x = left+2
             elif text_x + width > right-2:
                 text_x = right-2 - width
-
             if bg_color is not None:
                 # Expand box a bit
                 img[tick_label_top-1:tick_label_bottom+1, text_x-1:text_x + width+1] = bg_color
-
             cv2.putText(img, string, (text_x, tick_label_bottom),
                         font, font_scale, color, thickness, lineType=cv2.LINE_AA)
+            return text_x, width
 
-            return text_x, text_x + width
-
-        for i in range(num_ticks):
-            tick_x_pos = int(spectrum_x[0] + (spectrum_x[1] - spectrum_x[0]) * self.norm_value(ticks[i]) )
-            tick_left = tick_x_pos - tick_width // 2
-            tick_right = tick_left + tick_width
-            if i == num_ticks - 1:
-                # don't overrun axis
-                shift = tick_right - spectrum_x[1]
-                tick_left, tick_right = tick_left-shift, tick_right-shift
-            elif i == 0:
-                shift = tick_left - spectrum_x[0]
-                tick_right, tick_left = tick_right-shift, tick_left-shift
-            img[tick_top:tick_bottom, tick_left:tick_right] = self.draw_params['line_color']
-            
-            label_value = ticks[i]
-            label_text = f"{label_value:.1f}"
-            draw_label_at(label_text, tick_x_pos,  color=self.draw_params['text_color'])
-
+        tick_dims = []  # (x_pos, width)
         if indicate_value is not None:
 
             # Write the indicatee value
@@ -206,7 +173,7 @@ class ColorKey(Key):
             if ind_x < 0:
                 ind_line_x = spectrum_x[0] - line_w*2  # move it to the left of the spectrum
             elif ind_x > spectrum_width:
-                ind_line_x = spectrum_x[1] + line_w*2  # move it to the right of the spectrum
+                ind_line_x = spectrum_x[1] + line_w*2 - 2  # move it to the right of the spectrum
             else:
                 ind_line_x = spectrum_x[0] + ind_x
 
@@ -223,8 +190,9 @@ class ColorKey(Key):
                 ind_x = spectrum_width - 1
 
             ind_label_text = f"{indicate_value:.3f}"
-            line_x_left, line_x_right = draw_label_at(
-                ind_label_text, spectrum_x[0] + ind_x, color=self.draw_params['text_color'], bg_color=bkg_color)
+            line_x_left, label_width = draw_label_at(
+                ind_label_text, spectrum_x[0] + ind_x, color=self.draw_params['text_color'])
+            line_x_right = line_x_left + label_width
             if line_x_left < left + space_x:
                 line_x_left += line_w*2
             elif line_x_right > right - space_x:
@@ -242,6 +210,43 @@ class ColorKey(Key):
                     ind_line[:, i] = white
             # place the horizontal line above the label
             img[line_bottom:line_bottom+line_height, line_x_left:line_x_right] = ind_line
+            tick_dims.append((line_x_left, label_width  ))
+
+        def check_tick_room(tick_x, label_text):
+            width = cv2.getTextSize(label_text, font, font_scale, 1)[0][0]
+            tick_left = tick_x - width // 2
+            tick_right = tick_left + width
+            room = True
+
+            for x_pos, width in tick_dims:
+                other_left, other_right = x_pos, x_pos + width
+                if (tick_left < other_right and tick_right > other_left) or \
+                        (tick_right > other_left and tick_left < other_right):
+                    room = False
+                    break
+            return room
+
+        # And draw the rest of the ticks:        
+        for i in range(num_ticks):
+            tick_x_pos = int(spectrum_x[0] + (spectrum_x[1] - spectrum_x[0]) * self.norm_value(ticks[i]))
+            tick_left = tick_x_pos - tick_width // 2
+            tick_right = tick_left + tick_width
+            if ticks[i]==self.range[1]:
+                # don't overrun axis
+                shift = tick_right - spectrum_x[1]
+                tick_left, tick_right = tick_left-shift, tick_right-shift
+            elif ticks[i]==self.range[0]:
+                shift = tick_left - spectrum_x[0]
+                tick_right, tick_left = tick_right-shift, tick_left-shift
+            img[tick_top:tick_bottom, tick_left:tick_right] = self.draw_params['line_color']
+
+            label_value = ticks[i]
+            label_text = f"{label_value:.1f}"
+            show_label= check_tick_room(tick_x_pos, label_text)
+            if show_label:
+                x_pos, width = draw_label_at(label_text, tick_x_pos,  color=self.draw_params['text_color'])
+                tick_dims.append((x_pos, width))
+            last_tick_x_txt = tick_x_pos
 
         return img
 
@@ -272,12 +277,10 @@ class SelfAdjustingColorKey(ColorKey):
     """
 
     def __init__(self, size, cmap, x_offset=None):
-        self._min_value = -1.0
-        self._max_value = 1.0
         self._n_set = 0
 
         super().__init__(size=size, cmap=cmap,
-                         value_range=(self._min_value, self._max_value),
+                         value_range=(-1.0, 1.0),
                          x_offset=x_offset)
 
     def set_values(self, values):
@@ -285,19 +288,10 @@ class SelfAdjustingColorKey(ColorKey):
         :param values: list of values to set the color key range to.
         :return: True if either the min or max value changed, False otherwise.
         """
-        smallest, biggest = min(values), max(values)
-        if self._n_set == 0:
-            if smallest == biggest:
-                # just one value
-                new_min_value = min(-1.0, smallest)
-                new_max_value = max(1.0, biggest)
-            else:
-                new_min_value_min_value = min(self._min_value, smallest)
-                new_max_value = max(self._max_value, biggest)
-        changed = (self._min_value != new_min_value or
-                   self._max_value != new_max_value)
-        self._min_value = new_min_value
-        self._max_value = new_max_value
+        all_values = np.array([self.range[0], self.range[1], np.min(values), np.max(values)])
+        new_range = all_values.min(), all_values.max()
+        changed = (new_range[0] != self.range[0]) or (new_range[1] != self.range[1])
+        self.range = new_range
         return changed
 
 
@@ -315,17 +309,21 @@ def test_adjusting_color_key():
 
     mouse_val = [None]
 
+    x_val_range = [-10, 10]
+
     def _x_val(x_pos, y_pos):
         if y_lims[0] > y_pos or y_pos > y_lims[1]:
             return None
         if x_pos < x_lims[0] or x_pos > x_lims[1]:
             return None
-        return (x_pos - x_lims[0]) / (x_lims[1] - x_lims[0]) * (sack._max_value - sack._min_value) + sack._min_value
+        return (x_pos - x_lims[0]) / (x_lims[1] - x_lims[0]) * (x_val_range[1] - x_val_range[0]) + x_val_range[0]
+
+    def _x_pos(x_val):
+        return int((x_val - x_val_range[0]) / (x_val_range[1] - x_val_range[0]) * (x_lims[1] - x_lims[0]) + x_lims[0])
 
     def on_mouse(event, x, y, flags, param):
         if event != cv2.EVENT_MOUSEMOVE:
             return
-        print(f"Mouse at ({x}, {y})")
         x_val = _x_val(x, y)
         if x_val is not None:
             mouse_val[0] = (x_val)
@@ -345,12 +343,16 @@ def test_adjusting_color_key():
         key_img[:] = COLOR_SCHEME['bg']
         sack.draw(key_img, indicate_value=mouse_val[0])
         if mouse_val[0] is not None:
+            sack.set_values([mouse_val[0]])
             color = sack.map_color_uint8(mouse_val[0])
-            print(f"Mouse value: {mouse_val[0]:.3f} -> color {color}")
         else:
             color = bar_color
         frame[y_lims[0]:y_lims[1], x_lims[0]:x_lims[1]] = color
         frame[300:key_size[1]+300, 100:100+key_size[0]] = key_img
+        x_minus = int(_x_pos(-1))
+        x_plus = int(_x_pos(1))
+        frame[y_lims[0]-10:y_lims[0]+10, x_minus] = bar_color
+        frame[y_lims[0]-10:y_lims[0]+10,  x_plus] = bar_color
 
         cv2.imshow(win_name, frame[:, :, ::-1])
         k = cv2.waitKey(1)
@@ -373,7 +375,6 @@ def test_color_key():
         img = np.zeros((box_h, box_w, 3), dtype=np.uint8)
         img[:] = (127, 127, 127)
         cmap = plt.get_cmap('coolwarm')
-        # import ipdb ; ipdb.set_trace()
         ck = ColorKey(size=box_size, cmap=cmap, value_range=(-1.0, 1.0))
 
         ck.draw(img, indicate_value=indicated[i])
@@ -418,6 +419,6 @@ def test_probability_color_key():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # test_color_key()
-    # test_probability_color_key()
+    test_color_key()
+    test_probability_color_key()
     test_adjusting_color_key()
