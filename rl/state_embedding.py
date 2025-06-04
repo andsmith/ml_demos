@@ -15,6 +15,7 @@ from gameplay import ResultSet, Match
 from colors import COLOR_SCHEME
 from layer_optimizer import SimpleTreeOptimizer
 from gui_base import Key, KeySizeTester
+from game_base import TERMINAL_REWARDS, Result
 
 SPACE_SIZES = [7, 2, 2, 2, 2, 3]  # Sizes for the state embedding layers
 
@@ -147,18 +148,20 @@ class StateEmbeddingKey(Key):
                    'states': [[Game.from_strs(["X  ", " X ", "  X"]),
                               Game.from_strs(["XOO", "OXX", "OXO"]),
                               Game.from_strs(["O  ", " O ", "  O"])]],
-                   'captions': [["R: 1.0", "R: -0.5", "R: -1.0"]],  # Only 1 line for each, for now.
+                   'captions': [["R: %.2F" % (TERMINAL_REWARDS[Result.X_WIN]),
+                                "R: %.2F" % (TERMINAL_REWARDS[Result.DRAW]),
+                                 "R: %.2F" % (TERMINAL_REWARDS[Result.O_WIN])]],
                    'font': cv2.FONT_HERSHEY_SIMPLEX,
                    'text_color': COLOR_SCHEME['text']}
 
         dims = {}
 
         # TODO: Move to LAYOUT
-        v_pad_frac = 0.1  # fraction of TOTAL vertical space used for top & bottom padding
+        v_pad_frac = 0.15  # fraction of TOTAL vertical space used for top & bottom padding
         h_pad_frac = 0.15  # fraction of TOTAL horizontal space used for left & right padding, and between columns
 
-        t_pad_frac = 0.07  # fraction of TOTAL unused space used for text_padding
-        v_img_frac = 0.66  # fraction of key height used for the game state images
+        t_pad_frac = 0.1  # fraction of TOTAL unused space used for text_padding
+        v_img_frac = 0.5  # fraction of key height used for the game state images
         n_cols = len(content['titles'][0])  # number of columns in the key
         n_rows = len(content['titles'])  # number of rows in the key
 
@@ -205,6 +208,39 @@ class StateEmbeddingKey(Key):
                                     max_height=text_h,
                                     incl_baseline=False)
 
+        # Need to shrink caption font size? (Should all be the same)
+        cap_font_scale = font_scale
+        title_font_scale = font_scale
+
+        for row in range(n_rows):
+            y_top, y_bottom = dims['rows'][row]
+            for col in range(n_cols):
+                x_left, x_right = dims['columns'][col]
+                text_width = x_right - x_left
+                caption = content['captions'][row][col]
+                font = content['font']
+                (cap_width, cap_height), cap_baseline = cv2.getTextSize(text=caption, fontFace=font,
+                                                                        fontScale=font_scale,
+                                                                        thickness=1)
+                if cap_width > text_width:
+                    new_cap_font_scale = get_font_scale(font=font,
+                                                        max_height=text_h,
+                                                        incl_baseline=False,
+                                                        max_width=text_width, text_lines=[caption])
+                    if new_cap_font_scale < cap_font_scale:
+                        cap_font_scale = new_cap_font_scale
+                title = content['titles'][row][col]
+                (title_width, title_height), title_baseline = cv2.getTextSize(text=title, fontFace=font,
+                                                                              fontScale=title_font_scale,
+                                                                              thickness=1)
+                if title_width > text_width:
+                    new_title_font_scale = get_font_scale(font=font,
+                                                          max_height=text_h,
+                                                          incl_baseline=False,
+                                                          max_width=text_width, text_lines=[title])
+                    if new_title_font_scale < font_scale:
+                        title_font_scale = new_title_font_scale
+
         # set text and image positions:
         cells = []
 
@@ -212,9 +248,9 @@ class StateEmbeddingKey(Key):
             y_top, y_bottom = dims['rows'][row]
             cells.append([])
             for col in range(n_cols):
-                
+
                 x_left, x_right = dims['columns'][col]
-                
+
                 title_top, title_bottom = y_top, y_top + text_h
                 img_top = title_bottom+vert_text_pad_size
                 img_bottom = img_top + img_h
@@ -226,21 +262,29 @@ class StateEmbeddingKey(Key):
 
                 (width, height), baseline = cv2.getTextSize(content['titles'][row][col],
                                                             content['font'],
-                                                            fontScale=font_scale,
+                                                            fontScale=title_font_scale,
                                                             thickness=1)
-                txt_center_x = x_center - width // 2
+                title_txt_center_x = x_center - width // 2
+
+                (width, height), baseline = cv2.getTextSize(content['captions'][row][col],
+                                                            content['font'],
+                                                            fontScale=cap_font_scale,
+                                                            thickness=1)
+                cap_txt_center_x = x_center - width // 2
 
                 cells[-1].append({'title_y_span': (title_top, title_bottom),
                                  'caption_y_span': (caption_top, caption_bottom),
-                                 'img_y_span': (img_top, img_bottom),
-                                 'img_x_span': img_center_x_span,
-                                 'text_pos': (txt_center_x, title_bottom +baseline),
-                                 'bbox': {'x': (x_left, x_right),
-                                          'y': (y_top, y_bottom)}})
+                                  'img_y_span': (img_top, img_bottom),
+                                  'img_x_span': img_center_x_span,
+                                  'title_text_pos': (title_txt_center_x, title_bottom + baseline),
+                                  'caption_text_pos': (cap_txt_center_x, caption_bottom + baseline),
+                                  'bbox': {'x': (x_left, x_right),
+                                           'y': (y_top, y_bottom)}})
         dims['cells'] = cells
         dims['n_rows'] = n_rows
         dims['n_cols'] = n_cols
-        dims['font_scale'] = font_scale
+        dims['title_font_scale'] = title_font_scale
+        dims['caption_font_scale'] = cap_font_scale
 
         return dims, content
 
@@ -269,8 +313,7 @@ class StateEmbeddingKey(Key):
 
         for row in range(self._dims['n_rows']):
             for col in range(self._dims['n_cols']):
-                cell=self._dims['cells'][row][col]
-
+                cell = self._dims['cells'][row][col]
 
                 x_left, x_right = self._dims['columns'][col]
 
@@ -282,24 +325,23 @@ class StateEmbeddingKey(Key):
                     offset[0] + img_pos[0]:offset[0] + img_pos[0]+state_image.shape[1], :] = state_image
                 # _dot_at(img_pos,size=4)
                 title_y_span = cell['title_y_span']
-                title_x_span = cell['text_pos']
-                #_dot_at((title_x_span[0], title_y_span[0]), size=4)
-                #_dot_at((title_x_span[0], title_y_span[1]), size=4)
+                title_x_span = cell['title_text_pos']
+                # _dot_at((title_x_span[0], title_y_span[0]), size=4)
+                # _dot_at((title_x_span[0], title_y_span[1]), size=4)
 
                 pos = (title_x_span[0]+offset[0], title_y_span[1]+offset[1])
                 cv2.putText(img, self._content['titles'][row][col],
-                            pos, self._content['font'],self._dims['font_scale'],
+                            pos, self._content['font'], self._dims['title_font_scale'],
                             self._content['text_color'], thickness=1, lineType=cv2.LINE_AA)
 
                 cap_y_span = cell['caption_y_span']
-                cap_x = offset[0] + img_pos[0]
+                cap_x = offset[0] + cell['caption_text_pos'][0]
                 cap_y = cap_y_span[1] + offset[1]
-                #_dot_at((cap_x, cap_y_span[0]), size=4, color=128)
-                #_dot_at((cap_x, cap_y_span[1]), size=4, color=128)
+                # _dot_at((cap_x, cap_y_span[0]), size=4, color=128)
+                # _dot_at((cap_x, cap_y_span[1]), size=4, color=128)
                 pos = (cap_x, cap_y)
-                print("Writing caption at", pos, self._content['captions'][row][col])
-                cv2.putText(img, self._content['captions'][row][col],pos,
-                            self._content['font'], self._dims['font_scale'],
+                cv2.putText(img, self._content['captions'][row][col], pos,
+                            self._content['font'], self._dims['caption_font_scale'],
                             self._content['text_color'], thickness=1, lineType=cv2.LINE_AA)
 
                 # img[offset[1]+title_span[0],10:200,:] =

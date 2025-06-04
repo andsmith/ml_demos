@@ -137,6 +137,7 @@ class TabTester(object):
     def on_mouse_move(self, event):
         tab = self._tabs[self._set_cur_tab()]['tab_content']
         if tab.mouse_move((event.x, event.y)):
+            print("CHANGE#(*$(*H$(*($*F()))))")
             self.refresh_images()
 
     def on_mouse_click(self, event):
@@ -153,11 +154,15 @@ class TabTester(object):
         return frame
 
     def refresh_images(self,clear=False):
+
         if self._img_size is None:
             return
+        
         tab = self._tabs[self._set_cur_tab()]['tab_content']
+        
         if clear:
             tab.clear_images(marked_only=True)
+
         new_img = self._render_frame(self._cur_tab)
         new_img = ImageTk.PhotoImage(image=Image.fromarray(new_img))
         label = self._labels[self._cur_tab]

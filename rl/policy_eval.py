@@ -16,6 +16,7 @@ from color_key import SelfAdjustingColorKey, ProbabilityColorKey
 from state_embedding import StateEmbedding,StateEmbeddingKey
 from state_tab_content import FullStateContentPage, ValueFunctionContentPage
 from gui_base import Key
+from tic_tac_toe import Game
 # TODO: import results viz tab
 import matplotlib.pyplot as plt
 
@@ -152,9 +153,10 @@ class PolicyEvalDemoAlg(DemoAlg):
         Need the key size to determine the embedding size.
         """
         # Only include keys that go on embedding-based images.
-        self._key_sizes = OrderedDict((('state', {'height': 100, 'width': 100}),
-                                        ('embedding', {'height': 100, 'width': 200}),
-                                       ('color', {'height': 100, 'width': 150})))
+        key_h = 90
+        self._key_sizes = OrderedDict((('state', {'height': key_h, 'width': 100}),
+                                        ('embedding', {'height': key_h, 'width': 200}),
+                                       ('color', {'height': key_h, 'width': 150})))
         
         self._x_offsets, self._key_sizes, self._total_key_size = self._calc_key_placement(self._key_sizes)
 
@@ -228,6 +230,10 @@ class PolicyEvalDemoAlg(DemoAlg):
 
     def _learn_loop(self):
         self.pi_convergence_iter = -1
+
+
+        self.state = Game.from_strs(["   ", "   ", "   "])  # Set a default state for the algorithm
+
         self._maybe_pause('state-update')  # start paused, before any learning
 
         while not self._shutdown:

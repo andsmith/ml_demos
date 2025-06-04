@@ -338,7 +338,6 @@ class MSMTester(object):
 
     def on_mouse_click(self, event):
         msm = self._msms[self._cur_tab]
-        # import ipdb; ipdb.set_trace()
         box_id, _ = msm.mouse_click((event.x, event.y))
         if box_id is not None:
             self.toggle_selected(box_id)

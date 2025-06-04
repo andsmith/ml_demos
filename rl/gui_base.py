@@ -112,8 +112,7 @@ class Key(ABC):
         if center_rect is not None:
             
             padx = (self.size[0] - center_rect[0]) // 2
-            pady = (self.size[0] - center_rect[0]) // 2
-            print("PAd-shifting key by (%d, %d) to center it" % (padx, pady))
+            pady = (self.size[1] - center_rect[1]) // 2
             x_left += padx
             y_top += pady
         return x_left, y_top

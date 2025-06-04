@@ -60,7 +60,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   'font': cv2.FONT_HERSHEY_SIMPLEX,
                   'colors': COLOR_SCHEME}},
 
-          'keys': {'h_pad_px': 60}}
+          'keys': {'h_pad_px': 15}}
 
 TITLE_INDENT = 5
 

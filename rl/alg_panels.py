@@ -28,6 +28,7 @@ class AlgDepPanel(Panel, ABC):
     """
 
     def __init__(self, app, alg, bbox_rel, margin_rel=0.0):
+        self._t0 = time.perf_counter()
         super().__init__(app, bbox_rel, margin_rel=margin_rel)
         self.change_algorithm(alg)
 
@@ -131,10 +132,10 @@ class TabPanel(AlgDepPanel):
             img_label = tk.Label(tab_frame, bg=self._color_bg)
             img_label.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-            img_label.bind("<Button-1>", lambda event: self._on_mouse_click(event, tab_name))
-            img_label.bind("<Motion>", lambda event: self._on_mouse_move(event, tab_name))
+            img_label.bind("<Button-1>",self._on_mouse_click)
+            img_label.bind("<Motion>", self._on_mouse_move)
             # Bind mouse-out events
-            img_label.bind("<Leave>", lambda event: self._on_mouse_leave(event, tab_name))
+            img_label.bind("<Leave>", self._on_mouse_leave)
             # Bind resize events to the tab frame:
             tab_frame.bind("<Configure>", self.on_tab_resize)
 
@@ -146,6 +147,7 @@ class TabPanel(AlgDepPanel):
 
         # get the current tab:
         self.cur_tab = self._tab_name_by_disp[self._notebook.tab(self._notebook.select(), "text")]
+        self._notebook.select(self._tabs[self.cur_tab]['frame'])
         logging.info("TabPanel set initial tab to %s" % self.cur_tab)
 
     def get_frame_size(self):
@@ -169,10 +171,10 @@ class TabPanel(AlgDepPanel):
         """
         if self._tab_image_size is None:
             return
+        
         tab =self._tabs[self.cur_tab]['tab_content']
 
         if clear:
-            # Marking/annotations can change while a different tab is active, other interactions already update the image.
             tab.clear_images(marked_only=True)
 
         new_img = tab.get_tab_frame(self._tab_image_size, annotated=is_paused)
@@ -181,29 +183,44 @@ class TabPanel(AlgDepPanel):
         label.config(image=new_img)
         label.image = new_img
 
+    def _set_cur_tab(self):
+        """
+        Set the current tab based on the selected tab in the notebook.
+        """
+        tab_text = self._notebook.tab(self._notebook.select(), "text")
+        self.cur_tab = self._tab_name_by_disp[tab_text]
+        return self.cur_tab
+
     def _on_tab_changed(self, event):
         """
         """
         logging.info("Tab changed to %s" % self._notebook.tab(self._notebook.select(), "text"))
         # get the current tab:
         self.cur_tab = self._tab_name_by_disp[self._notebook.tab(self._notebook.select(), "text")]
-        self.refresh_images(is_paused=self._alg.paused, clear_tab=True)
+        self.refresh_images(is_paused=self._alg.paused, clear=True)
 
-    def _on_mouse_click(self, event, tab):
-        #logging.info("Mouse click at (%d, %d) on tab %s" % (event.x, event.y, tab))
-        content_page = self._tabs[tab]['tab_content']
-        if content_page.mouse_click((event.x, event.y)):
-            self.refresh_images(is_paused=self._alg.paused)
+    def get_current_conent_page(self):
+        """
+        Get the current content page for the current tab.
+        :return: The content page for the current tab.
+        """
+        return self._tabs[self.cur_tab]['tab_content']
 
-    def _on_mouse_move(self, event, tab):
-        #logging.info("Mouse move at (%d, %d) on tab %s" % (event.x, event.y, tab))
-        content_page = self._tabs[tab]['tab_content']
+    def _on_mouse_click(self, event):
+        content_page = self.get_current_conent_page()
+        box_id=content_page.mouse_click((event.x, event.y))
+        if box_id is not None:
+            self.refresh_images(is_paused=self._alg.paused,clear=True)
+
+    def _on_mouse_move(self, event):
+        content_page =  self.get_current_conent_page()
         if content_page.mouse_move((event.x, event.y)):
+            
+
             self.refresh_images(is_paused=self._alg.paused)
 
-    def _on_mouse_leave(self, event, tab):
-        #logging.info("Mouse leave on tab %s" % tab)
-        content_page = self._tabs[tab]['tab_content']
+    def _on_mouse_leave(self, event):
+        content_page = self.get_current_conent_page()
         if content_page.mouse_leave():
             self.refresh_images(is_paused=self._alg.paused)
 
