@@ -125,14 +125,16 @@ def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_l
     """
     text_lines = ["0"] if text_lines is None else text_lines
 
-    scale = 5.
+    scale = 5
     while True:
 
         def _check(test_text):
+            
             (text_width, text_height), baseline = cv2.getTextSize(test_text, font, scale, 1)
-            # print("Text height for scale %.2f is %i  (should be under %i)" % (scale, text_height , max_height))
-            h = text_height + baseline if incl_baseline else text_height
-            if (h < max_height) and (max_width is None or (text_width < max_width)):
+            text_height = text_height + baseline if incl_baseline else text_height
+
+            #print("Text scales vs maximums: Scale:  %.3f, needs %s <= %s, %s <= %s" % (scale,text_width, max_width, text_height, max_height))
+            if (text_height <= max_height) and (max_width is None or (text_width <= max_width)):
                 return True
             return False
         
