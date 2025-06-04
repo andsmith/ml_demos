@@ -124,7 +124,7 @@ class TabTester(object):
     def on_tab_change(self, event):
         self._set_cur_tab()
         logging.info("Tab changed to: %s" % self._cur_tab)
-        self.refresh_images()
+        self.refresh_images(clear=True)
 
     def on_mouse_leave(self, event):
         """

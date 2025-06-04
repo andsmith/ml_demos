@@ -98,18 +98,24 @@ class Key(ABC):
         self.size = size
         self._x_offset = x_offset if x_offset is not None else -size[0]
 
-    def _get_draw_pos(self, img, center_width=None):
+    def _get_draw_pos(self, img, center_rect=None):
         """
         Get the position to draw the key on the given image.
         :param img: The image to draw on.
-        :param center_width: The key to be drawn is narrower than self.size[0], so center it in the key bbox.
+        :param center_rect: None, return (0,0) for this key,
+           or (width, height) of an image, return the coordinate where
+           the upper left corner of the key should be drawn so it's centered.
         :return: The position to draw the key as (x, y).
         """
         y_top = 0
         x_left = img.shape[1] + self._x_offset
-        if center_width is not None:
-            pad = (self.size[0] - center_width) // 2
-            x_left += pad
+        if center_rect is not None:
+            
+            padx = (self.size[0] - center_rect[0]) // 2
+            pady = (self.size[0] - center_rect[0]) // 2
+            print("PAd-shifting key by (%d, %d) to center it" % (padx, pady))
+            x_left += padx
+            y_top += pady
         return x_left, y_top
 
     @abstractmethod

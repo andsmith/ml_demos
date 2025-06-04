@@ -13,8 +13,9 @@ from drawing import GameStateArtist
 import time
 from state_key import StateKey
 from color_key import SelfAdjustingColorKey, ProbabilityColorKey
-from state_embedding import StateEmbedding
+from state_embedding import StateEmbedding,StateEmbeddingKey
 from state_tab_content import FullStateContentPage, ValueFunctionContentPage
+from gui_base import Key
 # TODO: import results viz tab
 import matplotlib.pyplot as plt
 
@@ -22,6 +23,7 @@ import matplotlib.pyplot as plt
 class PIPhases(IntEnum):
     POLICY_EVAL = 0
     POLICY_OPTIM = 1
+
 
 
 class PolicyEvalDemoAlg(DemoAlg):
@@ -150,9 +152,12 @@ class PolicyEvalDemoAlg(DemoAlg):
         Need the key size to determine the embedding size.
         """
         # Only include keys that go on embedding-based images.
-        self._key_sizes = OrderedDict((('state', {'height': 80, 'width': 80}),
-                                       ('color', {'height': 80, 'width': 250})))
+        self._key_sizes = OrderedDict((('state', {'height': 100, 'width': 100}),
+                                        ('embedding', {'height': 100, 'width': 200}),
+                                       ('color', {'height': 100, 'width': 150})))
+        
         self._x_offsets, self._key_sizes, self._total_key_size = self._calc_key_placement(self._key_sizes)
+
         embedding = StateEmbedding(self.app.env, key_size=self._total_key_size)
         return embedding
 
@@ -165,6 +170,9 @@ class PolicyEvalDemoAlg(DemoAlg):
                                    x_offset=self._x_offsets['color'],
                                    cmap=plt.get_cmap('viridis'))
         
+        embedding_key = StateEmbeddingKey(size=self._key_sizes['embedding'],
+                                          x_offset=self._x_offsets['embedding'])
+        
         # delta_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
         # prob_color_key = ProbabilityColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
         # values_key_dict
@@ -172,7 +180,8 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         tabs = OrderedDict((('state', {'disp_text': "States",
                                        'tab_content': FullStateContentPage(self, self._embedding,
-                                                                           keys=OrderedDict((('state', state_key),)))}),
+                                                                           keys=OrderedDict((('state', state_key),
+                                                                                                ('embedding', embedding_key))))}),
 
                             ('values', {'disp_text': "Values",
                                         'tab_content': ValueFunctionContentPage(self, self._embedding,

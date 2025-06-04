@@ -244,7 +244,7 @@ class StateEmbeddingKey(Key):
 
         return dims, content
 
-    def draw(self, img):
+    def draw(self, img, indicate_value=None):
         """
         Draw the key on the given image.
         :param img: The image to draw on.
@@ -293,10 +293,12 @@ class StateEmbeddingKey(Key):
 
                 cap_y_span = cell['caption_y_span']
                 cap_x = offset[0] + img_pos[0]
+                cap_y = cap_y_span[1] + offset[1]
                 #_dot_at((cap_x, cap_y_span[0]), size=4, color=128)
                 #_dot_at((cap_x, cap_y_span[1]), size=4, color=128)
-                cv2.putText(img, self._content['captions'][row][col],
-                            (cap_x + offset[0], cap_y_span[1] + offset[1]),
+                pos = (cap_x, cap_y)
+                print("Writing caption at", pos, self._content['captions'][row][col])
+                cv2.putText(img, self._content['captions'][row][col],pos,
                             self._content['font'], self._dims['font_scale'],
                             self._content['text_color'], thickness=1, lineType=cv2.LINE_AA)
 

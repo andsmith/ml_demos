@@ -35,9 +35,10 @@ class StateKey(Key):
         if indicate_value is None:
             return
         state_img = self._state_artist.get_image(indicate_value)
-        pos= self._get_draw_pos(img,center_width=self._icon_size)
+        pos= self._get_draw_pos(img, center_rect=(self._icon_size, self._icon_size))
          
         img[pos[1]:pos[1]+state_img.shape[0], pos[0]:pos[0]+state_img.shape[1]] = state_img
+        self.draw_bbox(img, color=0)
 
 
 

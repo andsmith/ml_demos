@@ -87,6 +87,8 @@ class FullStateContentPage(TabContentPage):
         """
         if key_name=='state':
             return self._mouse_manager.mouseover_id
+        elif key_name=='embedding':
+            pass # static key
         else:
             raise ValueError(f"Unknown key name: {key_name}. Only 'state' is supported in FullStateContentPage.")
         
