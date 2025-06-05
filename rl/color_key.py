@@ -298,14 +298,24 @@ class SelfAdjustingColorKey(ColorKey):
         - Subsequent values expand the range.
     """
 
-    def __init__(self, size, cmap, x_offset=None, **argv):
+    def __init__(self, size, cmap, value_range=None, x_offset=None, **argv):
         self._n_set = 0
+        value_range = (-1.0, 1.0) if value_range is None else value_range
+        self._init_value_range = value_range
 
         super().__init__(size=size, cmap=cmap,
-                         value_range=(-1.0, 1.0),
+                         value_range=value_range,
                          x_offset=x_offset, **argv)
+        
+    def reset(self):
+        """
+        Reset the color key to its initial value range.
+        """
+        self.range = self._init_value_range
+        self._n_set = 0
+        logging.info("Reset SelfAdjustingColorKey to range %s", str(self.range))
 
-    def set_values(self, values):
+    def add_values(self, values):
         """
         :param values: list of values to set the color key range to.
         :return: True if either the min or max value changed, False otherwise.
@@ -314,7 +324,13 @@ class SelfAdjustingColorKey(ColorKey):
         new_range = all_values.min(), all_values.max()
         changed = (new_range[0] != self.range[0]) or (new_range[1] != self.range[1])
         self.range = new_range
+        self._n_set += len(values)
         return changed
+
+
+    def map_color(self, value):
+        self.add_values([value])
+        return super().map_color(value)
 
 
 def test_adjusting_color_key():
@@ -365,7 +381,6 @@ def test_adjusting_color_key():
         key_img[:] = COLOR_SCHEME['bg']
         sack.draw(key_img, indicate_value=mouse_val[0])
         if mouse_val[0] is not None:
-            sack.set_values([mouse_val[0]])
             color = sack.map_color_uint8(mouse_val[0])
         else:
             color = bar_color
