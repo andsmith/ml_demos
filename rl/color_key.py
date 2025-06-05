@@ -10,6 +10,8 @@ import cv2
 import logging
 from colors import COLOR_SCHEME
 import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+
 from gui_base import Key
 from util import get_font_scale
 
@@ -28,7 +30,7 @@ class ColorKey(Key):
 
     """
 
-    def __init__(self, size, cmap, value_range, x_offset=None):
+    def __init__(self, size, cmap, value_range, x_offset=None, **argv):
         """
         Create a color key object.
         :param size: width, height
@@ -49,6 +51,7 @@ class ColorKey(Key):
                             'line_color': COLOR_SCHEME['lines'],
                             'text_color': COLOR_SCHEME['text'],
                             }
+        self.draw_params.update(argv)
 
         logging.info("Initialized ColorKey(%i x %i) with range %s, at x_offset %i",
                      size[0], size[1], str(value_range), self._x_offset)
@@ -210,7 +213,7 @@ class ColorKey(Key):
                     ind_line[:, i] = white
             # place the horizontal line above the label
             img[line_bottom:line_bottom+line_height, line_x_left:line_x_right] = ind_line
-            tick_dims.append((line_x_left, label_width  ))
+            tick_dims.append((line_x_left, label_width))
 
         def check_tick_room(tick_x, label_text):
             width = cv2.getTextSize(label_text, font, font_scale, 1)[0][0]
@@ -226,23 +229,23 @@ class ColorKey(Key):
                     break
             return room
 
-        # And draw the rest of the ticks:        
+        # And draw the rest of the ticks:
         for i in range(num_ticks):
             tick_x_pos = int(spectrum_x[0] + (spectrum_x[1] - spectrum_x[0]) * self.norm_value(ticks[i]))
             tick_left = tick_x_pos - tick_width // 2
             tick_right = tick_left + tick_width
-            if ticks[i]==self.range[1]:
+            if ticks[i] == self.range[1]:
                 # don't overrun axis
                 shift = tick_right - spectrum_x[1]
                 tick_left, tick_right = tick_left-shift, tick_right-shift
-            elif ticks[i]==self.range[0]:
+            elif ticks[i] == self.range[0]:
                 shift = tick_left - spectrum_x[0]
                 tick_right, tick_left = tick_right-shift, tick_left-shift
             img[tick_top:tick_bottom, tick_left:tick_right] = self.draw_params['line_color']
 
             label_value = ticks[i]
             label_text = f"{label_value:.1f}"
-            show_label= check_tick_room(tick_x_pos, label_text)
+            show_label = check_tick_room(tick_x_pos, label_text)
             if show_label:
                 x_pos, width = draw_label_at(label_text, tick_x_pos,  color=self.draw_params['text_color'])
                 tick_dims.append((x_pos, width))
@@ -255,14 +258,33 @@ class ColorKey(Key):
         return (color * 255).astype(np.uint8)
 
 
+def get_good_cmap():
+    color1 = np.array(COLOR_SCHEME['color_o'])/255.
+    color2 = np.array((127, 127, 127))/255.  # neutral gray
+    color3 = np.array(COLOR_SCHEME['color_x'])/255.
+    
+    cdict = {
+        'red':   [(0.0, color1[0], color1[0]),
+                  (0.5, color2[0], color2[0]),
+                  (1.0, color3[0], color3[0])],
+        'green': [(0.0, color1[1], color1[1]),
+                  (0.5, color2[1], color2[1]),
+                  (1.0, color3[1], color3[1])],
+        'blue':  [(0.0, color1[2], color1[2]),
+                  (0.5, color2[2], color2[2]),
+                  (1.0, color3[2], color3[2])]}
+    cmap = colors.LinearSegmentedColormap('my_cmap', cdict)
+    return cmap
+
+
 class ProbabilityColorKey(ColorKey):
     """
     Uses 'gray' colormap, range [0, 1] and inverts rgb values (so dark is 1.0)
     """
 
-    def __init__(self, size, x_offset=None):
+    def __init__(self, size, x_offset=None, **argv):
         cmap = plt.get_cmap('gray')
-        super().__init__(size=size, cmap=cmap, value_range=(0., 1.), x_offset=x_offset)
+        super().__init__(size=size, cmap=cmap, value_range=(0., 1.), x_offset=x_offset, **argv)
 
     def map_color(self, value):
         return super().map_color(1.0 - value)  # invert the color for probabilities
@@ -276,12 +298,12 @@ class SelfAdjustingColorKey(ColorKey):
         - Subsequent values expand the range.
     """
 
-    def __init__(self, size, cmap, x_offset=None):
+    def __init__(self, size, cmap, x_offset=None, **argv):
         self._n_set = 0
 
         super().__init__(size=size, cmap=cmap,
                          value_range=(-1.0, 1.0),
-                         x_offset=x_offset)
+                         x_offset=x_offset, **argv)
 
     def set_values(self, values):
         """
@@ -336,7 +358,7 @@ def test_adjusting_color_key():
     cv2.resizeWindow(win_name, img_size[0], img_size[1])
     cv2.setMouseCallback(win_name, on_mouse)
 
-    sack = SelfAdjustingColorKey(size=key_size, cmap=plt.get_cmap('coolwarm'))
+    sack = SelfAdjustingColorKey(size=key_size, cmap=get_good_cmap())
 
     while True:
         frame = bkg.copy()

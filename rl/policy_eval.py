@@ -12,7 +12,7 @@ import cv2
 from drawing import GameStateArtist
 import time
 from state_key import StateKey
-from color_key import SelfAdjustingColorKey, ProbabilityColorKey
+from color_key import SelfAdjustingColorKey, ProbabilityColorKey,get_good_cmap
 from state_embedding import StateEmbedding,StateEmbeddingKey
 from state_tab_content import FullStateContentPage, ValueFunctionContentPage
 from gui_base import Key
@@ -29,7 +29,7 @@ class PIPhases(IntEnum):
 
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, pi_seed):  # ,alg_params):
+    def __init__(self, app, pi_seed, gamma=0.9):  # ,alg_params):
 
         # TODO:   DemoAlg.get_options() shoudl return a dict of option types,
         # then the alg_params dict should match it here.
@@ -47,16 +47,17 @@ class PolicyEvalDemoAlg(DemoAlg):
         """
         self.app = app
         self.env = app.env
-        self._embedding = self._make_embedding()
-
-        super().__init__(app=app)
-        self.updatable_states = self.app.env.get_nonterminal_states()
-        self.terminal_states = self.app.env.get_terminal_states()
+        self._embedding = self._make_embedding()        
+        self._state_update_order = None  # set after box_placer is defined
+        self._gamma = gamma
         self._viz_img_size = None
         self._delta_v_tol = 1e-6
         self.pi_seed = pi_seed
-        # self.gamma = gamma
+        self.updatable_states = app.env.get_nonterminal_states()
+        self.terminal_states = app.env.get_terminal_states()
+
         self.reset_state()
+        super().__init__(app=app)
 
         logging.info("PolicyEvalDemoAlg initialized.")
 
@@ -64,20 +65,34 @@ class PolicyEvalDemoAlg(DemoAlg):
         super().resize(panel, new_size)
         if panel == 'state-tabs':
             self._embedding.set_size(new_size)
+            self._state_update_order = self._get_state_update_order()
             for tab in self._tabs.values():
                 tab['tab_content'].resize(new_size)
         elif panel != 'step-visualization':
             raise ValueError("Unknown panel for resizing: %s" % panel)
+        
+    def _get_state_update_order(self):
+        """
+        Get the order of states to update.
+        :return: A list of states in the order they should be updated.
+        """
+        positions = self._embedding.box_placer.box_positions
+        update_order = sorted(self.updatable_states, key=lambda s: positions[s]['x'][0])
+        return update_order
 
     def reset_state(self):
+        
         # start by learning v(s) for this policy:
         self.policy = self.pi_seed
 
-        self.state = None
+        # Current state being updated, etc.
+        self.state = None   # for both phases
+
         # Policy Improvement (PI) state:
         self.pi_iter = 0
         self.pi_phase = PIPhases.POLICY_EVAL
         self.pi_converged = False
+        self.pi_convergence_iter = None  # iteration when policy converged (don't update)
 
         # Policy evaluation state (part of a PI iteration):
         self.pe_iter = 0  # epoch
@@ -86,16 +101,16 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.max_delta_vs = 0.0
 
         # Policy optimization state:
-        self.n_changes = 0
+        self.n_changed = 0  # number of states with changed policy actions
+        # index of the next state to optimize (in self._state_update_order)
+        self.next_state_ind = 0  
 
+        # Value function & update tables
         # initial values for terminal states (should be zero, but we're using the terminal reward):
         self.values = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
         self.values.update({state: 0.0 for state in self.updatable_states})
-
-        # self._update_img_mgr(values=self.values, updates=0.0)
-
-        self.next_values = {}
-
+        self.next_values = {}  # next values for the current policy, updated during policy evaluation
+    
     def get_status(self):
         font_default = layout.LAYOUT['fonts']['status']
         font_bold = layout.LAYOUT['fonts']['status_bold']
@@ -170,11 +185,12 @@ class PolicyEvalDemoAlg(DemoAlg):
         
         value_color_key = SelfAdjustingColorKey(size=self._key_sizes['color'],
                                    x_offset=self._x_offsets['color'],
-                                   cmap=plt.get_cmap('viridis'))
+                                   cmap=get_good_cmap())
         
         embedding_key = StateEmbeddingKey(size=self._key_sizes['embedding'],
                                           x_offset=self._x_offsets['embedding'])
-        
+        prob_key = ProbabilityColorKey(size=self._key_sizes['color'],
+                                       x_offset=self._x_offsets['color'])
         # delta_color_key = ColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
         # prob_color_key = ProbabilityColorKey(size=key_sizes['color'], x_offset=x_offsets['color'])
         # values_key_dict
@@ -184,12 +200,16 @@ class PolicyEvalDemoAlg(DemoAlg):
                                        'tab_content': FullStateContentPage(self, self._embedding,
                                                                            keys=OrderedDict((('state', state_key),
                                                                                                 ('embedding', embedding_key))))}),
-
                             ('values', {'disp_text': "Values",
-                                        'tab_content': ValueFunctionContentPage(self, self._embedding,
+                                        'tab_content': ValueFunctionContentPage(self, self._embedding, values=self.values,
                                                                                 keys=OrderedDict((('state', state_key),
-                                                                                                 ('values', value_color_key))))})))
-        # ('updates', ValueFunctionContentPage(self, embedding, as_delta=True, keys = [state_key, delta_color_key]))
+                                                                                                 ('values', value_color_key))))}),))
+        
+        #                    ('updates', {'disp_text': "Updates",
+        #                                 'tab_content': ValueFunctionContentPage(self, self._embedding, 
+        #                                                                            keys=OrderedDict((('state', state_key),
+        #                                                                                            ('values', value_color_key)),
+        #                                                                                            as_delta=True))}),))
 
         return tabs
 
@@ -382,7 +402,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         # state_update_order = self._img_mgr.get_state_update_order()
 
         while not self._shutdown and self.next_state_ind < len(self.updatable_states):
-            self.state = state_update_order[self.next_state_ind]
+            self.state = self._state_update_order[self.next_state_ind]
             new_action = self._optimize_state_policy(self.state)
             update(self.state, new_action)
             if self._maybe_pause('state-update'):

@@ -94,23 +94,28 @@ class FullStateContentPage(TabContentPage):
         
 
 class ValueFunctionContentPage(FullStateContentPage):
-    def __init__(self, alg, embedding, keys, bg_color=None):
+    def __init__(self, alg, embedding, keys,values,  bg_color=None, as_deltas=False):
         """
         :param app:  The application instance.
-        :param env:  The environment to use.
-        :param tabs:  list of strings, names of tabs (for dict references, not display)
-        :param value_ranges:  dict(tab_name: (min, max)) for each tab (defaults to (-1, 1))
-        :param colormap_names:  dict(tab_name: colormap name) for each tab (defaults to 'viridis')
-        :param bg_colors:  dict(tab_name: color) for each tab (defaults COLOR_BG for states, SKY_BLUE for values/updates)
-        :param key_sizes:  dict with 'color' and 'state' keys, each with a tuple (width, height)
+        :param embedding:  The StateEmbedding instance to use for drawing states.
+        :param keys:  Dictionary of keys to display in the key area.
+            NOTE:  1 must be 'values', to use its color key.
+        :param values:  Dictionary of state values, indexed by state.  
+
+
+        :param as_deltas:  If True, display the value function as deltas from the previous state.
+            * Values (as_deltas=False):  show the value/terminal-reward for every state in 
+              the embedding as a colored square, using a ColorKey object to manage the color mapping.
+            * Deltas show
         """
         bg_color = bg_color if bg_color is not None else COLOR_SCHEME['func_bg']
         super().__init__(alg=alg, embedding=embedding, keys=keys, bg_color=bg_color)
-        self._values = {}
-        self._cmap = plt.get_cmap('viridis')  # Default colormap for value functions
+        self._values = values  # Dictionary of state values, indexed by state.
+        self._color_key = keys['values']
+        self._as_deltas = as_deltas
 
-    def set_values(self, values):   
-        self._values = values
+    def update_values(self, values):   
+        self._values.update(values)
         logging.info(f"Setting values for {len(values)} states.")
         self.clear_images(marked_only=False)
 
@@ -125,3 +130,15 @@ class ValueFunctionContentPage(FullStateContentPage):
         else:
             raise ValueError(f"Unknown key name: {key_name}. Only 'state' is supported in FullStateContentPage.")
 
+    def _draw_base(self):
+        """
+        Draw the base image for the value function content page.
+        :return:  The base image for the value function content page.
+        """
+        size = self._embed.size
+        logging.info(f"Regenerating base image for Value Function.")
+        img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+        img[:] = self._bg_color
+        value_colors = {state: self._color_key.map_color_uint8(self._values[state]) for state in self._values}
+        img = self._embed.box_placer.draw(images=None, colors=value_colors, show_bars=False, dest=img)
+        return img
