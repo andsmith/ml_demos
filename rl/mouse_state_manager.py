@@ -66,7 +66,7 @@ class MouseBoxManager(object):
         self._box_inds = {box_id: i for i, box_id in enumerate(self._box_ids)}
         self._box_centers = np.array(box_centers)
         self._box_wh = np.array(box_wh)
-        self._box_tree = KDTree(box_centers)
+        self._box_tree = KDTree(box_centers) if len(box_centers) > 0 else None
 
     def get_box_at(self, pos_xy, margin=0):
         """

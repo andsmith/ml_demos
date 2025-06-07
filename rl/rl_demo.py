@@ -245,7 +245,7 @@ class RLDemoApp(object):
             if elapsed > 1.0 / FPS:
                 self._status_control_panel.refresh_status()
                 if self._state_panel is not None:
-                    self._state_panel.refresh_images(is_paused=False)
+                    self._state_panel.refresh_images(is_paused=False, clear=True)
                 if self._visualization_panel is not None:
                     self._visualization_panel.refresh_images(is_paused=False, control_point=control_point)
                 self._timing_info['n_frames'] += 1

@@ -43,11 +43,11 @@ class ColorKey(Key):
         self.range = value_range
         self.draw_params = {'axis_width_frac': 1./30,
                             'tick_width_frac': 1./35,
-                            'tick_height_frac': .2,
+                            'tick_height_frac': .1,
                             'dot_size_frac': .02,  # for dot/dashed line of indicator
                             'tick_font': {'big': cv2.FONT_HERSHEY_COMPLEX, 'small': cv2.FONT_HERSHEY_SIMPLEX},
                             'pad_x_frac': .08,  # allow for axis labels to be centered under spectrum endpoints
-                            'spacing_y_frac': .15,  # top, axis, ticks, bottom
+                            'spacing_y_frac': .2,  # top, axis, ticks, bottom
                             'line_color': COLOR_SCHEME['lines'],
                             'text_color': COLOR_SCHEME['text'],
                             }
@@ -67,6 +67,8 @@ class ColorKey(Key):
         return (float(value) - self.range[0]) / (self.range[1] - self.range[0])
 
     def map_color(self, value):
+        if value is None:
+            return None
         val_norm = self.norm_value(value)
         return np.array(self.cmap(val_norm)[:3])  # returns RGBA, we use RGB
 
@@ -255,6 +257,8 @@ class ColorKey(Key):
 
     def map_color_uint8(self, value):
         color = self.map_color(value)
+        if color is None:
+            return None
         return (color * 255).astype(np.uint8)
 
 
@@ -262,7 +266,7 @@ def get_good_cmap():
     color1 = np.array(COLOR_SCHEME['color_o'])/255.
     color2 = np.array((127, 127, 127))/255.  # neutral gray
     color3 = np.array(COLOR_SCHEME['color_x'])/255.
-    
+
     cdict = {
         'red':   [(0.0, color1[0], color1[0]),
                   (0.5, color2[0], color2[0]),
@@ -287,6 +291,8 @@ class ProbabilityColorKey(ColorKey):
         super().__init__(size=size, cmap=cmap, value_range=(0., 1.), x_offset=x_offset, **argv)
 
     def map_color(self, value):
+        if value is None:
+            return None
         return super().map_color(1.0 - value)  # invert the color for probabilities
 
 
@@ -306,7 +312,7 @@ class SelfAdjustingColorKey(ColorKey):
         super().__init__(size=size, cmap=cmap,
                          value_range=value_range,
                          x_offset=x_offset, **argv)
-        
+
     def reset(self):
         """
         Reset the color key to its initial value range.
@@ -327,11 +333,28 @@ class SelfAdjustingColorKey(ColorKey):
         self._n_set += len(values)
         return changed
 
+    def map_color(self, value, check_growing=False):
+        if value is None:
+            if check_growing:
+                return None, False
+            return None  # for backwards compatibility
+        changed = self.add_values([value])
+        color = super().map_color(value)
+        if check_growing:
+            return color, changed
+        return color  # for backwards compatibility
 
-    def map_color(self, value):
-        self.add_values([value])
-        return super().map_color(value)
-
+    def map_color_uint8(self, value, check_growing=False):
+        if value is None:
+            if check_growing:
+                return None, False
+            return None  # for backwards compatibility
+        color, changed = self.map_color(value, check_growing=True)
+        color = super().map_color_uint8(value)
+        if check_growing:
+            return color, changed
+        return color
+    
 
 def test_adjusting_color_key():
     key_size = (300, 50)

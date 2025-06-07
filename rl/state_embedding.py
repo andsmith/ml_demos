@@ -17,7 +17,7 @@ from layer_optimizer import SimpleTreeOptimizer
 from gui_base import Key, KeySizeTester
 from game_base import TERMINAL_REWARDS, Result
 
-SPACE_SIZES = [7, 2, 2, 2, 2, 3]  # Sizes for the state embedding layers
+
 
 
 class StateEmbedding(object):
@@ -90,7 +90,7 @@ class StateEmbedding(object):
         return box_placer
 
     def _get_box_sizes(self):
-        artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in SPACE_SIZES]
+        artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in self._layout['space_sizes']]
         box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
         return box_sizes, artists
 

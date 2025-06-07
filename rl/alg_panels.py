@@ -61,7 +61,7 @@ class TabPanel(AlgDepPanel):
         :param resize_callback:  function to call to resize the panel when the tab changes.
             Whoever makes the tab images needs to know the new size, etc.
         """
-        self._tabs = OrderedDict()  # (tab_name: (tab_frame, img_label))
+        self._tabs = OrderedDict()  
         self._tab_image_size = None
 
         #  Selecting states is common across all tabs, changing in one changes in all, etc.
@@ -112,7 +112,7 @@ class TabPanel(AlgDepPanel):
         """
 
         # Clear old tabs' images and frames:
-        for old_tab_name in self._tabs.values():
+        for old_tab_name in self._tabs:
             self._tabs[old_tab_name]['label'].destroy()
             self._tabs[old_tab_name]['frame'].destroy()
         

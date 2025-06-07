@@ -27,7 +27,7 @@ from layout import COLOR_SCHEME
 from mouse_state_manager import MouseBoxManager
 
 # BOX_SIZES = [22, 12, 12, 12, 12, 12]  # good for single value function
-SPACE_SIZES = [7, 2, 2, 2, 2, 3]
+SPACE_SIZES = LAYOUT['state_embedding']['space_sizes']  # sizes of the spaces between states in pixels
 
 
 ######

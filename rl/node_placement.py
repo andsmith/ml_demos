@@ -67,7 +67,7 @@ class BoxOrganizer(ABC):
         """
         pass
 
-    def draw_box(self, image, state_id, color, thickness=0):
+    def draw_box(self, image, state_id, color,default_color=None, thickness=0):
         """
         Draw a box on the image.
         :param image: image to draw on.
@@ -75,13 +75,17 @@ class BoxOrganizer(ABC):
         :param color: color of the box.
         """
         if color is None:
-            return
+            if default_color is None:
+                return
+            color = default_color  # For drawing "undefined" values
         bos_pos = self.box_positions[state_id]
         x, y = bos_pos['x'], bos_pos['y']
         if thickness == 0:
             image[y[0]:y[1], x[0]:x[1]] = color
         else:
             color = int(color[0]), int(color[1]), int(color[2])
+            # TODO:  set image[y[0]:y[1], x[0]:x[1]] = color for thickness=0
+            # or set pixels directly for lines.
             cv2.rectangle(image, (x[0], y[0]), (x[1], y[1]), color, thickness, cv2.LINE_AA)
 
     def _draw_layer_bars(self, image):
@@ -121,8 +125,9 @@ class BoxOrganizer(ABC):
                 if box['id'] not in self.box_positions:
                     bad_boxes.add(box['id'])
                     continue
-
                 if images is None:
+                    if box['id'] not in colors:
+                        continue
                     self.draw_box(img, box['id'], colors[box['id']], **kwargs)
                 else:
                     bos_pos = self.box_positions[box['id']]

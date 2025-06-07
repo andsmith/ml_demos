@@ -19,7 +19,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                                     'y_rel': (0.0, 1.0)}
                      },
           'state_embedding': {  # a kind of TabContentPage showing all RL states
-              'space_sizes': [7, 2, 2, 2, 2, 3]},  # sizes of the spaces between states in pixels
+          'space_sizes': [12, 2, 2, 2, 2, 3]},  # sizes of the spaces between states in pixels
           'margin_rel': .0025,  # margin between frames in relative coordinates
 
           'fonts': {'panel_title': ('Helvetica', 16, 'underline'),

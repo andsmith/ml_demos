@@ -11,7 +11,8 @@ def tk_color_from_rgb(rgb):
     r, g, b = rgb
     return f'#{r:02x}{g:02x}{b:02x}'
 
-def get_clobber_free_filename(filename, clobber = False):
+
+def get_clobber_free_filename(filename, clobber=False):
     """
     Append _1, _2, etc. to the filename if it already exists, before the extension.
     """
@@ -23,6 +24,8 @@ def get_clobber_free_filename(filename, clobber = False):
         filename = f"{base}_{i}{ext}"
         i += 1
     return filename
+
+
 
 def get_annulus_polyline(r_outer, r_inner, n_points=50):
     """
@@ -45,8 +48,10 @@ def get_annulus_polyline(r_outer, r_inner, n_points=50):
     ring_y = np.concatenate([y_outer, y_inner[::-1]])
     return list(zip(ring_x, ring_y))
 
-def float_rgb_to_int(rgb):  
+
+def float_rgb_to_int(rgb):
     return (int(rgb[0] * 255), int(rgb[1] * 255), int(rgb[2] * 255))
+
 
 def frame_bbox_from_rel(window_size, rel_bbox):
     """
@@ -116,7 +121,8 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, max_f
     logging.warning("Failed to find good font size, using smallest.")
     return np.min(font_sizes), np.min(font_sizes)//2
 
-def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_lines = None):
+
+def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_lines=None):
     """
     Find the maximum font scale that fits a number in the given height.
     :param font_name: Name of the font to use.
@@ -129,15 +135,15 @@ def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_l
     while True:
 
         def _check(test_text):
-            
+
             (text_width, text_height), baseline = cv2.getTextSize(test_text, font, scale, 1)
             text_height = text_height + baseline if incl_baseline else text_height
 
-            #print("Text scales vs maximums: Scale:  %.3f, needs %s <= %s, %s <= %s" % (scale,text_width, max_width, text_height, max_height))
+            # print("Text scales vs maximums: Scale:  %.3f, needs %s <= %s, %s <= %s" % (scale,text_width, max_width, text_height, max_height))
             if (text_height <= max_height) and (max_width is None or (text_width <= max_width)):
                 return True
             return False
-        
+
         scores = [_check(line) for line in text_lines]
         if all(scores):
             break
@@ -153,15 +159,17 @@ def write_lines_in_bbox(img, lines, bbox, font, color, spacing_frac=0.85):
     h_space = bbox['x'][1] - bbox['x'][0]
     max_h_per_line = int(v_space / n_lines)
 
-    font_scale = get_font_scale(font, max_h_per_line, incl_baseline=True, max_width = h_space,text_lines=lines) * spacing_frac
-    y0 = bbox['y'][0] 
-    x0 = bbox['x'][0] 
+    font_scale = get_font_scale(font, max_h_per_line, incl_baseline=True,
+                                max_width=h_space, text_lines=lines) * spacing_frac
+    y0 = bbox['y'][0]
+    x0 = bbox['x'][0]
     for i, line in enumerate(lines):
         (width, height), baseline = cv2.getTextSize(line, font, font_scale, 1)
         text_height = height + baseline
         pos = (x0, y0+text_height)
         cv2.putText(img, line, pos, font, font_scale, color, thickness=1, lineType=cv2.LINE_AA)
-        y0 +=  max_h_per_line
+        y0 += max_h_per_line
+
 
 def test_write_lines_in_bbox():
     lines = ["This is a test",
@@ -169,7 +177,7 @@ def test_write_lines_in_bbox():
              "broadcast system.",
              "This is only a test but it has a long line."]
     img = np.zeros((200, 400, 3), dtype=np.uint8)
-    bbox = {'x': (10, 390), 'y': (10, 190)} 
+    bbox = {'x': (10, 390), 'y': (10, 190)}
     font = cv2.FONT_HERSHEY_SIMPLEX
     write_lines_in_bbox(img, lines, bbox, font, (255, 255, 255), spacing_frac=0.85,)
     cv2.imshow("Test", img[:, :, ::-1])
