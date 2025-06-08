@@ -113,6 +113,7 @@ class RLDemoApp(object):
         logging.info("Starting new algorithm: %s", alg_name)
         alg_ind = self._get_alg_ind(alg_name)
         self._alg = ALGORITHMS[alg_ind](self, self.env)
+        self._init_ctrl_point = self._alg.get_init_control()  # first control point
 
         self.start_alg()
         # Update the panels with the new algorithm.
@@ -121,7 +122,6 @@ class RLDemoApp(object):
         self._visualization_panel.change_algorithm(self._alg)
 
         # Refresh panels' images with new algorithm.
-        self._init_ctrl_point = self._alg.get_init_control()  # first control point
         self.paused = True
         self._state_panel.refresh_images(is_paused=self.paused)
         self._visualization_panel.refresh_images(is_paused=self.paused, control_point=self._init_ctrl_point)
@@ -234,7 +234,7 @@ class RLDemoApp(object):
             self.paused = True
             self._status_control_panel.refresh_status()
             if self._state_panel is not None:
-                self._state_panel.refresh_images(is_paused=True)
+                self._state_panel.refresh_images(is_paused=True, clear=True)
             if self._visualization_panel is not None:
                 self._visualization_panel.refresh_images(is_paused=True, control_point=control_point)
         else:

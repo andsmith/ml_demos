@@ -20,7 +20,6 @@ from color_key import ColorKey, ProbabilityColorKey
 from state_key import StateKey
 from gameplay import ResultSet, Match
 from tab_content import TabContentPage
-from state_embedding import StateEmbedding
 
 
 class FullStateContentPage(TabContentPage):
