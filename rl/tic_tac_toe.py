@@ -30,6 +30,10 @@ class Game(object):
 
     def __eq__(self, other):
         return np.all(self.state == other.state)
+    
+    def greater_than(self, other):
+        # Compare two game states lexicographically, for embedding.
+        return np.lexsort((self.state.flatten(),)) > np.lexsort((other.state.flatten(),))
 
     def get_actions(self):
         # return list of all (i,j) tuples where state[i,j] == Mark.EMPTY

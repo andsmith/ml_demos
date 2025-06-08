@@ -33,6 +33,7 @@ class ResizingTester(object):
         self._root.mainloop()
 
     def _on_resize(self, event):
+        print(f"Resizing frame to {event.width}x{event.height}")
         self._img_size = self._frame.winfo_width(), self._frame.winfo_height()
         self.refresh_image()
 

@@ -47,7 +47,7 @@ import numpy as np
 from game_util import get_box_placer, get_state_icons
 from layer_optimizer import SimpleTreeOptimizer
 from game_base import Result, Mark
-from colors import UI_COLORS, _COLOR_BG as COLOR_BG,  _COLOR_LINES as COLOR_LINES,_DARK_GRAY as DARK_GRAY
+from colors import UI_COLORS,COLOR_SCHEME,_DARK_GRAY as DARK_GRAY
 from colors import COLOR_SCHEME
 import tkinter as tk
 from PIL import Image, ImageTk
@@ -127,7 +127,7 @@ class RLDemoWindow(object):
         self.player = player_mark
 
         # Color for state representations
-        self.color_bg_rbg = COLOR_BG
+        self.color_bg_rbg = COLOR_SCHEME['bg']
         self.color_bg = tk_color_from_rgb(self.color_bg_rbg)
 
         # Color for background of value function images
@@ -135,7 +135,7 @@ class RLDemoWindow(object):
         self.color_val_bg = tk_color_from_rgb(self.color_val_bg_rbg)
 
         # text & widget defs:
-        self.color_lines = tk_color_from_rgb(COLOR_LINES)
+        self.color_lines = tk_color_from_rgb(COLOR_SCHEME['lines'])
         self._img_label = None
 
         self.color_scalers = {'values': None, 'updates': None}

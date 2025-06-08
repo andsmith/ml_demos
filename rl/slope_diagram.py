@@ -55,13 +55,13 @@ from plot_util import draw_alpha_line, scale_y_value, scale_counts, calc_alpha_a
 from micro_histogram import MicroHist
 
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
-# TODO:  add side-histograms
+# TODO:  move to LAYOUT
 REL_DIMS = {'hist_width_frac': 0.2,  # fraction of bounding box width to use for histogram width
-            'padding_frac': (0.05, 0.02),
+            'padding_frac': (0.05, 0.08),
             'font': cv2.FONT_HERSHEY_SIMPLEX,
             'spread': 0.8,  # lines are this far apart in their available horizontal space.
-            'line_alpha_range': (0.05, 0.45),
-            'line_thickness_range_rel': (2, .05),  # min ing pixels, max is relative to height
+            'line_alpha_range': (0.025, 0.3),
+            'line_thickness_range_rel': (2, .15),  # min ing pixels, max is relative to height
 
             'ticks': {'alpha': 0.5, 
                       'w': 2},
@@ -396,6 +396,7 @@ class DiagramSizeTester(object):
         self._root.mainloop()
 
     def _on_resize(self, event):
+        print(f"Resizing frame to {event.width}x{event.height}")
         self._img_size = self._frame.winfo_width(), self._frame.winfo_height()
         self.refresh_diag_image()
 
@@ -455,29 +456,31 @@ def get_test_vals(n_points=100, n_clust_init=6, splits=3):
 
 
 def test_diag():
-    tests = [get_test_vals(100, 6, 3),
-             get_test_vals(750, 10, 8),
-             get_test_vals(2900, 9, 40),
-             get_small_test_vals()]
+    tests = [get_test_vals(10, 1, 3),
+             get_test_vals(324, 3, 6),
+             get_test_vals(2016, 10, 2),
+             get_test_vals(2928, 30, 10),
+             get_test_vals(1080, 6, 8)]
 
     def _make_diag_img(size, start_vals, end_vals):
         n_vals = start_vals.size
-        diag = SlopeDiagram(size, start_vals, end_vals, title="Shift in %i values" % n_vals)
+        diag = SlopeDiagram(size, start_vals, end_vals, title=None)#="Shift in %i values" % n_vals)
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
         img[:] = COLOR_SCHEME['bg']
         diag.draw(img)
         return img
 
     def _frame_factory(size):
-        img_size = (size[0]//2, size[1]//2)
+        img_size = (size[0], size[1]//len(tests))
+        #spacer_img = np.zeros((20, img_size[0], 3), dtype=np.uint8)
 
         imgs = [_make_diag_img(img_size, start_vals, end_vals) for (start_vals, end_vals) in tests]
-        frame_layout = [[imgs[0], imgs[1]],
-                        [imgs[2], imgs[3]]]
+        #frame_layout = [[f] for img in imgs for f in (img, spacer_img)][:-1]
+        frame_layout = [[img] for img in imgs]
         frame = np.concatenate([np.concatenate(row, axis=1) for row in frame_layout], axis=0)
         return frame
 
-    tester = DiagramSizeTester((600, 600), _frame_factory)
+    tester = DiagramSizeTester((100,    950), _frame_factory)
     tester.start()
 
 

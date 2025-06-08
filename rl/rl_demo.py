@@ -185,8 +185,9 @@ class RLDemoApp(object):
         self._status_control_panel.set_run_control_setting(control_point)
 
     def clear_stop_states(self):
-        self._alg.clear_stop_states()
-        self._state_panel.refresh_images(is_paused=self.paused)
+        self.selected = []  # clear the selected states
+        self._status_control_panel.refresh_status()
+        self._state_panel.refresh_images(is_paused=self.paused, clear=True)
         self._status_control_panel.refresh_status()
 
     def set_opponent(self, n_rules):

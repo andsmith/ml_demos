@@ -153,11 +153,11 @@ class MouseBoxManager(object):
         for box_id in selected_ids:
             if box_id in self.bboxes:
                 bbox = self.bboxes[box_id]
-                self._draw_box(img, bbox, UI_COLORS['selected'])
+                self._draw_box(img, bbox, UI_COLORS['selected'], thickness=thickness)
 
         if self.mouseover_id is not None:
             bbox = self.bboxes[self.mouseover_id]
-            self._draw_box(img, bbox, UI_COLORS['mouseovered'])
+            self._draw_box(img, bbox, UI_COLORS['mouseovered'], thickness=thickness)
 
     def _draw_box(self, img, bbox, color, thickness=1):
         p0 = bbox['x'][0]-1, bbox['y'][0]-1

@@ -5,7 +5,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 import logging
-from colors import _COLOR_BG as COLOR_BG, _COLOR_LINES as COLOR_LINES, _COLOR_TEXT as COLOR_TEXT
+from colors import COLOR_SCHEME
 from util import calc_font_size
 
 def get_n_bins(values):
@@ -33,12 +33,12 @@ class TinyHistogram(object):
        i.e. 6 in a column.
     """
 
-    def __init__(self, size, values, color_draw=COLOR_LINES, color_text=COLOR_TEXT):
+    def __init__(self, size, values, color_draw=COLOR_SCHEME['lines'], color_text=COLOR_SCHEME['text']):
         self._size = size
         self._vals = np.array(values)
         self._color = color_draw
         self._color_text = np.array(color_text) / 255
-        self._color_bg = np.array(COLOR_BG)/255
+        self._color_bg = np.array(COLOR_SCHEME['bg'])/255
 
 
     def draw(self, img, x, y, test_plot=False, xlabel="",ylabel="", title=""):
@@ -127,7 +127,7 @@ class MultiHistogram(object):
         y = self._pad + self._h_top
         if len(self._title) > 0:
             text_pos = (self._pad, self._pad + self._h_top - 5)
-            cv2.putText(img, self._title, text_pos, self._font, self._font_scale, COLOR_TEXT, 1, cv2.LINE_AA)
+            cv2.putText(img, self._title, text_pos, self._font, self._font_scale, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         x = self._pad
         for l_num, hist in enumerate(self._histograms):
             hist.draw(img, x, y, ylabel="Layer %i" %(l_num+1))
@@ -137,10 +137,10 @@ class MultiHistogram(object):
 def test_multihist():
     values = [np.random.randn(np.random.randint(1,50)**2) for _ in range(6)]
     size = (413, 980)
-    mh = MultiHistogram(size, values, color_draw=COLOR_LINES, color_text=COLOR_TEXT, title="Tiny ")
+    mh = MultiHistogram(size, values, color_draw=COLOR_SCHEME['lines'], color_text=COLOR_SCHEME['text'], title="Tiny ")
     img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
-    img[:] += np.array(COLOR_BG, dtype=np.uint8)
-    print("Created image of size:", img.shape, "with color", COLOR_BG)
+    img[:] += np.array(COLOR_SCHEME['bg'], dtype=np.uint8)
+    print("Created image of size:", img.shape, "with color", COLOR_SCHEME['bg'])
     mh.draw(img)
     cv2.imshow("Tiny Histogram", img[:,:,::-1])
     cv2.waitKey(0)

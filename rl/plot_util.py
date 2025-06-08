@@ -244,7 +244,7 @@ def draw_alpha_line(img, x_range, y_range, color, thickness=1, alpha=0.5, separa
     # return bottom y coordinate drawn
     # TODO: jax, c, etc. implementation.
     half_thick, _ = divmod(thickness, 2)
-    # import ipdb; ipdb.set_trace()
+    
     x_px = np.arange(x_range[0], x_range[1]+1, dtype=np.int32)
     y_px_upper = np.linspace(y_range[0], y_range[1], len(x_px), dtype=np.int32) - half_thick - separate_y//2
     adjusted_thickness = thickness - separate_y
@@ -254,6 +254,10 @@ def draw_alpha_line(img, x_range, y_range, color, thickness=1, alpha=0.5, separa
     x_px_grid = np.tile(x_px.reshape(-1, 1), (1, adjusted_thickness))  # Repeat x coordinates for each thickness level
     y_px = y_px_grid.flatten()  # Flatten the y coordinates to match the x coordinates
     x_px = x_px_grid.flatten()  # Flatten the x coordinates to match the y coordinates
+    valid = (y_px >= 0) & (y_px < img.shape[0]) & (x_px >= 0) & (x_px < img.shape[1])
+    y_px = y_px[valid]
+    x_px = x_px[valid]
+
     if color is None:
         pixels = img[(y_px, x_px)]
         pixels = (pixels * (1.0-alpha)).astype(np.uint8)  # Apply alpha to the existing pixels
