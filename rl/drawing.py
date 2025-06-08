@@ -43,6 +43,9 @@ class GameStateArtist(object):
 
     """
 
+    _SHIFT_BITS = 5
+    _SHIFT = 1 << _SHIFT_BITS
+
     @staticmethod
     def get_size(space_size):
         if space_size >= 11:
@@ -63,8 +66,7 @@ class GameStateArtist(object):
         self.dims = self._get_image_dims()
 
         # For clean drawing:
-        self._SHIFT_BITS = 5
-        self._SHIFT = 1 << self._SHIFT_BITS
+
 
     def _get_image_dims(self):
         """
@@ -337,36 +339,47 @@ class GameStateArtist(object):
         returns: bounding box of cell marker was drwan in.
         """
         cell_span = self.dims['cells'][row][col]
-        padding = self._space_size * .4
-        size = GameStateArtist.get_size(self._space_size)
+        color = MARKER_COLORS[marker] if color is None else color
+        line_t = self.dims['line_t']
+        GameStateArtist.draw_mark(img, cell_span, line_t, marker, color,
+                                  highlight_color=highlight_color, no_marker=no_marker)
+        return cell_span
+    
 
-        def _draw_line(p0, p1, color, thickness):
-            cv2.line(img,
-                     (int(p0[0]*self._SHIFT), int(p0[1]*self._SHIFT)),
-                     (int(p1[0]*self._SHIFT), int(p1[1]*self._SHIFT)),
-                     color, thickness, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
+    @staticmethod
+    def draw_mark(img, bbox, line_t, marker, color, highlight_color=None, no_marker=False):
+        space_size = bbox['x'][1] - bbox['x'][0]
+        y_size = bbox['y'][1] - bbox['y'][0]
+        space_size = min(space_size, y_size)  # use the smaller dimension
+        padding = space_size * .4
+
+        size = GameStateArtist.get_size(space_size)
 
         def _circle_at(c, rad, color, thickness):
-            cv2.circle(img, (int(c[0]*self._SHIFT), int(c[1]*self._SHIFT)),
-                       int(rad*self._SHIFT), color, thickness=thickness,
-                       lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
+            cv2.circle(img, (int(c[0]*GameStateArtist._SHIFT), int(c[1]*GameStateArtist._SHIFT)),
+                       int(rad*GameStateArtist._SHIFT), color, thickness=thickness,
+                       lineType=cv2.LINE_AA, shift=GameStateArtist._SHIFT_BITS)
 
         def get_X_points(pad_l):
-            x0, x1 = cell_span['x'][0]+pad_l/2, cell_span['x'][1]-pad_l/2-1
-            y0, y1 = cell_span['y'][0]+pad_l/2, cell_span['y'][1]-pad_l/2-1
+            x0, x1 = bbox['x'][0]+pad_l/2, bbox['x'][1]-pad_l/2-1
+            y0, y1 = bbox['y'][0]+pad_l/2, bbox['y'][1]-pad_l/2-1
             return x0, x1, y0, y1
-
-        color = MARKER_COLORS[marker] if color is None else color
+        
+        def _draw_line(p0, p1, color, thickness):
+            cv2.line(img,
+                     (int(p0[0]*GameStateArtist._SHIFT), int(p0[1]*GameStateArtist._SHIFT)),
+                     (int(p1[0]*GameStateArtist._SHIFT), int(p1[1]*GameStateArtist._SHIFT)),
+                     color, thickness, lineType=cv2.LINE_AA, shift=GameStateArtist._SHIFT_BITS)
 
         if size == 'normal':  # draw Normal
 
-            x_thickness = int(self.dims['line_t'])
+            x_thickness = int(line_t)
             if x_thickness > 2:
                 x_thickness = x_thickness - 1
 
             circle_thickness = x_thickness*1.4  # if x_thickness>2 else x_thickness*1.35
-            center = get_cell_center(self.dims, (row, col))
-            rad = (self._space_size/2)-padding/2 + (self._space_size/17)
+            center = (bbox['x'][0] + (bbox['x'][1]-1)) / 2, (bbox['y'][0] + (bbox['y'][1]-1)) / 2
+            rad = (space_size/2)-padding/2 + (space_size/17)
             rad_inner = rad - circle_thickness
 
             rad_highlight = max(2, rad_inner-1)
@@ -390,7 +403,7 @@ class GameStateArtist(object):
         elif size == 'small':
             border = 1  # if self._space_size < 10 else 2
             # fill the cell with the color, leaving a border
-            x_span, y_span = cell_span['x'], cell_span['y']
+            x_span, y_span = bbox['x'], bbox['y']
             if not no_marker:
                 img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = color
             if highlight_color is not None:    
@@ -398,13 +411,11 @@ class GameStateArtist(object):
 
         else:  # size == 'micro'
             # fill the cell with the color
-            x_span, y_span = cell_span['x'], cell_span['y']
+            x_span, y_span = bbox['x'], bbox['y']
             if not no_marker:
                 img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = color
             if highlight_color is not None:
                 img[y_span[0]:y_span[1], x_span[0]:x_span[1]] = highlight_color
-
-        return cell_span
 
     def _get_o_points(self, size, line_width):
 
