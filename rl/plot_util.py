@@ -17,7 +17,7 @@ def scale_y_value(value, value_span, y_span, flip_y=True):
     return (y_span[1] - val_norm * (y_span[1] - y_span[0])) + y_span[0]
 
 
-def scale_counts(all_counts, line_t_range, alpha_range=(0.05, 0.95), alpha_adjust=1.0):
+def scale_counts(all_counts, line_t_range, alpha_range, alpha_adjust=1.0):
     """
     Lines representing counts are to be drawn.
     Scale thickness linearly between the given range.
@@ -76,6 +76,17 @@ def test_scale_counts():
     plt.title('Scaled Alphas')
 
     plt.show()
+
+
+def calc_alpha_adjust(n_lines, y_span, line_t, alpha_range):
+    """
+    Given how many lines there are, the span, and their thickness,
+    how transparent should they be?
+    """
+    est_coverage = n_lines * line_t / y_span
+    est_alpha_raw = 1.0 / (est_coverage*2)
+    est_alpha = np.clip(est_alpha_raw, alpha_range[0], alpha_range[1])
+    return est_alpha
 
 
 def calc_tick_placement(px_range, val_range, min_minor_spacing_px=20):
@@ -229,11 +240,11 @@ def test_calc_tick_placement():
     cv2.destroyAllWindows()
 
 
-def draw_alpha_line(img, x_range, y_range, color, thickness=1, alpha=0.5,separate_y=0):
+def draw_alpha_line(img, x_range, y_range, color, thickness=1, alpha=0.5, separate_y=0):
     # return bottom y coordinate drawn
     # TODO: jax, c, etc. implementation.
     half_thick, _ = divmod(thickness, 2)
-    #import ipdb; ipdb.set_trace()
+    # import ipdb; ipdb.set_trace()
     x_px = np.arange(x_range[0], x_range[1]+1, dtype=np.int32)
     y_px_upper = np.linspace(y_range[0], y_range[1], len(x_px), dtype=np.int32) - half_thick - separate_y//2
     adjusted_thickness = thickness - separate_y
@@ -253,7 +264,6 @@ def draw_alpha_line(img, x_range, y_range, color, thickness=1, alpha=0.5,separat
         img[(y_px, x_px)] = new_pixels  # Update the image with the new pixel values
 
     return y_px.max()
-
 
 
 def test_draw_alpha_line():

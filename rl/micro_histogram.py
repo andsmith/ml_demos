@@ -3,7 +3,7 @@ import cv2
 from resize_test import ResizingTester
 from colors import COLOR_SCHEME
 import logging
-from plot_util import scale_y_value, draw_alpha_line
+from plot_util import scale_y_value, draw_alpha_line,calc_alpha_adjust
 
 
 def get_n_bins(values, min_bins=20):
@@ -52,7 +52,7 @@ class MicroHist(object):
         self._counts = counts
         self._c_norm = self._counts / np.max(self._counts)
         self._v_scale = v_scale
-        self._bbox = bbox
+        self.bbox = bbox
         self._draw_params = MicroHist._DEFAULT_PARAMS.copy()
         if draw_params is not None:
             self._draw_params.update(draw_params)
@@ -79,20 +79,7 @@ class MicroHist(object):
 
     def _calc_bars(self, backwards=False):
         raise NotImplementedError("Drawing bins is not implemented yet.")
-
-    def _calc_alpha_lines(self, n_lines, y_span, line_t):
-        """
-        Given how many lines there are, the span, and their thickness,
-        how transparent should they be?
-        """
-        est_coverage = n_lines * line_t / y_span
-        est_alpha_raw = 1.0 / (est_coverage*2)
-        est_alpha = np.clip(est_alpha_raw, self._draw_params['line_alpha_range']
-                            [0], self._draw_params['line_alpha_range'][1])
-        print(
-            f"Estimated coverage: {est_coverage:.2f} for {n_lines} lines, y_span={y_span}, line_t={line_t} --->  alpha_raw={est_alpha_raw:.2f}--->  alpha={est_alpha:.2f}")
-        return est_alpha
-
+    
     def _calc_lines(self, backwards=False):
         """
         Get the layout for  a sideways histogram for the given values, 
@@ -106,13 +93,14 @@ class MicroHist(object):
         :returns:  list of line dicts, each with keys: p0, p1, thickness, color, alpha
         """
 
-        x_min, x_max = self._bbox['x']
+        x_min, x_max = self.bbox['x']
         x_span = x_max - x_min
-        y_span = self._bbox['y'][1] - self._bbox['y'][0]
+        y_span = self.bbox['y'][1] - self.bbox['y'][0]
 
         lines = []
         line_t = self._draw_params['single_line_t']
-        alpha = self._calc_alpha_lines(len(self._y_positions), y_span, line_t)
+
+        alpha = calc_alpha_adjust(len(self._y_positions), y_span, line_t,self._draw_params['line_alpha_range'])
 
         for (y_pos, bar_norm_len) in zip(self._y_positions, self._c_norm):
             if backwards:
@@ -122,10 +110,10 @@ class MicroHist(object):
                 bar_left = x_min
                 bar_right = x_min + x_span * bar_norm_len
 
-            if y_pos - line_t//2 < self._bbox['y'][0]:
-                y_pos = self._bbox['y'][0] + line_t // 2
-            if y_pos + line_t // 2 > self._bbox['y'][1]:
-                y_pos = self._bbox['y'][1] - line_t // 2
+            if y_pos - line_t//2 < self.bbox['y'][0]:
+                y_pos = self.bbox['y'][0] + line_t // 2
+            if y_pos + line_t // 2 > self.bbox['y'][1]:
+                y_pos = self.bbox['y'][1] - line_t // 2
             lines.append({'x': (bar_left, bar_right),
                           'y_pos': y_pos,
                           'thickness': line_t,
@@ -144,7 +132,7 @@ class MicroHist(object):
             img[y0:y1, x0] = color
             img[y0:y1, min(x1, img.shape[1]-1)] = color
 
-        draw_bbox(self._bbox, self._draw_params['color'])
+        #draw_bbox(self.bbox, self._draw_params['color'])
 
         if self._kind == 'lines':
             for line in self._lines:

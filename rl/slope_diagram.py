@@ -51,19 +51,22 @@ import numpy as np
 import cv2
 from colors import COLOR_SCHEME
 from gui_base import get_font_scale
+from plot_util import draw_alpha_line, scale_y_value, scale_counts, calc_alpha_adjust
+from micro_histogram import MicroHist
+
 from loop_timing.loop_profiler import LoopPerfTimer as LPT
 # TODO:  add side-histograms
 REL_DIMS = {'hist_width_frac': 0.175,  # fraction of bounding box width to use for histogram width
-            'padding_frac': (0.05, 0.10),
+            'padding_frac': (0.05, 0.02),
             'font': cv2.FONT_HERSHEY_SIMPLEX,
             'spread': 0.8,  # lines are this far apart in their available horizontal space.
-            'line_alpha_range': (0.1, 1.0),
-            'line_thickness_range': (1, 15),  # Sloped lines
-            'min_hist_bar_thickness': 2,
-            'max_hist_bar_thickness_frac': .03,  # thickness of the histogram bars, fraction of image height
-            'axis': {'thickness': 3,
-                     'tick_len': 3,
+            'line_alpha_range': (0.05, 0.45),
+            'line_thickness_range_rel': (2, .05),  # min ing pixels, max is relative to height
+
+            'axis': {'thickness': 2,
+                     'tick_len': 2,
                      'margin': 0.1},  # reserve this much on the top & bottom of each axis (before points)
+
             'lable_spacing_frac': 0.05,  # fraction of text height between axis ends and end labels.
             # fraction of bounding box height to use for title height
             'text_height_frac': {'title': 0.1},
@@ -90,115 +93,6 @@ class SlopeDiagram(object):
         self._right_vals, self._right_counts = np.unique(self._v1, return_counts=True)
 
     @LPT.time_function
-    def draw(self, img, bbox=None):
-        bbox = bbox if bbox is not None else {'x': (0, img.shape[1]), 'y': (0, img.shape[0])}
-        dims = self._calc_dims(bbox)
-
-        def draw_bbox(bbox, color):
-            x0, x1 = bbox['x']
-            y0, y1 = bbox['y']
-            img[y0, x0:x1] = color
-            img[y1, x0:x1] = color
-            img[y0:y1, x0] = color
-            img[y0:y1, x1] = color
-
-        # draw the bounding box
-        # draw_bbox(dims['inner_bbox'], self._colors['lines'])
-
-        # axis lines
-        axis_y = dims['axis']['y']
-        t = dims['axis']['axis_thickness']
-        tick_len = dims['axis']['tick_len']
-        max_line_thickness = REL_DIMS['line_thickness_range'][1]
-
-        slope_bbox = dims['inner_bbox']
-
-        def draw_axis(x, color, thick):
-
-            if thick > 0:
-                x0, x1 = x, x+thick
-                y_thick = thick
-                # Set area next to axis to the BG color
-                y_upper = axis_y[0] + y_thick
-                y_lower = axis_y[1] - y_thick
-                img[y_upper:y_lower, max(0, x0-max_line_thickness):x0] = self._colors['bg']
-            else:
-                # Right axis
-                x0, x1 = x+thick, x
-                y_thick = -thick
-                y_upper = axis_y[0] + y_thick
-                y_lower = axis_y[1] - y_thick
-                img[y_upper:y_lower, x1:min(x1+max_line_thickness,slope_bbox['x'][1])] =self._colors['bg']
-
-            # Vertical axis line:
-            img[axis_y[0]:axis_y[1], x0:x1] = color
-            # draw the upper and lower ends:
-            x_t_left = x0 - tick_len
-            x_t_right = x1 + tick_len
-            img[axis_y[0]:axis_y[0]+y_thick, x_t_left:x_t_right] = color  # top tick
-            img[axis_y[1]-y_thick:axis_y[1], x_t_left:x_t_right] = color  # bottom tick
-
-        # axis labels
-        axis_label_font_scale = dims['font']
-        for line, pos in dims['axis']['labels']:
-            cv2.putText(img, line, (pos[0], pos[1]), dims['font'],
-                        axis_label_font_scale, self._colors['text'], 1, cv2.LINE_AA)
-
-        # histograms
-        def draw_histogram(hist_lines, bbox):
-            """
-            Draw the histogram lines in the given bounding box.
-            :param hist_lines:  list of line dicts, each with keys: p0, p1, thickness, alpha
-            :param bbox:  bounding box for the histogram
-            """
-            for line in hist_lines:
-                p0 = int(line['p0'][0]*self._SHIFT_MUL), int(line['p0'][1]*self._SHIFT_MUL)
-                p1 = int(line['p1'][0]*self._SHIFT_MUL), int(line['p1'][1]*self._SHIFT_MUL)
-                thickness = line['thickness']
-                alpha = line['alpha']
-                color = (np.array((255, 255, 255))*(1.0-alpha)).astype(np.uint8).tolist()
-                cv2.line(img, p0, p1, color, thickness=thickness, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
-
-        # slopes
-        for line in dims['lines']:
-
-            p0 = int(line['p0'][0]*self._SHIFT_MUL), int(line['p0'][1]*self._SHIFT_MUL)
-            p1 = int(line['p1'][0]*self._SHIFT_MUL), int(line['p1'][1]*self._SHIFT_MUL)
-
-            thickness = line['thickness']
-            alpha = line['alpha']
-            color = (np.array((255, 255, 255))*(1.0-alpha)).astype(np.uint8).tolist()
-            cv2.line(img, p0, p1, color, thickness=thickness, lineType=cv2.LINE_AA, shift=self._SHIFT_BITS)
-
-        # Draw axis at the end to cover up CV2 messy line ends.
-        axis_left = dims['axis']['x_left']
-        axis_right = dims['axis']['x_right']
-        draw_bbox(dims['l_hist']['bbox'], self._colors['lines'])
-        draw_bbox(dims['r_hist']['bbox'], self._colors['lines'])
-
-        draw_axis(axis_left, self._colors['lines'], t)
-        draw_axis(axis_right, self._colors['lines'], -t)
-        if dims['l_hist']['bbox'] is not None:
-            # Draw the left histogram
-            draw_histogram(dims['l_hist']['lines'], dims['l_hist']['bbox'])
-        if dims['r_hist']['bbox'] is not None:
-            # Draw the right histogram
-            draw_histogram(dims['r_hist']['lines'], dims['r_hist']['bbox'])
-
-
-
-
-        # title
-        if self._title is not None:
-            title_x, title_y = dims['title']['x'], dims['title']['y']
-            cv2.putText(img, dims['title']['text'], (title_x, title_y), dims['font'],
-                        dims['title']['font_scale'], self._colors['text'], 1, cv2.LINE_AA)
-
-
-
-        return img
-
-    @LPT.time_function
     def _calc_dims(self, bbox):
         """
         Find absolute dimensions & layout locations for everything, return as dict.
@@ -213,12 +107,18 @@ class SlopeDiagram(object):
         x_center = x_left + x_w // 2
         text_padding = int(h * REL_DIMS['lable_spacing_frac'])
 
+        ltr_rel = REL_DIMS['line_thickness_range_rel']
+        line_thickness_range = (ltr_rel[0],
+                                max(ltr_rel[0], int(h * ltr_rel[1])))
+        med_thick = (line_thickness_range[0] + line_thickness_range[1]) // 2
+
         dims = {'bbox': bbox,
                 'inner_bbox': {'x': (x_left, x_right), 'y': (y_top, y_bottom)},
                 'x_center': x_center,
                 'title': None,
                 'font': REL_DIMS['font'],
-                'axis': {}, }
+                'axis': {},
+                'line_thickness_range': line_thickness_range}
         # 'l_hist': {'bbox': h_bbox_left, 'lines': l_hist_lines},
         # 'r_hist': {'bbox': h_bbox_right, 'lines': r_hist_lines}
 
@@ -256,7 +156,7 @@ class SlopeDiagram(object):
         axis_y = (y_top, y_bottom)
         axis_tick_len = REL_DIMS['axis']['tick_len']
         axis_dist = int((x_right-x_left) * REL_DIMS['spread'])
-        ax_thick = REL_DIMS['axis']['thickness']
+        ax_thick = int(REL_DIMS['axis']['thickness'])
 
         dims['axis'] = {'x_left': x_left,
                         'x_right': x_right,
@@ -270,96 +170,42 @@ class SlopeDiagram(object):
 
         # Calculate where the values go on both axes.
         val_scale = self._get_scaling()
-        y_height = axis_y[1] - axis_y[0]
 
         lines = []
-        line_scale = self._scale_counts(self._pair_counts)
+
+        line_scale = scale_counts(self._pair_counts, line_thickness_range,
+                                  REL_DIMS['line_alpha_range'])
+
+        alpha_adjust = calc_alpha_adjust(n_lines=len(self._pair_counts),
+                                         y_span=axis_y[1] - axis_y[0],
+                                         line_t=med_thick,
+                                         alpha_range=REL_DIMS['line_alpha_range'])
+
         for ind, (v0, v1) in enumerate(self._distinct_pairs):
-            thickness, alpha = line_scale['t'][ind], line_scale['alpha'][ind]
-            y_span = (axis_y[0], axis_y[0]+y_height)
-            y_left, y_right = (self._scale_y_value(v0, y_span=y_span, value_span=val_scale),
-                               self._scale_y_value(v1, y_span=y_span, value_span=val_scale))
+            thickness, alpha = line_scale['t'][ind], line_scale['alpha']
+            y_left = scale_y_value(v0, y_span=axis_y, value_span=val_scale)
+            y_right = scale_y_value(v1, y_span=axis_y, value_span=val_scale)
 
-            lines.append({'p0': (x_left+int(ax_thick)-axis_tick_len, y_left),
-                          'p1': (x_right-int(ax_thick)+axis_tick_len, y_right),
+            lines.append({'x': (x_left+ax_thick, x_right-ax_thick),
+                          'y': (y_left, y_right),
                           'thickness': thickness,
-                          'alpha': alpha})
+                          'alpha': alpha_adjust})
         dims['lines'] = lines
-
         # Now we can draw the histograms at the same y positions as the lines.
 
-        # Place histograms on the sides.
+        dp = {'line_alpha_range': REL_DIMS['line_alpha_range'],
+              'line_thickness_range': line_thickness_range,
+              'single_line_t': med_thick}
 
-        def make_hist(values, counts, bbox, backwards=False):
-            """
-            Create a histogram for the given values, in the given x range, with the given y span.
-            Can extend to the left  (xlow > x_high)  or right (xlow < x_high) 
-            :param values:  list of values (y-positions)
-            :param counts:  list of counts for each value
-            :param px_low:  x position of the small-value edge of the histogram
-            :param px_high: x position of the large-value edge of the histogram (can be left of px_low)
-            :param y_span:  (y_min, y_max)  y positions for the histogram
-            :returns:  list of line dicts, each with keys: p0, p1, thickness, color, alpha
-            """
-            
-            x_min, x_max = bbox['x'] 
-            x_span = x_max - x_min
-            bar_norm = counts / np.max(counts)
-            if not backwards:
-                x_left = x_min
-                x_right = x_left + x_span * bar_norm
-            else:
-                x_right = x_max
-                x_left = x_right - x_span * bar_norm
-
-            y_positions = self._scale_y_value(values, val_scale, y_span=(bbox['y'][0], bbox['y'][1]))
-            lines = []
-            thicknesss, alphas = self._scale_counts(counts).values()
-            for (y_pos, bar_norm_len, thick, alpha) in zip(y_positions, bar_norm, thicknesss, alphas):
-                if backwards:
-                    bar_right = x_right
-                    bar_left = x_right - x_span * bar_norm_len
-                else:
-                    bar_left = x_left
-                    bar_right = x_left + x_span * bar_norm_len
-
-                lines.append({'p0': (bar_left, y_pos),
-                              'p1': (bar_right, y_pos),
-                              'thickness': thick,
-                              'alpha': alpha})
-
-            return lines
-        
-        l_hist_lines = make_hist(self._left_vals, self._left_counts, h_bbox_left, backwards=True)
-        r_hist_lines = make_hist(self._right_vals, self._right_counts, h_bbox_right)
-
-        dims['l_hist'] = {'bbox': h_bbox_left, 'lines': l_hist_lines}
-        dims['r_hist'] = {'bbox': h_bbox_right, 'lines': r_hist_lines}
-
+        dims['l_hist'] = MicroHist(self._left_vals, self._left_counts,
+                                   v_scale=val_scale,
+                                   bbox=h_bbox_left,
+                                   left_facing=True, draw_params=dp)
+        dims['r_hist'] = MicroHist(self._right_vals, self._right_counts,
+                                   v_scale=val_scale,
+                                   bbox=h_bbox_right,
+                                   left_facing=False, draw_params=dp)
         return dims
-
-    def _scale_counts(self, all_counts):
-        ltr = REL_DIMS['line_thickness_range']
-        lar = REL_DIMS['line_alpha_range']
-        rel_counts = all_counts / np.max(all_counts)
-        # Thicknesses:
-        t_scaled_counts = (rel_counts * (ltr[1] - ltr[0]) + ltr[0]).astype(int)
-        t_scaled_counts = np.clip(t_scaled_counts, ltr[0], ltr[1])
-        # Alphas:
-        a_scaled_counts = rel_counts * (lar[1] - lar[0]) + lar[0]
-        a_scaled_counts = np.clip(a_scaled_counts, lar[0], lar[1])
-        alphas = a_scaled_counts*0 + 0.5
-
-        return {'t': t_scaled_counts.astype(int),
-                'alpha': alphas}
-
-    def _scale_y_value(self, value, value_span, y_span):
-        val_norm = (value - value_span[0]) / (value_span[1] - value_span[0])
-
-        # flip the value to go from top to bottom.
-
-        # return int(y_span[1] - val_norm * (y_span[1] - y_span[0]))
-        return (y_span[0] + val_norm * (y_span[1] - y_span[0]))
 
     def _get_scaling(self):
         """
@@ -393,6 +239,91 @@ class SlopeDiagram(object):
 
         return scale
 
+    @LPT.time_function
+    def draw(self, img, bbox=None):
+        bbox = bbox if bbox is not None else {'x': (0, img.shape[1]), 'y': (0, img.shape[0])}
+        dims = self._calc_dims(bbox)
+
+        def draw_bbox(bbox, color):
+            x0, x1 = bbox['x']
+            y0, y1 = bbox['y']
+            img[y0, x0:x1] = color
+            img[y1, x0:x1] = color
+            img[y0:y1, x0] = color
+            img[y0:y1, x1] = color
+
+        # draw the bounding box
+        # draw_bbox(dims['inner_bbox'], self._colors['lines'])
+
+        # axis lines
+        axis_y = dims['axis']['y']
+        t = dims['axis']['axis_thickness']
+        tick_len = dims['axis']['tick_len']
+        ltr = dims['line_thickness_range']
+        max_line_thickness = ltr[1]
+
+        slope_bbox = dims['inner_bbox']
+
+        def draw_axis(x, color, thick):
+
+            if thick > 0:
+                x0, x1 = x, x+thick
+                y_thick = thick
+                # Set area next to axis to the BG color
+                y_upper = axis_y[0] + y_thick
+                y_lower = axis_y[1] - y_thick
+                img[y_upper:y_lower, max(0, x0-max_line_thickness):x0] = self._colors['bg']
+            else:
+                # Right axis
+                x0, x1 = x+thick, x
+                y_thick = -thick
+                y_upper = axis_y[0] + y_thick
+                y_lower = axis_y[1] - y_thick
+                img[y_upper:y_lower, x1:min(x1+max_line_thickness, slope_bbox['x'][1])] = self._colors['bg']
+
+            # Vertical axis line:
+            img[axis_y[0]:axis_y[1], x0:x1] = color
+            # draw the upper and lower ends:
+            x_t_left = x0 - tick_len
+            x_t_right = x1 + tick_len
+            img[axis_y[0]:axis_y[0]+y_thick, x_t_left:x_t_right] = color  # top tick
+            img[axis_y[1]-y_thick:axis_y[1], x_t_left:x_t_right] = color  # bottom tick
+
+        # axis labels
+        axis_label_font_scale = dims['font']
+        for line, pos in dims['axis']['labels']:
+            cv2.putText(img, line, (pos[0], pos[1]), dims['font'],
+                        axis_label_font_scale, self._colors['text'], 1, cv2.LINE_AA)
+
+        # slopes
+        for line in dims['lines']:
+
+            x_left, x_right = line['x']
+            y_left, y_right = line['y']
+            thickness = line['thickness']
+            alpha = line['alpha']
+            draw_alpha_line(img, (x_left, x_right), (y_left, y_right),
+                            color=None, thickness=thickness, alpha=alpha)
+        # Draw axis at the end to cover up CV2 messy line ends.
+        axis_left = dims['axis']['x_left']
+        axis_right = dims['axis']['x_right']
+
+        draw_axis(axis_left, self._colors['lines'], t)
+        draw_axis(axis_right, self._colors['lines'], -t)
+        if dims['l_hist'] is not None:
+            # Draw the left histogram
+            dims['l_hist'].draw(img)
+        if dims['r_hist'] is not None:
+            # Draw the right histogram
+            dims['r_hist'].draw(img)
+        # title
+        if self._title is not None:
+            title_x, title_y = dims['title']['x'], dims['title']['y']
+            cv2.putText(img, dims['title']['text'], (title_x, title_y), dims['font'],
+                        dims['title']['font_scale'], self._colors['text'], 1, cv2.LINE_AA)
+
+        return img
+
 
 @LPT.time_function
 def _gfs_stub(*args, **kwargs):
@@ -407,10 +338,10 @@ class DiagramSizeTester(object):
     Tk window with single image lable (the diag), to show resize capability.
     """
 
-    def __init__(self, size, diag_factory):
-        diag = diag_factory(size)
-        self._img_size = diag.size
-        self._make_diag = diag_factory
+    def __init__(self, size, img_factory):
+        img = img_factory(size)
+        self._img_size = img.shape[1], img.shape[0]
+        self._make_frame = img_factory
         self._init_tk()
 
     def _init_tk(self):
@@ -439,26 +370,17 @@ class DiagramSizeTester(object):
         self._root.mainloop()
 
     def _on_resize(self, event):
-        print(f"Resize event: {event.width}x{event.height}")
         self._img_size = self._frame.winfo_width(), self._frame.winfo_height()
         self.refresh_diag_image()
 
-    def _get_img(self):
-        diag = self._make_diag(self._img_size)
-        img = np.zeros((self._img_size[1], self._img_size[0], 3), dtype=np.uint8)
-        img[:] = COLOR_SCHEME['bg']
-        diag.draw(img)
-        return img
-
     def refresh_diag_image(self):
-        print(f"Refreshing diagram image to size {self._img_size}")
-        img = self._get_img()
+        img = self._make_frame(self._img_size)
         img = ImageTk.PhotoImage(image=Image.fromarray(img))
         self._label.config(image=img)
         self._label.image = img
 
 
-def test_diag():
+def get_small_test_vals():
     vals1 = np.concatenate((np.random.randn(100), np.random.randn(100)*.5 + 2.0))
     vals2 = np.concatenate((np.random.randn(50)*.7-.5, np.random.randn(150)*1.0 + 1.0))
     vals1 = np.zeros(10)
@@ -466,14 +388,71 @@ def test_diag():
     vals2 = np.array([-1.0]*1 + [0.0]*1 + [1.0]*2 + [2.0]*5 + [-3.0]*1)
     print("vals1", vals1)
     print("vals2", vals2)
+    return vals1, vals2
 
-    def _make_diag(size):
-        diag = SlopeDiagram(size, vals1, vals2, title="Values from T=0 -> T=1")
-        return diag
 
-    size = (300, 220)
+def get_test_vals(n_points=100, n_clust_init=6, splits=3):
+    """
+    Start with N clusters, splitting/merging into M clusters.
+    Use a small number of distinct values in each cluster.
+    """
 
-    tester = DiagramSizeTester(size, _make_diag)
+    init_vals = np.random.randn(n_clust_init) * 10.0  # initial cluster centers
+    c_dist = np.random.rand(n_clust_init)  # initial cluster distribution
+    c_dist = c_dist / np.sum(c_dist)  # normalize
+    cluster_dist = np.random.multinomial(n_points, c_dist)  # initial cluster sizes
+    # Now split the clusters into n_clusters
+    start_vals = []
+    end_vals = []
+
+    for start_clust_ind, c_val in enumerate(init_vals):
+        c_size = cluster_dist[start_clust_ind]
+        new_start_vals = np.ones(c_size) * c_val
+        # Split the cluster into splits clusters
+        new_split_vals = np.random.randn(splits)*5.0 + c_val
+        # divide up the cluster into the splits
+        s_dist = np.random.rand(splits)
+        s_dist = s_dist / np.sum(s_dist)
+        split_dist = np.random.multinomial(c_size, s_dist)
+        new_end_vals = 0 * new_start_vals
+        n_ind = 0
+        for split_ind, split_val in enumerate(new_split_vals):
+            split_size = split_dist[split_ind]
+            new_end_vals[n_ind: n_ind + split_size] = split_val
+            n_ind += split_size
+        start_vals.extend(new_start_vals)
+        end_vals.extend(new_end_vals)
+
+    start_vals = np.array(start_vals)
+    end_vals = np.array(end_vals)
+
+    return start_vals, end_vals
+
+
+def test_diag():
+    tests = [get_test_vals(100, 6, 3),
+             get_test_vals(750, 10, 8),
+             get_test_vals(2900, 9, 40),
+             get_small_test_vals()]
+
+    def _make_diag_img(size, start_vals, end_vals):
+        n_vals = start_vals.size
+        diag = SlopeDiagram(size, start_vals, end_vals, title="Shift in %i values" % n_vals)
+        img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+        img[:] = COLOR_SCHEME['bg']
+        diag.draw(img)
+        return img
+
+    def _frame_factory(size):
+        img_size = (size[0]//2, size[1]//2)
+
+        imgs = [_make_diag_img(img_size, start_vals, end_vals) for (start_vals, end_vals) in tests]
+        frame_layout = [[imgs[0], imgs[1]],
+                        [imgs[2], imgs[3]]]
+        frame  = np.concatenate([np.concatenate(row, axis=1) for row in frame_layout], axis=0)
+        return frame
+
+    tester = DiagramSizeTester((600, 600), _frame_factory)
     tester.start()
 
 
