@@ -122,7 +122,7 @@ def calc_font_size(lines, bbox, font, item_spacing_px, n_extra_v_spaces=0, max_f
     return np.min(font_sizes), np.min(font_sizes)//2
 
 
-def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_lines=None):
+def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_lines=None, max_font_scale=5):
     """
     Find the maximum font scale that fits a number in the given height.
     :param font_name: Name of the font to use.
@@ -131,7 +131,7 @@ def get_font_scale(font, max_height, max_width=None, incl_baseline=False, text_l
     """
     text_lines = ["0"] if text_lines is None else text_lines
 
-    scale = 5
+    scale = max_font_scale
     while True:
 
         def _check(test_text):

@@ -4,6 +4,7 @@ from resize_test import ResizingTester
 from colors import COLOR_SCHEME
 import logging
 from plot_util import scale_y_value, draw_alpha_line,calc_alpha_adjust
+from util import get_font_scale
 
 
 def get_n_bins(values, min_bins=20):
@@ -29,9 +30,12 @@ def get_n_bins(values, min_bins=20):
 
 class MicroHist(object):
 
-    _DEFAULT_PARAMS = {'single_line_t': 10,  # fraction of height
+    _DEFAULT_PARAMS = {'single_line_t': 20,  # fraction of height
                        'color': COLOR_SCHEME['lines'],
-                       'line_alpha_range': (0.1, 0.95)}
+                       'line_alpha_range': (0.1, 0.7),
+                       
+                       'font': cv2.FONT_HERSHEY_SIMPLEX,
+                       'max_font_scale': 1.0}
 
     def __init__(self, values, counts, v_scale,  bbox, left_facing=False, draw_params=None):
         """
@@ -59,10 +63,9 @@ class MicroHist(object):
 
         # 
         self._kind = 'lines'  # 'bins' if self._n_bins is not None else 'lines'
-
         if self._kind == 'lines':
             self._y_positions = scale_y_value(values, v_scale, y_span=(bbox['y'][0], bbox['y'][1]))
-            self._lines = self._calc_lines(backwards=left_facing)
+            self._lines = self._calc_lines(backwards=left_facing, bbox=self.bbox)
 
         elif self._kind == 'bins':
             raise NotImplementedError("Drawing bins is not implemented yet.")
@@ -73,14 +76,16 @@ class MicroHist(object):
                                                     weights=counts)
             self._c_norm = self._counts / np.max(self._counts)
             self._bin_y = scale_y_value(self._bins, v_scale, y_span=(bbox['y'][0], bbox['y'][1]))
-            self._bars = self._calc_bars(backwards=left_facing)
+            self._bars = self._calc_bars(backwards=left_facing, bbbox=self.bbox)
         else:
             raise ValueError(f"Unknown histogram type: {self._kind}")
+        
 
-    def _calc_bars(self, backwards=False):
+
+    def _calc_bars(self, bbbox,backwards=False):
         raise NotImplementedError("Drawing bins is not implemented yet.")
     
-    def _calc_lines(self, backwards=False):
+    def _calc_lines(self, bbox, backwards=False):
         """
         Get the layout for  a sideways histogram for the given values, 
         in the given bounding box.  Default has lines extending to the right.
@@ -92,10 +97,9 @@ class MicroHist(object):
         :param backwards:  If True, the histogram will extend to the left instead of the right.
         :returns:  list of line dicts, each with keys: p0, p1, thickness, color, alpha
         """
-
-        x_min, x_max = self.bbox['x']
+        x_min, x_max =bbox['x']
         x_span = x_max - x_min
-        y_span = self.bbox['y'][1] - self.bbox['y'][0]
+        y_span = bbox['y'][1] - bbox['y'][0]
 
         lines = []
         line_t = self._draw_params['single_line_t']
@@ -110,10 +114,10 @@ class MicroHist(object):
                 bar_left = x_min
                 bar_right = x_min + x_span * bar_norm_len
 
-            if y_pos - line_t//2 < self.bbox['y'][0]:
-                y_pos = self.bbox['y'][0] + line_t // 2
-            if y_pos + line_t // 2 > self.bbox['y'][1]:
-                y_pos = self.bbox['y'][1] - line_t // 2
+            if y_pos - line_t//2 < bbox['y'][0]:
+                y_pos = bbox['y'][0] + line_t // 2
+            if y_pos + line_t // 2 > bbox['y'][1]:
+                y_pos = bbox['y'][1] - line_t // 2
             lines.append({'x': (bar_left, bar_right),
                           'y_pos': y_pos,
                           'thickness': line_t,
