@@ -2,7 +2,7 @@
 
 from colors import COLOR_SCHEME
 import cv2
-MID_X = 0.38  # "state-tabs" frame (sate/value/update images) to the right of this point
+MID_X = 0.5  # "state-tabs" frame (sate/value/update images) to the right of this point
 MID_Y = 0.5  # "step-visualization" frame below this point
 LOW_Y = 1.0
 HALF_MID_X = 0.15
@@ -19,7 +19,8 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                                     'y_rel': (0.0, 1.0)}
                      },
           'state_embedding': {  # a kind of TabContentPage showing all RL states
-          'space_sizes': [12, 2, 2, 2, 2, 3]},  # sizes of the spaces between states in pixels
+                'space_sizes': [12, 2, 2, 2, 2, 3]
+          },  # sizes of the spaces between states in pixels
           'margin_rel': .0025,  # margin between frames in relative coordinates
 
           'fonts': {'panel_title': ('Helvetica', 16, 'underline'),
@@ -32,6 +33,10 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                     'big_button': ('Helvetica', 14, 'bold'),
                     'tabs': ('Helvetica', 12, 'bold'),
                     'flag': ('Helvetica', 13, 'bold')},
+                    
+        'cv2_fonts': {'main_titles': {'font': cv2.FONT_HERSHEY_COMPLEX,'scale':1.0},
+                      'sub_titles': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.9},
+                      'state_captions': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.8, 'v_spacing':1.2}},
 
           'results_viz': {
 

@@ -110,7 +110,7 @@ class GameTree(object):
 
     def __init__(self, player, verbose=False):
         self._player = player
-
+        self._n_games =0
         # state (Game): (None or one of the Result values).  Check here to if a state has been seen before.
         self._terminal = {}
         # state: {child_state: (action, player) for each of state's child states}, w/the player & actions that led to them.
@@ -177,13 +177,12 @@ class GameTree(object):
     def _build_tree_recursive(self, state, current_player, initial_player):
         if self._terminal[state] is not None:
             self._game_outcomes[initial_player][self._terminal[state]] += 1
+            self._n_games +=1
+
+            if self._verbose and self._n_games % 10000 == 0 and self._n_games > 0:
+                print("\t\tgames finished:  %i\t\tunique states: %i" % (self._n_games, len(self._terminal)))
+
             return
-
-        if self._verbose and np.random.rand() < .0001:
-            n_games = sum([sum([self._game_outcomes[p][r] for r in [Result.X_WIN, Result.O_WIN, Result.DRAW]])
-                          for p in [Mark.X, Mark.O]])
-            print("\t\tgames finished:  %i\t\tunique states: %i" % (n_games, len(self._terminal)))
-
         for action in state.get_actions():
             child = state.clone_and_move(action, current_player)
             self._children[state][child] = (action, current_player)
@@ -211,6 +210,7 @@ class GameTree(object):
         return self._terminal, children, self._parents, initial
 
     def print_win_losses(self):
+        print("Total games played: ", self._n_games)
         print("Total unique states: ", len(self._terminal))
         print("\tterminal, X-wins: ", len([state for state in self._terminal if self._terminal[state] == Result.X_WIN]))
         print("\tterminal, O-wins: ", len([state for state in self._terminal if self._terminal[state] == Result.O_WIN]))

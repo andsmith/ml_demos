@@ -3,6 +3,8 @@ from game_base import Mark, Result, WIN_MARKS, get_cell_center
 from util import get_annulus_polyline, float_rgb_to_int
 import cv2
 from colors import COLOR_SCHEME
+import matplotlib.pyplot as plt
+from tic_tac_toe import Game
 
 MARKER_COLORS = {Mark.X: COLOR_SCHEME['color_x'],
                  Mark.O: COLOR_SCHEME['color_o'],
@@ -66,7 +68,6 @@ class GameStateArtist(object):
         self.dims = self._get_image_dims()
 
         # For clean drawing:
-
 
     def _get_image_dims(self):
         """
@@ -187,7 +188,8 @@ class GameStateArtist(object):
         if size != 'micro':
             for i in [1, 2]:
                 # always dark or draw color
-                line_color = grid_line_color if not (term is not None and term == Result.DRAW) else COLOR_SCHEME['color_draw']
+                line_color = grid_line_color if not (term is not None and term ==
+                                                     Result.DRAW) else COLOR_SCHEME['color_draw']
                 z_0 = i * (self._space_size + thickness)
                 z_1 = z_0 + thickness
 
@@ -228,14 +230,14 @@ class GameStateArtist(object):
             for j in range(3):
                 no_marker = False
                 if game.state[i, j] == Mark.EMPTY:
-                    no_marker=True
+                    no_marker = True
                 h_col = highlight_color if highlight_cell is not None and (i, j) == highlight_cell else None
-                self._add_marker(img, row=i, col=j, marker=game.state[i, j],highlight_color=h_col, no_marker=no_marker)
+                self._add_marker(img, row=i, col=j, marker=game.state[i, j], highlight_color=h_col, no_marker=no_marker)
 
         # shade the whole image (including the bbox area) is averaged with the winner/draw color.
         shade_color = COLOR_SCHEME['color_shade'] if term is None else {Result.DRAW: COLOR_SCHEME['color_draw_shade'],
-                                                        Result.X_WIN: COLOR_SCHEME['color_x'],
-                                                        Result.O_WIN: COLOR_SCHEME['color_o']}[term]
+                                                                        Result.X_WIN: COLOR_SCHEME['color_x'],
+                                                                        Result.O_WIN: COLOR_SCHEME['color_o']}[term]
         weight = 0.25 if term is not None else .1
         tile = np.float32(img)
         shade_color = np.float32(shade_color)
@@ -344,7 +346,6 @@ class GameStateArtist(object):
         GameStateArtist.draw_mark(img, cell_span, line_t, marker, color,
                                   highlight_color=highlight_color, no_marker=no_marker)
         return cell_span
-    
 
     @staticmethod
     def draw_mark(img, bbox, line_t, marker, color, highlight_color=None, no_marker=False):
@@ -364,7 +365,7 @@ class GameStateArtist(object):
             x0, x1 = bbox['x'][0]+pad_l/2, bbox['x'][1]-pad_l/2-1
             y0, y1 = bbox['y'][0]+pad_l/2, bbox['y'][1]-pad_l/2-1
             return x0, x1, y0, y1
-        
+
         def _draw_line(p0, p1, color, thickness):
             cv2.line(img,
                      (int(p0[0]*GameStateArtist._SHIFT), int(p0[1]*GameStateArtist._SHIFT)),
@@ -406,7 +407,7 @@ class GameStateArtist(object):
             x_span, y_span = bbox['x'], bbox['y']
             if not no_marker:
                 img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = color
-            if highlight_color is not None:    
+            if highlight_color is not None:
                 img[y_span[0]+border:y_span[1]-border, x_span[0]+border:x_span[1]-border] = highlight_color
 
         else:  # size == 'micro'
@@ -423,6 +424,56 @@ class GameStateArtist(object):
             self._point_cache[size] = get_annulus_polyline(size, line_width, n_points=int(size*2))
         return self._point_cache[size]
 
+def place_string(pos, string, font, scale, thickness=1, incl_baseline=True, t_dims=None):
+    """
+    A string is to be added to an image below and right of 'pos'.
+    Determine the text's position, and where the new "top" of the image is.
+    :param pos: (x, y) position to place the string.
+    :param string: string to place.
+    :param font: cv2 font constant.
+    :param scale: font scale.
+    :param thickness: thickness of the text.
+    :param incl_baseline: whether to include the baseline in the new "top" of the image.
+    :param t_dims: if given, use these dimensions instead of recalculating them:
+       (width, height), baseline  # return value of cv2.getTextSize
+       NOTE:  If using, font, scale,thickness can be None
+    :returns: (x, y): position of the text, 
+               (y_top, x+width): new top y position, position right of text
+    """
+    if t_dims is None:
+        (text_width, text_height), baseline = cv2.getTextSize(string, font, scale, thickness)
+    else:
+        (text_width, text_height), baseline = t_dims
+
+    x_pos = pos[0]
+    y_pos = pos[1] + text_height
+    y_top = y_pos + (baseline if incl_baseline else 0)
+    return (x_pos, y_pos), (y_top, x_pos + text_width)
+
+def test_place_string():
+    img = np.zeros((200, 400, 3), dtype=np.uint8)
+    img[:] = COLOR_SCHEME['bg']
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 0.8
+    string = "T'j(}"
+
+    y_top = 20
+    pos = (20, y_top)
+    test_string = string + "no baseline"
+    (x_pos, y_pos), (y_top, _) = place_string(pos, test_string, font, scale, incl_baseline=False)
+    cv2.putText(img, test_string, (x_pos, y_pos), font, scale, COLOR_SCHEME['lines'], 1, cv2.LINE_AA)
+    cv2.rectangle(img, (pos[0], pos[1]), (pos[0]+200, y_top), COLOR_SCHEME['lines'], 1, cv2.LINE_AA)
+
+    y_top += 12
+    pos = (20, y_top)
+    test_string = string + "w/baseline"
+    (x_pos, y_pos),  (y_top, _) = place_string(pos, test_string, font, scale, incl_baseline=True)
+    cv2.putText(img, test_string, (x_pos, y_pos), font, scale, COLOR_SCHEME['lines'], 1, cv2.LINE_AA)
+    cv2.rectangle(img, (pos[0], pos[1]), (pos[0]+200, y_top), COLOR_SCHEME['lines'], 1, cv2.LINE_AA)
+    
+    cv2.imshow('Test Place String', img[:,:,::-1])
+    cv2.waitKey(0)
 
 def test_terminals():
     from tic_tac_toe import Game
@@ -454,32 +505,18 @@ def test_terminals():
     cv2.destroyAllWindows()
 
 
-def make_image():
-    from tic_tac_toe import Game
-    game = Game()
+def make_single_image(game=None, space_size=20):
+    artist = GameStateArtist(space_size)
     game = Game.from_strs(["XOX",
                            "O X",
-                           "OXO"])
-    print(game)
-
-    def print_dim_test(img_size):
-        s_size = GameStateArtist.get_space_size(img_size)
-        dims = GameStateArtist(s_size).dims
-        print(f"Image size: {img_size}, space size: {s_size}, line_t: {dims['line_t']}")
-
-    [print_dim_test(i) for i in [7, 25, 30, 35, 40, 45, 50, 100, 200, 500]]
-
-    artist = GameStateArtist(20)
-    print("Artist category:", artist.get_size(artist._space_size))
-    print("Artist space size:", artist._space_size)
+                           "OXO"]) if game is None else game
+    print("Generating image for game:\n%s" % game)
     img = artist.get_image(game)
-    import matplotlib.pyplot as plt
     plt.imshow(img)
     plt.show()
 
 
 if __name__ == "__main__":
+    test_place_string()
     test_terminals()
-    # get_draw()
-
-    make_image()
+    make_single_image()
