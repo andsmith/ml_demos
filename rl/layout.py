@@ -7,7 +7,8 @@ MID_Y = 0.5  # "step-visualization" frame below this point
 LOW_Y = 1.0
 HALF_MID_X = 0.15
 
-
+SHIFT_BITS = 6
+SHIFT_MUL = 2 ** SHIFT_BITS  # shift to the left by this many bits to get the value
 LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                                  'y_rel': (0.0, MID_Y)},
 
@@ -36,7 +37,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                     
         'cv2_fonts': {'main_titles': {'font': cv2.FONT_HERSHEY_COMPLEX,'scale':1.0},
                       'sub_titles': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.9},
-                      'state_captions': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.8, 'v_spacing':1.2}},
+                      'state_captions': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.7, 'v_spacing':.4}},
 
           'results_viz': {
 

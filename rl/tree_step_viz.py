@@ -56,7 +56,7 @@ from colors import COLOR_SCHEME, MPL_CYCLE_COLORS
 from drawing import GameStateArtist, place_string
 import abc
 from tab_content import TabContentPage
-from layout import LAYOUT
+from layout import LAYOUT, SHIFT_BITS, SHIFT_MUL
 
 _DEFAULT_PARAMS = {'space_sizes': {
     'state': 35,
@@ -93,8 +93,41 @@ class CaptionedTile(object):
         self._font_scale = font_scale if font_scale is not None else LAYOUT['cv2_fonts']['state_captions']['scale']
         test_str = above_cap if above_cap is not None else (below_cap if below_cap is not None else 'X')
         self._str_dims = cv2.getTextSize(test_str, self._font, self._font_scale, 1) if str_dims is None else str_dims
-        self._v_spacing = int(self._str_dims[0][1]*.4)
+        self._v_spacing = int(self._str_dims[0][1]*LAYOUT['cv2_fonts']['state_captions']['v_spacing'])
+        print("Font scale:  %f, v_spacing: %i" % (self._font_scale, self._v_spacing))
         self.size, self._tile_bbox, self._captions, self._y_bottom = self._calc_dims()
+
+    def get_attach_points(self, pos=(0, 0), n=8, loc='bottom-left'):
+        """
+        Equally distributed in specified location:
+          - bottom-left:  from the left edge to the middle (for the "state" tile).
+          - bottom: left to right of bottom edge. (for action tiles)
+          - left:  top to bottom of the left edge. (action tiles)
+          - top: middle, above upper caption.  (next-state tiles)
+        :param loc: position to attach to, one of 'bottom-left', 'bottom', 'left', 'top'.
+        :param n: number of points to return.
+        :param pos: (x, y) offset to apply to the points.
+        :returns: list of (x, y) points. 
+        """
+        if loc == 'bottom-left':
+            x = np.linspace(self._tile_bbox['x'][0], self._tile_bbox['x']
+                            [1], n+2)[1:-1]  # skip the first and last point
+            y = np.full(n,self.size[1])
+        elif loc == 'bottom':
+            x = np.linspace(self._tile_bbox['x'][0], self._tile_bbox['x']
+                            [1], n+2)[1:-1]  # skip the first and last point
+            y = np.full(n, self.size[1])
+        elif loc == 'left':
+            x = np.full(n, self._tile_bbox['x'][0])
+            y = np.linspace(self._tile_bbox['y'][0], self._tile_bbox['y']
+                            [1], n+2)[1:-1]  # skip the first and last point
+        elif loc == 'top':
+            x = np.linspace(self._tile_bbox['x'][0], self._tile_bbox['x']
+                            [1], n+2)[1:-1]  # skip the first and last point
+            y = np.full(n, 0)
+        else:
+            raise ValueError(f"Invalid attach position: {loc}")
+        return list(zip(x+pos[0], y+pos[1]))
 
     def _calc_dims(self):
         """
@@ -103,26 +136,27 @@ class CaptionedTile(object):
         """
         w = self.tile_size[0] + self._pad_px * 2
         h = self.tile_size[1] + self._pad_px * 2
-        y_top = self._pad_px +  self._v_spacing
+        y_top = self._pad_px + self._v_spacing 
         x_left = self._pad_px
         captions = []
         # import ipdb; ipdb.set_trace()
+        
         if self.above_cap is not None:
             cap_pos, (y_top, _) = place_string((x_left, y_top), self.above_cap, None, None,
                                                None, incl_baseline=True, t_dims=self._str_dims)
             captions.append((cap_pos, self.above_cap))
-            y_top += self._v_spacing
+            y_top += self._v_spacing //2
         img_pos = (x_left, y_top)
-        y_top += self.tile_size[1] + self._v_spacing
+        y_top += self.tile_size[1] + self._v_spacing 
         self._img_bottom = y_top
         if self.below_cap is not None:
-            y_top += self._v_spacing
             cap_pos, (y_top, _) = place_string((x_left, y_top), self.below_cap, None, None,
                                                None, incl_baseline=True, t_dims=self._str_dims)
             captions.append((cap_pos, self.below_cap))
-        
-
-        size = (w, y_top)
+            y_top += self._v_spacing
+            
+        self._bottom_space = 0# self._v_spacing //2
+        size = (w, y_top +self._bottom_space)
         tile_bbox = {'x': (img_pos[0], img_pos[0] + self.tile_size[0]),
                      'y': (img_pos[1], img_pos[1] + self.tile_size[1])}
         return size, tile_bbox, captions, y_top
@@ -147,11 +181,11 @@ class CaptionedTile(object):
             cv2.putText(img, cap_str, cap_pos, self._font, self._font_scale,
                         COLOR_SCHEME['text'], 1, cv2.LINE_AA)
 
-        tile_bbox= _offset_bbox(self._tile_bbox)
+        tile_bbox = _offset_bbox(self._tile_bbox)
         img[tile_bbox['y'][0]:tile_bbox['y'][1],
             tile_bbox['x'][0]:tile_bbox['x'][1]] = self.tile_img
-        
-        return tile_bbox, pos[1]+self._y_bottom
+
+        return tile_bbox, pos[1]+self._y_bottom + self._bottom_space
 
 
 def test_captioned_tile():
@@ -174,15 +208,38 @@ def test_captioned_tile():
         space_size = test_img_size[0]//8
 
         artist = GameStateArtist(space_size=space_size)
-        ct = CaptionedTile(artist.get_image(game), above_cap='P(s): 1.0', below_cap='v(s): 0.24253')
+        ct = CaptionedTile(artist.get_image(game), above_cap='P(s): 1.0', below_cap=None)#'v(s): 0.24253')
+
+        n_lower_attach = (size[0]//30 % 7+1)  # Change width to try different numbers of lower attach points
+
+        # draw the tile
         pos = (pad, pad)
         tile_bbox, y_bottom = ct.draw(img, pos)
 
+        # draw some attachment points
+        def _draw_attach(points, color):
+            for point in points:
+                pt =int(point[0]), int(point[1]) # (int(point[0]*SHIFT_MUL), int(point[1]*SHIFT_MUL))
+                cv2.circle(img, pt, 3, color, -1, cv2.LINE_AA)#, shift=SHIFT_BITS)
+
+        upper_attach = ct.get_attach_points(pos, n=1, loc='top')
+        lower_attach = ct.get_attach_points(pos, n=n_lower_attach, loc='bottom')
+        left_attach = ct.get_attach_points(pos, n=1, loc='left')
+        _draw_attach(upper_attach, (0, 255, 0))
+        _draw_attach(lower_attach, (0, 0, 255))
+        _draw_attach(left_attach, (255, 0, 0))
+        # Draw bbox around tile part
         p0 = tile_bbox['x'][0], tile_bbox['y'][0]
         p1 = tile_bbox['x'][1], tile_bbox['y'][1]
-        cv2.rectangle(img, p0, p1,(255,0,0), 1)
+        cv2.rectangle(img, p0, p1, (255, 0, 0), 1)
+
+        
+        x_left, x_right = pos[0], pos[1] + ct.size[0]
+        p0 = x_left, pos[1]
+        p1 = x_right, pos[1] + ct.size[1]
         cv2.line(img, (0, y_bottom), (size[0], y_bottom), (0, 255, 0), 1)
         cv2.line(img, (0, pos[1]), (size[0], pos[1]), (0, 255, 0), 1)
+        cv2.rectangle(img, p0, p1, (0, 255, 0), 2)
 
         return img
 
@@ -229,12 +286,23 @@ class ValFuncViz(object):
         x_marg, y_marg = LAYOUT['margin_rel'] * np.array(self.size)
         x_left, x_right = x_marg, self.size[0] - x_marg - self.key_size[0]
         y_top, y_bottom = y_marg, self.size[1] - y_marg
+        artists = {kind: GameStateArtist(space_size=self._par['space_sizes'][kind])
+                   for kind in ['state', 'action', 'next_state']}
 
         # Title area
         title_right = min(x_right, self.key_size[0] + x_marg)
         title_left = x_left
         title_top = y_top + int(y_marg * (self._par['string_v_spacing'] - 1))
-        title_x, title_y, y_bottom = self._get_txt_pos((title_left, title_right), y_top, self._title, 'center')
+        title_pos, y_top = place_string((title_left, title_top), self._title,
+                                        self._fonts['title']['font'], self._fonts['title']['scale'],
+                                        incl_baseline=True)
+        # State icon (CaptionedTile)
+        tile_sizes = {kind: artist.dims['img_size'] for kind, artist in artists.items()}
+
+        state_tile = CaptionedTile(artists['state'].get_image(None), above_cap='(set later)', below_cap=None)
+
+        # everything but arrows must be left of the right-most arrow possible
+        left_edge_x = state_tile.get_attach_points(n=8, pos='bottom-left')[-1][0]
 
         #
 
