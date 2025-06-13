@@ -15,6 +15,8 @@ from game_base import Mark, TERMINAL_REWARDS
 from gameplay import Match
 from policies import Policy
 from result_viz import load_value_func
+import time
+from neat.six_util import itervalues, iterkeys
 
 
 class Arena(object):
@@ -85,6 +87,50 @@ def eval_genomes(genomes, config):
 uncommon_arena = [None]
 
 
+
+class StdOutReporterWGenomSizes(neat.StdOutReporter):
+    """A reporter that outputs the genome sizes along with the standard output."""
+    
+    def end_generation(self, config, population, species_set):
+        # Modified copy of neat.reporting.StdOutReporter.end_generation
+        self.generation += 1
+        ng = len(population)
+        ns = len(species_set.species)
+        if self.show_species_detail:
+            print('Population of {0:d} members in {1:d} species:'.format(ng, ns))
+            sids = list(iterkeys(species_set.species))
+            sids.sort()
+            print("  ID    age   pop  mean #nodes    mean #conns     m enabled   fitness  adj fit  stag")
+            print("  ====  ===  ====  =============  ==============  ==========  =======  =======  =====")
+            for sid in sids:
+                s = species_set.species[sid]
+                a = self.generation - s.created
+                n = len(s.members)
+                f = "--" if s.fitness is None else "{:.1f}".format(s.fitness)
+                af = "--" if s.adjusted_fitness is None else "{:.3f}".format(s.adjusted_fitness)
+                st = self.generation - s.last_improved
+                sizes = [len(g.nodes) for g in s.members.values()]
+                n_nodes = "{:.2f} ({:0.1f})".format(np.mean(sizes), np.std(sizes))
+                g_sizes=[len(g.connections) for g in s.members.values()]
+                enable_rates = [np.mean([c.enabled for c in g.connections.values()]) for g in s.members.values()]
+                en_str = "{:.2f} ({:0.1f})".format(np.mean(enable_rates), np.std(enable_rates))
+                n_connect = "{:.1f} ({:0.1f})".format(np.mean(g_sizes), np.std(g_sizes))
+                print(
+                    "  {: >4}  {: >3}  {: >4}  {: >13}  {: >14}  {: >9}  {: >7}  {: >7}  {: >4}".format(sid, a, n,n_nodes, n_connect,en_str, f, af, st))
+        else:
+            print('Population of {0:d} members in {1:d} species'.format(ng, ns))
+
+        elapsed = time.time() - self.generation_start_time
+        self.generation_times.append(elapsed)
+        self.generation_times = self.generation_times[-10:]
+        average = sum(self.generation_times) / len(self.generation_times)
+        print('Total extinctions: {0:d}'.format(self.num_extinctions))
+        if len(self.generation_times) > 1:
+            print("Generation time: {0:.3f} sec ({1:.3f} average)".format(elapsed, average))
+        else:
+            print("Generation time: {0:.3f} sec".format(elapsed))
+
+
 def eval_genome(genome, config):
     arena = uncommon_arena[0] if uncommon_arena[0] is not None else Arena(get_opponent())
     uncommon_arena[0] = arena  # store the arena for later use
@@ -105,14 +151,14 @@ def run(config_file, n_cores=10):
     p = neat.Population(config)
 
     # Add a stdout reporter to show progress in the terminal.
-    p.add_reporter(neat.StdOutReporter(True))
+    p.add_reporter(StdOutReporterWGenomSizes(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
 
     pe = neat.ParallelEvaluator(n_cores, eval_genome)
 
     # Run for up to 300 generations.
-    for iter in range(1):
+    for iter in range(200):
         print("Iteration %d" % (iter*10))
 
         if n_cores > 1:
