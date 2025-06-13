@@ -137,13 +137,14 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
 
     node_attrs = {
         'shape': 'circle',
-        'fontsize': '9',
-        'height': '0.2',
-        'width': '0.2'}
+        'fontsize': '8',
+        'height': '0.1',
+        'width': '0.1'}
     # import ipdb; ipdb.set_trace()
     # graphviz.Digraph(format=fmt, node_attr=node_attrs)
     dot = graphviz.Graph(engine='neato', node_attr=node_attrs, format=fmt)
     dot.graph_attr['ranksep'] = '1.5'  # Increase vertical spacing between ranks
+    dot.graph_attr['nodesep'] = '3'
 
     inputs = set()
     input_keys = config.genome_config.input_keys
@@ -182,11 +183,15 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
                              (n_added, len(input_keys)))
 
     elif len(input_keys) == 18:   # (x=1, o=-1, empty=0) for 9 spaces, then (is_free) for 9 spaces
-        raise NotImplementedError("18 inputs not implemented yet")
+        in_out_sep = 5
+        marked_x =1.5
+        free_x = 7
+        _add_unit_grid(input_keys[:9], marked_x, 0, 'Taken',spacing = (.5, .3), h_spacing=2)
+        _add_unit_grid(input_keys[9:], free_x, 0, 'Free', spacing = (.5, .3), h_spacing=2)
+        
 
     elif len(input_keys) == 27:   # (x=1, o=-1, empty=0) for 3 spaces
         in_out_sep = 5
-
         mark_x =0
         mark_o = 3.5
         mark_empty = 7
@@ -223,7 +228,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
         if n in inputs or n in outputs:
             continue
         print("Adding hidden node %s" % n)
-        attrs = {'style': 'filled',
+        attrs = {'style': 'filled','radius': '0.05', 'width': '0.05',
                  'fillcolor': node_colors.get(n, 'white')}
         dot.node(str(n), _attributes=attrs)
 

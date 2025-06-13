@@ -96,11 +96,12 @@ class StdOutReporterWGenomSizes(neat.StdOutReporter):
         self.generation += 1
         ng = len(population)
         ns = len(species_set.species)
+        n_output = config.genome_config.num_outputs
         if self.show_species_detail:
             print('Population of {0:d} members in {1:d} species:'.format(ng, ns))
             sids = list(iterkeys(species_set.species))
             sids.sort()
-            print("  ID    age   pop  mean #nodes    mean #conns     m enabled   fitness  adj fit  stag")
+            print("    ID  age   pop  mean # hidden    mean # edges   m enabled  fitness  adj fit  stag")
             print("  ====  ===  ====  =============  ==============  ==========  =======  =======  =====")
             for sid in sids:
                 s = species_set.species[sid]
@@ -109,14 +110,14 @@ class StdOutReporterWGenomSizes(neat.StdOutReporter):
                 f = "--" if s.fitness is None else "{:.1f}".format(s.fitness)
                 af = "--" if s.adjusted_fitness is None else "{:.3f}".format(s.adjusted_fitness)
                 st = self.generation - s.last_improved
-                sizes = [len(g.nodes) for g in s.members.values()]
-                n_nodes = "{:.2f} ({:0.1f})".format(np.mean(sizes), np.std(sizes))
+                hid_sizes = [len(g.nodes)-n_output for g in s.members.values()]
+                n_h_nodes = "{:.2f} ({:0.1f})".format(np.mean(hid_sizes), np.std(hid_sizes))
                 g_sizes=[len(g.connections) for g in s.members.values()]
                 enable_rates = [np.mean([c.enabled for c in g.connections.values()]) for g in s.members.values()]
                 en_str = "{:.2f} ({:0.1f})".format(np.mean(enable_rates), np.std(enable_rates))
                 n_connect = "{:.1f} ({:0.1f})".format(np.mean(g_sizes), np.std(g_sizes))
                 print(
-                    "  {: >4}  {: >3}  {: >4}  {: >13}  {: >14}  {: >9}  {: >7}  {: >7}  {: >4}".format(sid, a, n,n_nodes, n_connect,en_str, f, af, st))
+                    "  {: >4}  {: >3}  {: >4}  {: >13}  {: >14}  {: >9}  {: >7}  {: >7}  {: >4}".format(sid, a, n,n_h_nodes, n_connect,en_str, f, af, st))
         else:
             print('Population of {0:d} members in {1:d} species'.format(ng, ns))
 
@@ -158,7 +159,7 @@ def run(config_file, n_cores=10):
     pe = neat.ParallelEvaluator(n_cores, eval_genome)
 
     # Run for up to 300 generations.
-    for iter in range(200):
+    for iter in range(10):
         print("Iteration %d" % (iter*10))
 
         if n_cores > 1:
@@ -168,16 +169,12 @@ def run(config_file, n_cores=10):
 
         # Save the winner.
         encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
-        filename = 'neat-checkpoint_-%s.pkl' % encoding
-
+        filename = 'neat-checkpoint-%i-%s.pkl' % (iter, encoding)
         with open(filename, 'wb') as f:
             pickle.dump(winner, f)
             print("SAVED WINNER FOR ITER %i:  %s" % (iter, filename))
 
-        # Display the winning genome.
-        # print('\nBest genome:\n{!s}'.format(winner))
 
-    # node_names = {-1:'A', -2: 'B', 0:'A XOR B'}
     #visualize.draw_net(config, winner, view=True)
     visualize.plot_stats(stats, ylog=False, view=True)
     visualize.plot_species(stats, view=True)
