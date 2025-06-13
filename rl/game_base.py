@@ -10,8 +10,8 @@ class Result(IntEnum):
 class Mark(IntEnum):
     EMPTY = 0
     X = 1  # also denotes the player
-    O = 2
-
+    O = -1
+OTHER_GUY = {Mark.X: Mark.O, Mark.O: Mark.X}
 
 # r is known only for these states in adavnce:
 TERMINAL_REWARDS = {

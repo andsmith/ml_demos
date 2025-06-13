@@ -3,6 +3,8 @@
 *.png
 *.lprof
 *.jpg
+*.svg
+*.gv
 temp/
 /loop_timing
 

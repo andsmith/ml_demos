@@ -8,7 +8,7 @@ WLOG, let the policy's player be X.
 import numpy as np
 from util import get_annulus_polyline
 import matplotlib.pyplot as plt
-from game_base import Mark, Result
+from game_base import Mark, Result, OTHER_GUY
 import logging
 import pickle
 import os
@@ -57,7 +57,7 @@ class Game(object):
         if method == 'enc':
             return input
         free = (input == Mark.EMPTY).astype(np.float32)
-        if method == 'enc_free':
+        if method == 'enc+free':
             return np.concatenate((input, free))
         if method == 'one-hot':
             X = (input == Mark.X).astype(np.float32)
@@ -213,7 +213,7 @@ class GameTree(object):
                 self._children[child] = {}
                 self._parents[child] = []
             self._parents[child].append(state)
-            self._build_tree_recursive(child, 3 - current_player, initial_player)
+            self._build_tree_recursive(child, OTHER_GUY[ current_player], initial_player)
 
     def get_game_tree(self, generic=False):
         """
@@ -243,6 +243,7 @@ class GameTree(object):
 
 
 def get_game_tree_cached(player, verbose=False):
+
     filename = f"game_tree_{player.name}.pkl"
     if os.path.exists(filename):
         print("Loading game tree from cache file: ", filename)
@@ -253,6 +254,7 @@ def get_game_tree_cached(player, verbose=False):
     else:
         print("Cache file not found: ", filename)
         print("\tgenerating game tree...")
+
         tree = GameTree(player, verbose=verbose)
         print("\n\n==========================================================")
         print("Saving game tree to cache file: ", filename)

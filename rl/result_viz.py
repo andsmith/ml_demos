@@ -24,7 +24,7 @@ import numpy as np
 from drawing import GameStateArtist
 from util import get_font_scale
 from tic_tac_toe import Game
-from game_base import WIN_MARKS, Mark, Result
+from game_base import Mark
 from threading import Thread
 from gameplay import Match, ResultSet
 import logging
@@ -33,14 +33,12 @@ import cv2
 from baseline_players import HeuristicPlayer
 from color_key import ProbabilityColorKey
 import matplotlib.pyplot as plt
-from colors import COLOR_BG, COLOR_LINES, COLOR_DRAW, COLOR_O, COLOR_X, COLOR_TEXT
+from colors import COLOR_SCHEME
 from reinforcement_base import Environment
 
 from layout import LAYOUT
 
-DEFAULT_COLORS = {'bg': COLOR_BG, 'lines': COLOR_LINES, 'text': COLOR_TEXT,
-                  'win': COLOR_X, 'loss': COLOR_O, 'draw': COLOR_DRAW}
-
+DEFAULT_COLORS = COLOR_SCHEME
 
 class PolicyEvaluationResultViz(object):
     def __init__(self, player_policy, opp_policy, colors=None):
@@ -49,15 +47,13 @@ class PolicyEvaluationResultViz(object):
         self._opp_pi = opp_policy
         self._pi = player_policy
         self._colors = colors if colors is not None else DEFAULT_COLORS
-        
-
         self._layout = LAYOUT['results_viz']
         self._env = Environment(opponent_policy=opp_policy, player_mark=self._player)
         self._updatable_states = self._env.get_nonterminal_states()
         self._n_states = len(self._updatable_states)
-        self._n_diffs = self._pi.compare(self._opp_pi, states=self._updatable_states, count=True, deterministic=True)
+        self._n_diffs = 0#self._pi.compare(self._opp_pi, states=self._updatable_states, count=True, deterministic=True)
 
-        self._color_key_size = (LAYOUT['color_key']['width'], LAYOUT['color_key']['height'])
+        self._color_key_size = (self._layout['color_key']['width'], self._layout['color_key']['height'])
         self._color_key = ProbabilityColorKey(size=self._color_key_size)
         self._cur_value = None  # mouseover
         self._cur_sample = None
@@ -92,8 +88,7 @@ class PolicyEvaluationResultViz(object):
                                     self._layout['summary']['text_spacing_frac'], incl_baseline=True)
 
         # draw the color key
-        self._color_key.draw(img, indicate_value=self._cur_value,
-                             line_color=self._colors['lines'], text_color=self._colors['text'])
+        self._color_key.draw(img, indicate_value=self._cur_value)
 
         def _draw_text(text, baseline_pos, color, font_scale=1.0, justify='left'):
             (txt_width, txt_height), baseline = cv2.getTextSize(line, self._layout['summary']['font'], font_scale, 1)
@@ -187,9 +182,9 @@ class PolicyEvaluationResultViz(object):
         patch = img[grah_y_top:grah_y_bottom, x_left:x_right]
         img[grah_y_top:grah_y_bottom, x_left:x_right] = (patch * .9).astype(np.uint8)
 
-        _draw_bar(self._colors['win'], sum_result['wins'] / n_games, 'wins')
-        _draw_bar(self._colors['draw'], sum_result['draws'] / n_games, 'draws')
-        _draw_bar(self._colors['loss'], sum_result['losses'] / n_games, 'losses')
+        _draw_bar(self._colors['color_x'], sum_result['wins'] / n_games, 'wins')
+        _draw_bar(self._colors['color_draw'], sum_result['draws'] / n_games, 'draws')
+        _draw_bar(self._colors['color_o'], sum_result['losses'] / n_games, 'losses')
     
 
     def _get_distinct_results_and_counts(self):
@@ -256,10 +251,43 @@ def test_policy_eval_viz_heuristic(n_rules_1=2, n_rules_2=4):
     cv2.imshow("Policy Evaluation Visualization", img[:, :, ::-1])
     cv2.waitKey(0)
 
+def test_perfect_vs_heuristic(n_rules_1=6):
+    img_size = (1590, 980)
+
+    agent = HeuristicPlayer(n_rules=n_rules_1, mark=Mark.X)
+    #opponent = HeuristicPlayer(n_rules=n_rules_2, mark=Mark.O)
+
+    from perfect_player import MiniMaxPolicy
+    opponent = MiniMaxPolicy(player_mark=Mark.O)
+    viz = PolicyEvaluationResultViz(player_policy=agent, opp_policy=opponent)
+    viz.play(n_games=1500)
+
+    img = viz.draw(img_size)
+    cv2.imshow("Policy Evaluation Visualization", img[:, :, ::-1])
+    cv2.waitKey(0)
+
+def test_perfect(n_rules_1=6):
+    img_size = (1590, 980)
+    from perfect_player import MiniMaxPolicy
+    #opponent = HeuristicPlayer(n_rules=n_rules_2, mark=Mark.O)
+
+    agent = MiniMaxPolicy(player_mark=Mark.X)
+    opponent = MiniMaxPolicy(player_mark=Mark.O)
+    viz = PolicyEvaluationResultViz(player_policy=agent, opp_policy=opponent)
+    viz.play(n_games=1500)
+
+    img = viz.draw(img_size)
+    cv2.imshow("Policy Evaluation Visualization", img[:, :, ::-1])
+    cv2.waitKey(0)
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    test_perfect()
+
     import sys
+    sys.exit()
+
     print(len(sys.argv))
     if len(sys.argv) > 2 :
         n_rules_1, n_rules_2 = int(sys.argv[1]), int(sys.argv[2])
