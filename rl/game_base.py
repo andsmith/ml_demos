@@ -12,12 +12,14 @@ class Mark(IntEnum):
     X = 1  # also denotes the player
     O = 2
 
+
 # r is known only for these states in adavnce:
 TERMINAL_REWARDS = {
     Result.X_WIN: 1.0,
     Result.O_WIN: -1.0,
     Result.DRAW: -.5,
 }
+
 
 def get_reward(state, action, player_mark=Mark.X):
     next_state = state.clone_and_move(action, player_mark)
@@ -27,8 +29,8 @@ def get_reward(state, action, player_mark=Mark.X):
     return TERMINAL_REWARDS[result]
 
 
-WIN_MARKS ={Mark.X: Result.X_WIN, 
-            Mark.O: Result.O_WIN}
+WIN_MARKS = {Result.X_WIN: Mark.X,
+             Result.O_WIN: Mark.O}
 
 
 def get_cell_center(dims, ij):

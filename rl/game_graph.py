@@ -2,7 +2,7 @@ import numpy as np
 import logging
 import cv2
 
-from colors import COLOR_LINES, COLOR_BG, COLOR_X, COLOR_O, COLOR_DRAW, COLOR_SELECTED, COLOR_MOUSEOVERED
+from colors import COLOR_SCHEME, UI_COLORS
 from game_base import Mark, Result
 from tic_tac_toe import get_game_tree_cached, Game, GameTree
 from node_placement import FixedCellBoxOrganizer, LayerwiseBoxOrganizer
@@ -52,7 +52,7 @@ class GameGraphApp(object):
             raise ValueError("Max levels must be <= 10 for Tic-Tac-Toe.")
         self._size = LAYOUT['win_size']
         self._blank_frame = np.zeros((self._size[1], self._size[0], 3), dtype=np.uint8)
-        self._blank_frame[:, :] = COLOR_BG
+        self._blank_frame[:, :] = COLOR_SCHEME['bg']
 
         self._init_state_grids()
         tree_opt = SimpleTreeOptimizer(image_size=self._size,
@@ -377,14 +377,14 @@ class GameGraphApp(object):
 
         # draw mouseover states
         if self._mouseover_state is not None:
-            _draw_box_at(self._mouseover_state, COLOR_MOUSEOVERED, thickness=1)
+            _draw_box_at(self._mouseover_state, UI_COLORS['mouseovered'], thickness=1)
 
         # draw selected states
         for s_state in self._selected_states:
             layer = self._layers_of_states[s_state]
             thickness = max(1, self._layer_artists[layer].dims['line_t'])
 
-            _draw_box_at(s_state, COLOR_SELECTED, thickness=thickness)
+            _draw_box_at(s_state, UI_COLORS['selected'], thickness=thickness)
 
         # draw edges
         self._draw_edges(frame)
@@ -430,9 +430,9 @@ class GameGraphApp(object):
 
                 # find the line
                 if player == Mark.X:
-                    color = COLOR_X
+                    color = COLOR_SCHEME['color_x']
                 elif player == Mark.O:
-                    color = COLOR_O
+                    color = COLOR_SCHEME['color_o']
 
                 line = np.array([from_attach*SHIFT, to_attach*SHIFT], dtype=np.int32)
 

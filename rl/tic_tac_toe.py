@@ -30,20 +30,42 @@ class Game(object):
 
     def __eq__(self, other):
         return np.all(self.state == other.state)
-    
+
     def greater_than(self, other):
         # Compare two game states lexicographically, for embedding.
         return np.lexsort((self.state.flatten(),)) > np.lexsort((other.state.flatten(),))
 
-    def get_actions(self):
+    def get_actions(self, flat_inds=False):
         # return list of all (i,j) tuples where state[i,j] == Mark.EMPTY
-        return [p for p in zip(*np.where(self.state == Mark.EMPTY))]
+        if not flat_inds:
+            return [p for p in zip(*np.where(self.state == Mark.EMPTY))]
+        # return list of integers in [0, 8] corresponding to the empty cells
+        else:
+            rows, cols = np.where(self.state == Mark.EMPTY)
+            return cols + 3 * rows  # convert (i, j) to flat index
 
     def n_free(self):
         return np.sum(self.state == Mark.EMPTY)
 
     def n_marked(self):
         return np.sum(self.state != Mark.EMPTY)
+
+    def to_nnet_input(self, method):
+        if int(Mark.O)==2:
+            raise Exception("NNet inputs should use -1 for Mark.O")
+        input = self.state.flatten().astype(np.float32)
+        if method == 'enc':
+            return input
+        free = (input == Mark.EMPTY).astype(np.float32)
+        if method == 'enc_free':
+            return np.concatenate((input, free))
+        if method == 'one-hot':
+            X = (input == Mark.X).astype(np.float32)
+            O = (input == Mark.O).astype(np.float32)
+
+            return np.concatenate((X, O, free))
+        else:
+            raise ValueError("Unknown method: %s" % method)
 
     def clone_and_move(self, action, mark):
         new_board = Game()
@@ -110,7 +132,7 @@ class GameTree(object):
 
     def __init__(self, player, verbose=False):
         self._player = player
-        self._n_games =0
+        self._n_games = 0
         # state (Game): (None or one of the Result values).  Check here to if a state has been seen before.
         self._terminal = {}
         # state: {child_state: (action, player) for each of state's child states}, w/the player & actions that led to them.
@@ -177,7 +199,7 @@ class GameTree(object):
     def _build_tree_recursive(self, state, current_player, initial_player):
         if self._terminal[state] is not None:
             self._game_outcomes[initial_player][self._terminal[state]] += 1
-            self._n_games +=1
+            self._n_games += 1
 
             if self._verbose and self._n_games % 10000 == 0 and self._n_games > 0:
                 print("\t\tgames finished:  %i\t\tunique states: %i" % (self._n_games, len(self._terminal)))

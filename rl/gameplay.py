@@ -183,13 +183,13 @@ class ResultSet(object):
         """
         is it a win for self.player?
         """
-
-        if (trace['result'] == WIN_MARKS[self._player_mark]):
-            return 'wins'
-        elif trace['result'] == WIN_MARKS[self._opp_mark]:
-            return 'losses'
-        elif trace['result'] == Result.DRAW:
+        if trace['result'] == Result.DRAW:
             return 'draws'
+        elif ( WIN_MARKS[trace['result']] ==self._player_mark):
+            return 'wins'
+        elif  WIN_MARKS[trace['result']] ==self._opp_mark:
+            return 'losses'
+        
 
         raise ValueError("Unexpected result!")
 
@@ -263,8 +263,8 @@ class ResultSet(object):
         n_draw_cols = min(len(self._traces['draws']), max(0, n_h_traces - n_win_cols - n_loss_cols))
         n_rows = n_v_traces
 
-        #print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
-        #print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
+        print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
+        print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
 
         r = 0
         no_additions = 0
@@ -358,7 +358,7 @@ class ResultSet(object):
             for i, trace in enumerate(traces):
                 trace = self._traces[kind][self._cur_sample[kind][i]]
                 count = self._counts[kind][self._cur_sample[kind][i]]
-                header_text = ("x %i" % count) if count > 1 else "X 1"
+                header_text = ("x %i" % count) if count > 1 else " "
                 pos = (x, y)
                 ta.draw_trace(img, trace, pos, header_txt=header_text)
                 x += trace_w + trace_pad
