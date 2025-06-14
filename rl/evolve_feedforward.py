@@ -24,9 +24,16 @@ NEAT_REWARDS = {Mark.X: {Result.X_WIN: 1.0, Result.O_WIN: -1.0, Result.DRAW: 0.0
 
 NETWORK_DIR = os.path.join(os.getcwd(), 'NEAT_nets')
 CONFIG_FILE = 'config-feedforward'
-WINNER_FILE = 'neat-winner.%s.p=%i.i=%i.pkl'   # input encoding, pop size , iteration, 
-POPULATION_PREFIX = 'neat-population.%s.p=%i.pop.'  # pop_size, input encoding
 
+
+N_EVAL_GAMES = 20  # games to play for evaluating a genome
+
+WINNER_FILE = f'neat-winner_in=%s_p=%i_neval={N_EVAL_GAMES}_gen=%i.pkl'   # input encoding, pop size , generation
+# input encoding, pop size  (generation number will be added automatically)
+POPULATION_PREFIX = f'neat-population_in=%s_p=%i_neval={N_EVAL_GAMES}_gen='
+
+print("Winner file: %s" % WINNER_FILE  )
+print("Population prefix: %s" % POPULATION_PREFIX)
 
 class Arena(object):
     def __init__(self, opp_pi):
@@ -49,7 +56,8 @@ class Arena(object):
         :returns: The average reward per game.
         """
         match = Match(agent_pi, self.opp_pi)
-        traces = [match.play_and_trace() for _ in range(n_games)]
+        traces = [match.play_and_trace(order=-1) for _ in range(n_games//2)] +\
+                 [match.play_and_trace(order=1) for _ in range(n_games//2)]
         rewards = self._score_games(traces)
         return np.mean(rewards)
 
@@ -117,29 +125,16 @@ class NNetPolicy(Policy):
         return [(best_action, 1.0)]  # return the best action with probability 1.0
 
 
-N_EVAL_GAMES = 50
-
 
 def get_opponent():
 
     return MiniMaxPolicy(Mark.O)
 
 
-def eval_genomes(genomes, config):
-    arena = Arena(get_opponent())
-    for genome_id, genome in genomes:
-        net = neat.nn.FeedForwardNetwork.create(genome, config)
-
-        agent = NNetPolicy(net)
-        fitness = arena.play_matches(agent, n_games=N_EVAL_GAMES)
-        # print("\tgenome %s: fitness = %.2f" % (genome_id, fitness))
-        genome.fitness = fitness
-
-
 shared_arena = [None]
 
 
-def eval_genome(genome, config):
+def eval_genome_gameplay(genome, config):
     arena = shared_arena[0] if shared_arena[0] is not None else Arena(get_opponent())
     shared_arena[0] = arena  # store the arena for the rest of the genomes
     net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -147,6 +142,11 @@ def eval_genome(genome, config):
     fitness = arena.play_matches(agent, n_games=N_EVAL_GAMES)
     genome.fitness = fitness
     return genome.fitness  # return the fitness for the parallel evaluator
+
+
+def eval_genomes_gameplay(genomes, config):
+    for genome_id, genome in genomes:
+        eval_genome_gameplay(genome, config)
 
 
 class StdOutReporterWGenomSizesPlus(neat.StdOutReporter):
@@ -248,23 +248,24 @@ def run():
     reporters = [StdOutReporterWGenomSizesPlus(True), stats]
     for r in reporters:
         p.add_reporter(r)
-    pe = neat.ParallelEvaluator(n_cores, eval_genome)
+    
+    pe = neat.ParallelEvaluator(n_cores, eval_genome_gameplay) if n_cores > 1 else None
 
     n_gen_per_iter = 10
-    for iter in range(200):
+    for iter in range(10):
         print("------>  Iteration %d" % (iter*10))
 
         if n_cores > 1:
             winner = p.run(pe.evaluate, n_gen_per_iter)
         else:
-            winner = p.run(eval_genomes, n_gen_per_iter)
+            winner = p.run(eval_genomes_gameplay, n_gen_per_iter)
 
         # Save the winner.
         encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
-        filename = os.path.join(NETWORK_DIR, WINNER_FILE % (encoding, config.pop_size, iter))
+        filename = os.path.join(NETWORK_DIR, WINNER_FILE % (encoding, config.pop_size, p.generation))
         with open(filename, 'wb') as f:
             pickle.dump(winner, f)
-            print("------------------------------------->   SAVED WINNER FOR ITER %i:  %s" % (iter, filename))
+            print("------------------------------------->   SAVED WINNER FOR ITER %i:  %s" % (p.generation, filename))
 
         if iter % 5 == 0:
            # if False:  # TODO: FIX

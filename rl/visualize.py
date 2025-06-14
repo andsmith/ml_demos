@@ -151,7 +151,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
 
       # Horizontal and vertical spacing between nodes
 
-    def _add_unit_grid(keys, x_offset, y_offset, label_prefix,spacing, h_spacing=1,):
+    def _add_unit_grid(keys, x_offset, y_offset, label_prefix,spacing,x_spread=0):
         """ Helper function to add a grid of input nodes. """
 
         n_added = 0
@@ -159,7 +159,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
             y= -(i * spacing[1]) - y_offset
 
             for j in range(3):
-                x = (i * spacing[0]) +j * spacing[0]*h_spacing + x_offset
+                x = (i * spacing[0]) + j * x_spread + x_offset
 
                 k = keys[i * 3 + j]
                 inputs.add(k)
@@ -173,36 +173,37 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
                     center_x = x
 
         return n_added, center_x
+    out_x = 2
 
     if len(input_keys) == 9:   # (x=1, o=-1, empty=0) for 9 spaces
         # 3x3 grid
         in_out_sep = 3
-        n_added,center_x=_add_unit_grid(input_keys, 0, 0, 'In', h_spacing=4,spacing = (.5, .3))
+        n_added,center_x=_add_unit_grid(input_keys, 0, 0, 'X/O/Free', h_spacing=4,spacing = (.5, .5))
         if (n_added != len(input_keys)):
             raise ValueError("Number of input keys does not match number of inputs in genome: %d != %d" %
                              (n_added, len(input_keys)))
 
     elif len(input_keys) == 18:   # (x=1, o=-1, empty=0) for 9 spaces, then (is_free) for 9 spaces
-        in_out_sep = 5
-        marked_x =1.5
-        free_x = 7
-        _add_unit_grid(input_keys[:9], marked_x, 0, 'Taken',spacing = (.5, .3), h_spacing=2)
-        _add_unit_grid(input_keys[9:], free_x, 0, 'Free', spacing = (.5, .3), h_spacing=2)
+        in_out_sep = 6
+        marked_x =1
+        free_x = 8
+        _add_unit_grid(input_keys[:9], marked_x, 0, 'X/O',spacing =(1, .8), x_spread = 1)
+        _add_unit_grid(input_keys[9:], free_x, 0, 'Free', spacing = (1, .8), x_spread =1)
         
 
     elif len(input_keys) == 27:   # (x=1, o=-1, empty=0) for 3 spaces
-        in_out_sep = 5
-        mark_x =0
-        mark_o = 3.5
-        mark_empty = 7
-        _add_unit_grid(input_keys[:9], mark_x, 0, 'X',spacing = (.5, .3), h_spacing=2)
-        _add_unit_grid(input_keys[9:18], mark_o, 0, 'O', spacing = (.5, .3), h_spacing=2)
-        _add_unit_grid(input_keys[18:], mark_empty, 0, 'Free', spacing = (.5, .3), h_spacing=2)
+        in_out_sep = 7
+        mark_x =0.5
+        mark_o = 4.75
+        mark_empty = 9
+        _add_unit_grid(input_keys[:9], mark_x, 0, 'X',spacing = (1, .8), x_spread =1)
+        _add_unit_grid(input_keys[9:18], mark_o, 0, 'O', spacing = (1, .8), x_spread =1)
+        _add_unit_grid(input_keys[18:], mark_empty, 0, 'Free', spacing = (1, .8), x_spread =1)
         
 
     outputs = set()
     output_keys = config.genome_config.output_keys
-    n_added = _add_unit_grid(output_keys, .5 ,in_out_sep, 'X-Act', h_spacing=4,spacing=(1,.2))[0]
+    n_added = _add_unit_grid(output_keys,out_x ,in_out_sep, 'X-Act', spacing=(1.2,.5), x_spread = 3.5)[0]
     if (n_added != len(output_keys)):
         raise ValueError("Number of output keys does not match number of outputs in genome: %s != %s" %
                          (n_added, len(output_keys)))
