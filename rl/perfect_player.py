@@ -5,14 +5,29 @@ Problem:  Find pi(s), such that following pi(s) from the start ("weak solution")
 """
 import numpy as np
 import logging
-from game_base import Mark, Result, TERMINAL_REWARDS
+from game_base import Mark, Result
 from tic_tac_toe import Game, get_game_tree_cached
 import pickle
 from reinforcement_base import Environment
 import os
 from policies import Policy
+import sys
 
 
+
+def compare_action_distributions(dist1, dist2):
+    """
+    Compare two action distributions.
+    :param dist1: First action distribution (list of (action, prob) tuples).
+    :param dist2: Second action distribution (list of (action, prob) tuples).
+    :return: True if the distributions are equal, False otherwise.
+    """
+    if len(dist1) != len(dist2):
+        return False
+    if set(dist1) != set(dist2):
+        return False
+    return True
+    
 class MiniMaxPolicy(Policy):
     cache_file = {Mark.X: "minimax_policy_cache_X.pkl",
                   Mark.O: "minimax_policy_cache_O.pkl"}
@@ -59,6 +74,7 @@ class MiniMaxPolicy(Policy):
             """
             if (state, player) in mm_values:
                 return mm_values[(state, player)]
+            
             term = state.check_endstate()
 
             if term is not None:
@@ -68,20 +84,30 @@ class MiniMaxPolicy(Policy):
 
             actions = state.get_actions()
             next_states = [state.clone_and_move(action, player) for action in actions]
-            values = [_minimax(next_state, other_guy[player]) for next_state in next_states]
+            values = np.array([_minimax(next_state, other_guy[player]) for next_state in next_states])
             if player != player_mark:
-                top_val = min(values)
+                top_val = values.min()  # Opponent tries to minimize our score
             else:
-                top_val = max(values)
-                # Policy is action w/best value. For ties, make a uniform distribution from them.
-                best_inds = np.where(np.array(values) == top_val)[0]
+                top_val = values.max()  # We try to maximize our score.
+
+                # For ties, make a uniform distribution from all w/tie value.
+                best_inds = np.where(values == top_val)[0]
                 n_best_actions = len(best_inds)
                 action_dist = [(actions[i], 1.0/n_best_actions) for i in best_inds]
+
                 if state in policy:
-                    raise Exception("State %s already in policy!" % state)
+                    
+                    if not compare_action_distributions(policy[state], action_dist):
+                        logging.warning("State %s already in policy with different action distribution!" % state)
+                        logging.warning("Old: %s" % policy[state])
+                        logging.warning("New: %s" % action_dist)
+                        raise Exception("State %s already in policy!" % state)
+                
                 policy[state] = action_dist
+
                 if len(policy) % 100 == 0:
                     logging.info("Processed %d states." % len(policy))
+
             mm_values[(state, player)] = top_val
             return top_val
 
@@ -100,13 +126,13 @@ class MiniMaxPolicy(Policy):
         if state not in self._pi:
             print(state)
             print("State not in policy")
-            import ipdb
-            ipdb.set_trace()
+            
             raise Exception()
         return self._pi[state]
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    player_mark = Mark.X
-    pi = MiniMaxPolicy(player_mark=player_mark)
+    
+    pi_x = MiniMaxPolicy(player_mark=Mark.X)
+    pi_o = MiniMaxPolicy(player_mark=Mark.O)

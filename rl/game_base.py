@@ -8,17 +8,30 @@ class Result(IntEnum):
 
 
 class Mark(IntEnum):
-    EMPTY = 0
-    X = 1  # also denotes the player
     O = -1
+    EMPTY = 0
+    X = 1
+
+
 OTHER_GUY = {Mark.X: Mark.O, Mark.O: Mark.X}
 
-# r is known only for these states in adavnce:
-TERMINAL_REWARDS = {
+
+TERMINAL_X_REWARDS = {
     Result.X_WIN: 1.0,
     Result.O_WIN: -1.0,
     Result.DRAW: -.5,
 }
+
+
+TERMINAL_O_REWARDS = {
+    Result.X_WIN: TERMINAL_X_REWARDS[Result.O_WIN],
+    Result.O_WIN: TERMINAL_X_REWARDS[Result.X_WIN],
+    Result.DRAW: TERMINAL_X_REWARDS[Result.DRAW],
+}
+
+
+TERM_REWARDS = {Mark.X: TERMINAL_X_REWARDS,
+                Mark.O: TERMINAL_O_REWARDS}
 
 
 def get_reward(state, action, player_mark=Mark.X):
@@ -26,7 +39,7 @@ def get_reward(state, action, player_mark=Mark.X):
     result = next_state.check_endstate()
     if result is None:
         return 0.0
-    return TERMINAL_REWARDS[result]
+    return TERM_REWARDS[player_mark][result]
 
 
 WIN_MARKS = {Result.X_WIN: Mark.X,
