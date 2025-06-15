@@ -2,6 +2,7 @@
 Play agents against each other.
 Watch the game unfold, or run many trials.
 """
+from enum import IntEnum
 import numpy as np
 from tic_tac_toe import Game, GameTree
 from game_base import Mark, Result, get_reward, WIN_MARKS
@@ -122,6 +123,12 @@ def demo_fixed_match():
         print('\n\n\n----------------------\n')
 
 
+class OutcomeEnum(IntEnum):
+    WIN = 1
+    DRAW = 0
+    LOSS = -1
+
+
 class ResultSet(object):
     """
     Accumulate traces.  Determine wins/losses/draws, count unique traces
@@ -132,90 +139,69 @@ class ResultSet(object):
         self._opp_mark = GameTree.opponent(player_mark)
         self._cur_sample = None  # dict of permutations of wins/draw/loss (index into self._traces  )
         self._n_games = 0
+        self._show_most_freq = True  # show games repeatedly played
 
         # Create mapping as new states come in, use to identify unique traces.
         self._state_to_ind = {}
-        self._next_new_ind = 0
+        self._gamestates = []  # inverse mapping
 
-        self._trace_inds = {'wins': [],  # for each trace a tuple of indices
-                            'losses': [],  # for identifying unique traces
-                            'draws': []}
 
-        self._traces = {'wins': [],  # the actual traces
-                        'losses': [],
-                        'draws': []}
-
-        self._counts = {'wins': [],  # number of unique traces
-                        'losses': [],
-                        'draws': []}
-
-    def get_summary(self):
-        """
-        Return a summary of the results.
-        :return: dict with keys:
-
-           - 'wins', 'losses', 'draws': each a tuple(n total, n distinct).
-           - 'games': number of games played.
-        """
-
-        return {'wins': (int(np.sum(self._counts['wins'])), len(self._counts['wins'])),
-                'losses': (int(np.sum(self._counts['losses'])), len(self._counts['losses'])),
-                'draws': (int(np.sum(self._counts['draws'])), len(self._counts['draws'])),
-                'games': self._n_games}
+        self._game_traces = {'traces': [],  # list of game trace records (as returned by Match.play_and_trace)
+                             'indsqs': [],  # list of tuples of indices into self._gamestates
+                             'played_first': [],  # list of booleans, True if player_mark played first
+                             'outcomes': []}  # list of OutcomeEnum values.
 
     def _get_ind_seq(self, trace):
         """
         Get the indices of the states in the trace.
+        Add states not seen before to the mapping.
         :param trace: list of Game states
-        :return: list of indices of the states in the trace
+        :return: tuple of indices of the states in the trace
         """
         indices = []
         for turn_info in trace['game']:
             state = turn_info['state']
             if state not in self._state_to_ind:
-                self._state_to_ind[state] = self._next_new_ind
-                self._next_new_ind += 1
+                self._state_to_ind[state] = len(self._gamestates)
+                self._gamestates.append(state)
+                
             indices.append(self._state_to_ind[state])
 
         return tuple(indices)
+    
+    def get_summary(self):
+        """
+        Get a summary of the results.
+        :return: dict with keys 'wins', 'losses', 'draws', each a dict with keys 'count' and 'traces'.
+        """
+        wins = np.array(self._game_traces['outcomes']) == OutcomeEnum.WIN
+        losses = np.array(self._game_traces['outcomes']) == OutcomeEnum.LOSS
+        draws = np.array(self._game_traces['outcomes']) == OutcomeEnum.DRAW
+        went_first = np.array(self._game_traces['played_first'])
+        n_games = len(self._game_traces['traces'])
+
+        return {'wins': {'total': np.sum(wins),
+                         'as_first': np.sum(wins[went_first]),
+                         'as_second': np.sum(wins[~went_first])},
+                'losses': {'total': np.sum(losses),
+                           'as_first': np.sum(losses[went_first]),
+                           'as_second': np.sum(losses[~went_first])},
+                'draws': {'total': np.sum(draws),
+                          'as_first': np.sum(draws[went_first]),
+                          'as_second': np.sum(draws[~went_first])},
+                'n_games': n_games}
 
     def _get_outcome(self, trace):
         """
         is it a win for self.player?
         """
         if trace['result'] == Result.DRAW:
-            return 'draws'
-        elif ( WIN_MARKS[trace['result']] ==self._player_mark):
-            return 'wins'
-        elif  WIN_MARKS[trace['result']] ==self._opp_mark:
-            return 'losses'
-        
-
+            return OutcomeEnum.DRAW
+        elif (WIN_MARKS[trace['result']] == self._player_mark):
+            return OutcomeEnum.WIN
+        elif WIN_MARKS[trace['result']] == self._opp_mark:
+            return OutcomeEnum.LOSS
         raise ValueError("Unexpected result!")
-
-    def add_trace(self, trace):
-        self._n_games += 1
-        outcome = self._get_outcome(trace)
-        trace_ind = self._get_ind_seq(trace)
-        if trace_ind not in self._trace_inds[outcome]:
-            self._trace_inds[outcome].append(trace_ind)
-            self._traces[outcome].append(trace)
-            self._counts[outcome].append(1)
-        else:
-            ind = self._trace_inds[outcome].index(trace_ind)  # TODO: Fix this, use a dict instead of a list.
-            self._counts[outcome][ind] += 1
-
-    def resample(self):
-        logging.info("Resampling %d games, %d wins, %d losses, %d draws" %
-                     (self._n_games, len(self._trace_inds['wins']),
-                      len(self._trace_inds['losses']), len(self._trace_inds['draws'])))
-
-        self._cur_sample = {'wins': np.random.permutation(len(self._traces['wins'])),
-                            'losses': np.random.permutation(len(self._traces['losses'])),
-                            'draws': np.random.permutation(len(self._traces['draws']))}
-        logging.info("Resampled %d games, %d wins, %d losses, %d draws" %
-                     (self._n_games, len(self._cur_sample['wins']),
-                      len(self._cur_sample['losses']), len(self._cur_sample['draws'])))
 
     def draw(self, img, y_top, trace_artist_params={}, layout_params={}):
         """
@@ -232,57 +218,54 @@ class ResultSet(object):
         :returns:  list of (bbox, probability) for the mousing over & updating the ColorKey.
         """
         w, h = img.shape[1], img.shape[0]
-        
-        
-        if self._cur_sample is None:
-            self.resample()
 
         layout = LAYOUT['results_viz']['match_area']
         layout.update(layout_params)
 
+        # Calculate how many traces can fit, given the bbox, trace size, box size, etc.:
         h = img.shape[0] - y_top
-        trace_size = layout['trace_size']
+        trace_size = np.array(layout['trace_size'])
         trace_w, trace_h = trace_size
-        
         ta = TraceArtist(trace_size, Mark.X, params=trace_artist_params, sample_header=" x 10   ")
-        
         trace_h = ta.dims['y_bottom']
-
-        trace_pad = int(layout['trace_pad_frac'] * trace_w)  # padding between traces
+        trace_pad = (np.array(layout['trace_pad_frac']) * trace_size).astype(int)
         group_pad = int(layout['group_pad_frac'] * w)
         group_bar_thickness = int(layout['group_bar_thickness_frac'] * w)
 
-        # calculate total horiz. space for drawing traces.
-        h_space = 4 * group_pad + 3*trace_pad + 6*group_bar_thickness
-        n_h_traces = int((w-h_space) / (trace_w + trace_pad))  # number of traces that fit horizontally
-        v_space = 2*group_pad + 2 * trace_pad + 2 * group_bar_thickness
-        n_v_traces = int((h - v_space) / (trace_h + trace_pad))  # number of traces that fit vertically
+        # calculate total horiz./vert. space for drawing traces, then the number that will fit:
+        h_space = 4 * group_pad + 3*trace_pad[0] + 6*group_bar_thickness
+        n_h_traces = int((w-h_space) / (trace_w + trace_pad[0]))  # number of traces that fit horizontally
+        v_space = 2*group_pad + 2 * trace_pad[1] + 2 * group_bar_thickness
+        # n_v_traces= int((h - v_space) / (trace_h + trace_pad))  # number of traces that fit vertically
+        n_v_traces = 2  # Hard code, x first above, o first below
 
-        n_win_cols = min(len(self._traces['wins']), int(np.ceil(n_h_traces/3)))
-        n_loss_cols = min(len(self._traces['losses']), int(np.ceil(n_h_traces/3)))
-        n_draw_cols = min(len(self._traces['draws']), max(0, n_h_traces - n_win_cols - n_loss_cols))
-        n_rows = n_v_traces
+        num_wins, num_draws, num_losses = np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.WIN), \
+                                          np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.DRAW), \
+                                          np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.LOSS)
 
-        print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
-        print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
+        n_win_cols = min(num_wins, int(np.ceil(n_h_traces/3)))
+        n_loss_cols = min(num_losses, int(np.ceil(n_h_traces/3)))
+        n_draw_cols = min(num_draws, max(0, n_h_traces - n_win_cols - n_loss_cols))
+        n_rows = n_v_traces  # n_cols different in each box
 
+        # Add columns to each category until the window is full, even if they'll be empty.
         r = 0
         no_additions = 0
         while n_win_cols + n_loss_cols + n_draw_cols < n_h_traces:
             if r % 3 == 0:
-                if n_win_cols < len(self._traces['wins']):
+                if n_win_cols < num_wins:
                     n_win_cols += 1
                     no_additions = 0
                 else:
                     no_additions += 1
             elif r % 3 == 1:
-                if n_loss_cols < len(self._traces['losses']):
+                if n_loss_cols < num_losses:
                     n_loss_cols += 1
                     no_additions = 0
                 else:
                     no_additions += 1
             elif r % 3 == 2:
-                if n_draw_cols < len(self._traces['draws']):
+                if n_draw_cols < num_draws:
                     n_draw_cols += 1
                     no_additions = 0
                 else:
@@ -294,91 +277,151 @@ class ResultSet(object):
 
         n_traces = n_h_traces * n_v_traces
 
-        n_wins = min(len(self._traces['wins']), n_v_traces*n_win_cols)
-        n_losses = min(len(self._traces['losses']), n_v_traces*n_loss_cols)
-        n_draws = min(len(self._traces['draws']), n_v_traces*n_draw_cols)
+        n_wins = min(num_wins, n_v_traces*n_win_cols)
+        n_losses = min(num_losses, n_v_traces*n_loss_cols)
+        n_draws = min(num_draws, n_v_traces*n_draw_cols)
 
-        
-
-        r = 0
-        #print("Drawing %d wins, %d losses, %d draws" % (n_wins, n_losses, n_draws))
-        #print("From totals: %d wins, %d losses, %d draws" % (len(self._traces['wins']),
-        #                                                     len(self._traces['losses']),
-        #                                                     len(self._traces['draws'])))
+        print("Drawing colums: %d wins, %d losses, %d draws" % (n_win_cols, n_loss_cols, n_draw_cols))
+        print("On a grid of %d x %d traces" % (n_h_traces, n_v_traces))
 
         def _box_width(n):
-            bw = n * trace_w + (n+1) * trace_pad
+            bw = n * trace_w + (n+1) * trace_pad[0]
             return bw
-        def _box_height(n):
-            bh = n * trace_h + (n+1) * trace_pad
-            return bh
+
         # draw the boxes for each outcome group
         x_left = 0
-        
-
 
         bbox_top = y_top + group_pad + group_bar_thickness
-        bbox_height = h - group_pad*2 -group_bar_thickness * 2 
+        bbox_height = h - group_pad*2 - group_bar_thickness * 2
         win_width, draw_width, loss_width = _box_width(n_win_cols), _box_width(n_draw_cols), _box_width(n_loss_cols)
         used_width = win_width + draw_width + loss_width + 6 * group_bar_thickness
-        horiz_spacing = (w- used_width) // 4
+        horiz_spacing = (w - used_width) // 4
 
-        #bbox_bottom = bbox_top + group_bar_thickness + 2 * 
+        # bbox_bottom = bbox_top + group_bar_thickness + 2 *
         win_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+win_width + horiz_spacing+group_bar_thickness),
                     'y': (bbox_top, bbox_top + bbox_height)}
-        x_left = win_bbox['x'][1] +group_bar_thickness
-        draw_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+draw_width+group_bar_thickness+ horiz_spacing),
+        x_left = win_bbox['x'][1] + group_bar_thickness
+        draw_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+draw_width+group_bar_thickness + horiz_spacing),
                      'y': (bbox_top, bbox_top + bbox_height)}
         x_left = draw_bbox['x'][1]+group_bar_thickness
-        loss_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+loss_width +group_bar_thickness+ horiz_spacing),
+        loss_bbox = {'x': (x_left+horiz_spacing+group_bar_thickness, x_left+loss_width + group_bar_thickness + horiz_spacing),
                      'y': (bbox_top, bbox_top + bbox_height)}
 
         def _draw_box_at(img, color, bbox, thickness=1):
-            """
-            bbox defines region INSIDE box of 'thickness' pixels.
-            """
+            # bbox defines region INSIDE box of 'thickness' pixels.
             thickness = 1 if thickness < 1 else int(thickness)
             x0, y0 = bbox['x'][0]-thickness, bbox['y'][0]-thickness
             x1, y1 = bbox['x'][1]+1, bbox['y'][1]+1
-            # top
             img[y0:y0+thickness, x0:x1+thickness] = color
-            # bottom
             img[y1:y1+thickness, x0:x1+thickness] = color
-            # left
             img[y0:y1+thickness, x0:x0+thickness] = color
-            # right
             img[y0:y1+thickness, x1:x1+thickness] = color
 
-            return thickness
-
-        def _draw_trace_set(group_bbox, traces, kind):
+        def _draw_trace_set(group_bbox, trace_lists):
+            """
+            Draw a set of traces in the given group_bbox.
+            :param group_bbox: dict with keys 'x' and 'y', each a tuple of (left, right)
+            :param trace_lists: list of lists of {'trace': <trace info>, 'count': <int>}, 1 list per row
+            :param kind: 'wins', 'losses', or 'draws'
+            """
             count = self._counts
-            x = group_bbox['x'][0] + trace_pad 
-            y = group_bbox['y'][0] + trace_pad 
-            for i, trace in enumerate(traces):
-                trace = self._traces[kind][self._cur_sample[kind][i]]
-                count = self._counts[kind][self._cur_sample[kind][i]]
-                header_text = ("x %i" % count) if count > 1 else " "
-                pos = (x, y)
-                ta.draw_trace(img, trace, pos, header_txt=header_text)
-                x += trace_w + trace_pad
-
-                if x + trace_w > group_bbox['x'][1]:
-                    x = group_bbox['x'][0] + trace_pad
-                    y += trace_h 
+            x_left = group_bbox['x'][0] + trace_pad[0]
+            y_top = group_bbox['y'][0] + trace_pad[1]
+            for row in range(len(trace_lists)):
+                y = y_top + row * (trace_h + trace_pad[1])
+                for col in range(len(trace_lists[row])):
+                    x = x_left + col * (trace_w + trace_pad[0])
+                    trace = trace_lists[row][col]['trace']
+                    count = trace_lists[row][col]['count']
+                    header_text = ("x %i" % count) if count > 1 else " "
+                    pos = (x, y)
+                    ta.draw_trace(img, trace, pos, header_txt=header_text)
 
         _draw_box_at(img, COLOR_SCHEME['color_x'], win_bbox, thickness=group_bar_thickness)
         _draw_box_at(img, COLOR_SCHEME['color_draw'], draw_bbox, thickness=group_bar_thickness)
         _draw_box_at(img, COLOR_SCHEME['color_o'], loss_bbox, thickness=group_bar_thickness)
 
-        def _get_sample(traces, inds):
-            return [traces[i] for i in inds]
+        win_samp_size = {'cols': n_win_cols, 'num': n_wins, 'rows': n_rows}
+        draw_samp_size = {'cols': n_draw_cols, 'num': n_draws, 'rows': n_rows}
+        loss_samp_size = {'cols': n_loss_cols, 'num': n_losses, 'rows': n_rows}
+        sample = self.resample(win_samp_size, draw_samp_size, loss_samp_size)
+        _draw_trace_set(win_bbox, sample['wins'])
+        _draw_trace_set(draw_bbox, sample['draws'])
+        _draw_trace_set(loss_bbox,  sample['losses'])
 
-        _draw_trace_set(win_bbox, _get_sample(self._trace_inds['wins'], self._cur_sample['wins'][:n_wins]), 'wins')
-        _draw_trace_set(draw_bbox, _get_sample(self._trace_inds['draws'], self._cur_sample['draws'][:n_draws]), 'draws')
-        _draw_trace_set(loss_bbox, _get_sample(
-            self._trace_inds['losses'], self._cur_sample['losses'][:n_losses]), 'losses')
-        
+    def add_trace(self, trace):
+        self._n_games += 1
+        outcome = self._get_outcome(trace)
+        indsq = self._get_ind_seq(trace)
+        self._game_traces['traces'].append(trace)
+        self._game_traces['indsqs'].append(indsq)
+        self._game_traces['outcomes'].append(outcome)
+        played_first = trace['game'][0]['player'] == self._player_mark
+        self._game_traces['played_first'].append(played_first)
+
+    def resample(self, win_samp_info, draw_samp_info, loss_samp_info, show_most_freq_offset=0):
+        """
+        Get the lists of traces to show, a sample of each kind, either random or the most frequetly repeated.
+        Split each list as evenly as possible into games started by the plaer and games started by the opponent.
+        i.e.: for 10 wins, show the 5 most played with X starting, and 5 most played with O starting (if show_most_freq=0)
+
+        :param *_samp_info: dict with:
+            'cols': int, number of columns to show,
+            'rows': int, number of rows to show, if 2, show X-starting on top, O-starting below,
+            'num': int, number of traces to show,
+        :param show_most_freq_offset:
+           if n, then show the n-th most frequent trace, n+1, n+2, ... up to n + 'cols' per row.
+           if None, show random traces.
+           (Show most freq by default.)
+        :return: dict for 'wins','draws','losses', each a list of lists of dicts with keys 'trace' and 'count' for plotting.
+        """
+        def _get_ranking(outcome, was_first=None):
+            subset = [i for i in range(self._n_games) if (self._game_traces['outcomes'][i] == outcome and
+                                                          (was_first is None or
+                                                           was_first == self._game_traces['played_first'][i]))]
+            ind_seqs = [self._game_traces['indsqs'][i] for i in subset]
+            counts = {}
+            for ind_seq in ind_seqs:
+                if ind_seq not in counts:
+                    counts[ind_seq] = 0
+                counts[ind_seq] += 1
+            unique_game_seqs = list(counts.keys())
+            seqences_rank = sorted(list(range(len(unique_game_seqs))),
+                                   key=lambda i: counts[unique_game_seqs[i]], reverse=True)
+            return {'order': seqences_rank,
+                    'counts': counts,
+                    'unique_game_seqs': unique_game_seqs,
+                    'subset': subset,
+                    'n_unique': len(unique_game_seqs)}
+
+        def _get_sample(outcome, info):
+                
+            if info['rows'] == 2:
+                p_first = _get_ranking(outcome, was_first=True)
+                p_second = _get_ranking(outcome, was_first=False)
+
+                n = info['cols']
+                if show_most_freq_offset is None:
+                    sample_ind_rows = [np.random.choice(p_first['n_unique'], size=n, replace=False),
+                                       np.random.choice(p_second['n_unique'], size=n, replace=False)]
+                else:
+                    sample_ind_rows = [[i + show_most_freq_offset for i in range(min(n, p_first['n_unique']))],
+                                       [i + show_most_freq_offset for i in range(min(n, p_second['n_unique']))]]
+                    
+            elif info['rows'] != 2:
+                raise NotImplemented
+
+            import ipdb; ipdb.set_trace()
+            sample = [[{'trace': self._game_traces['traces'][p_first['subset'][p_first['order'][i]]],
+                        'count': p_first['counts'][p_first['unique_game_seqs'][p_first['order'][i]]]}
+                       for i in sample_inds] 
+                    for sample_inds in sample_ind_rows]
+
+            return sample
+
+        return {'wins': _get_sample(OutcomeEnum.WIN, win_samp_info),
+                'draws': _get_sample(OutcomeEnum.DRAW, draw_samp_info),
+                'losses': _get_sample(OutcomeEnum.LOSS, loss_samp_info)}
 
 
 def test_result_set(n=100):
@@ -397,20 +440,19 @@ def test_result_set(n=100):
         """
         Mouse callback for the image window.
         """
-        
 
     cv2.namedWindow("results", cv2.WINDOW_NORMAL)
     cv2.resizeWindow("results", img_size[0][0], img_size[0][1])
     # Set the resize callback to update the image size
     cv2.setMouseCallback("results", on_mouse)
 
-    import pprint
-    print("Test set summary:")
-    pprint.pprint(rs.get_summary(), width=40)
+    #import pprint
+    #print("Test set summary:")
+    #pprint.pprint(rs.get_summary(), width=40)
 
     while True:
-        _,_, width, height = cv2.getWindowImageRect("results")
-        
+        _, _, width, height = cv2.getWindowImageRect("results")
+
         new_size = width, height
         if (new_size[0] != img_size[0][0] or new_size[1] != img_size[0][1]):
             img_size[0] = (new_size[0], new_size[1])
@@ -422,8 +464,6 @@ def test_result_set(n=100):
         key = cv2.waitKey(10)
         if key == 27 or key == ord('q'):
             break
-
-
 
 
 def _test():

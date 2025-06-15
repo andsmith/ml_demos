@@ -17,23 +17,35 @@ from policies import Policy
 from result_viz import load_value_func
 import sys
 import time
+import argparse
 from neat.six_util import itervalues, iterkeys
 
 NEAT_REWARDS = {Mark.X: {Result.X_WIN: 1.0, Result.O_WIN: -1.0, Result.DRAW: 0.0},
                 Mark.O: {Result.X_WIN: -1.0, Result.O_WIN: 1.0, Result.DRAW: 0.0}}
 
-NETWORK_DIR = os.path.join(os.getcwd(), 'NEAT_nets')
+
+NETWORK_DIR ='NEAT_nets'
 CONFIG_FILE = 'config-feedforward'
 
 
-N_EVAL_GAMES = 101  # games to play for evaluating a genome (100 going first, 100 going second)
 
-WINNER_FILE = f'neat-winner_in=%s_p=%i_neval={N_EVAL_GAMES}_gen=%i.pkl'   # input encoding, pop size , generation
+N_EVAL_GAMES = 150  # games to play for evaluating a genome (half first, half second)
+
+# strong/weak, input encoding, pop size , generation
+WINNER_FILE = f'neat-winner-%s_in=%s_p=%i_neval={N_EVAL_GAMES}_gen=%i.pkl'
 # input encoding, pop size  (generation number will be added automatically)
-POPULATION_PREFIX = f'neat-population_in=%s_p=%i_neval={N_EVAL_GAMES}_gen='
+POPULATION_PREFIX = f'neat-population-%s_in=%s_p=%i_neval={N_EVAL_GAMES}_gen='  # strong/weak, input encoding, pop size
+
+
 
 class Arena(object):
-    def __init__(self, opp_pi):
+    def __init__(self, opp_pi, strong=False):
+        """
+        :param opp_pi: The opponent policy to play against.
+        :param strong: If True, we are learing a STRONG solution, starting from any possible state.
+            If false, it's the WEAK solution, starting from one of the 10 initial states.
+        """
+        self.strong = strong
         self.opp_mark = opp_pi.player  # the opponent's mark is the player of the opponent policy
         self.player_mark = OTHER_GUY[self.opp_mark]  # the player is the opponent's opponent
         self.opp_pi = opp_pi
@@ -45,19 +57,40 @@ class Arena(object):
                      self.opp_mark.name,
                      self.player_mark.name,
                      self._loss_result.name))
+        
+        self._states_going_first, self._states_going_second = self._get_all_updatable_states()
 
     def play_matches(self, agent_pi, n_games=10):
         """
         Play a match with the opponent policy.
         :param n_games: The number of games to play.
+        :param agent_pi: The policy of the agent to play against the opponent.
+
         :returns: The average reward per game.
         """
         match = Match(agent_pi, self.opp_pi)
-        traces = [match.play_and_trace(order=-1) for _ in range(n_games//2)] +\
-                 [match.play_and_trace(order=1) for _ in range(n_games//2)]
+        if not self.strong:
+            # if we are learning a weak solution, start from one of the initial states
+            traces = [match.play_and_trace(order=-1) for _ in range(n_games//2)] +\
+                [match.play_and_trace(order=1) for _ in range(n_games//2)]
+        else:
+
+            first_sample = np.random.choice(self._states_going_first, n_games//2, replace=False)
+            second_sample = np.random.choice(self._states_going_second, n_games//2, replace=False)
+            traces = [match.play_and_trace(order=-1, initial_state=state) for state in first_sample] +\
+                     [match.play_and_trace(order=1, initial_state=state) for state in second_sample]
         rewards = self._score_games(traces)
         return np.mean(rewards)
 
+    def _get_all_updatable_states(self):
+        logging.info("Getting all updatable states from the environment, sorting by who went first...")
+        updatable = self.env.get_nonterminal_states()
+        going_first = [state for state in updatable if state.n_free() % 2 == 0]
+        going_second = [state for state in updatable if state.n_free() % 2 == 1]
+        logging.info("\tFound %d updatable states, %d going first, %d going second" %
+                     (len(updatable), len(going_first), len(going_second)))
+        return going_first, going_second
+    
     def _get_n_player_moves(self, trace):
         """
         Get the number of moves made by the player in the trace.
@@ -120,7 +153,6 @@ class NNetPolicy(Policy):
         best_action_flat = open_actions[bi]  # get the index of the best action in the flat array
         best_action = (best_action_flat // 3, best_action_flat % 3)  # convert to (i, j) tuple
         return [(best_action, 1.0)]  # return the best action with probability 1.0
-
 
 
 def get_opponent():
@@ -189,33 +221,50 @@ class StdOutReporterWGenomSizesPlus(neat.StdOutReporter):
         else:
             print("Generation time: {0:.3f} sec".format(elapsed))
 
-
 def _get_args():
-    if not os.path.exists(NETWORK_DIR):
-        logging.info("Creating directory for NEAT networks: %s" % NETWORK_DIR)
-        os.mkdir(NETWORK_DIR)
-    else:
-        logging.info("Using existing directory for NEAT networks: %s" % NETWORK_DIR)
-    config_path = os.path.join(os.getcwd(), CONFIG_FILE)
-    n_cores = int(sys.argv[1]) if len(sys.argv) > 1 else 12
-    pop_file = os.path.join(os.getcwd(), sys.argv[2]) if len(sys.argv) > 2 else None
-    return config_path, pop_file, n_cores
+    parser = argparse.ArgumentParser(description="Run NEAT evolution for Tic Tac Toe.")
+    parser.add_argument('-c', '--n_cores', type=int, default=12,
+                        help='Number of cores to use for parallel evaluation (default: 12)')
+    parser.add_argument('-g','--generations', type=int, default=100,)
+    parser.add_argument('-r', '--resume_population', type=str, default=None,
+                        help='Path to a population file to resume from (default: None, start fresh)')
+    parser.add_argument('-s', '--strong', action='store_true',
+                        help='If set, learn to maximize reward from any state, otherwise learn from initial states only')
+    args = parser.parse_args()
 
+    net_dir = os.path.join(os.getcwd(), 'NEAT_nets')
+    config_path = os.path.join(os.getcwd(), CONFIG_FILE)
+
+    net_dir = os.path.join(os.getcwd(), NETWORK_DIR)
+    if not os.path.exists(net_dir):
+        logging.info("Creating directory for NEAT networks: %s" % net_dir)
+        os.mkdir(net_dir)
+    else:
+        logging.info("Using existing directory for NEAT networks: %s" % net_dir)
+
+    pop_file = os.path.join(os.getcwd(), sys.argv[2]) if len(sys.argv) > 2 else None
+    return {'config_file': config_path,
+            'generations': args.generations,
+            'pop_file': pop_file,
+            'n_cores': args.n_cores,
+            'strong': args.strong,
+            'pop_file': args.resume_population,
+            'network_dir': net_dir}
 
 def run():
 
-    config_file, pop_file, n_cores = _get_args()
+    args = _get_args()
 
     # Load configuration.
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
-                         config_file)
+                         args['config_file'])
     # Create the population, which is the top-level object for a NEAT run.
-    if pop_file is not None:
+    if args['pop_file'] is not None:
         # Load a population from a file.
-        print("------>  Loading population from file: %s" % pop_file)
+        print("------>  Loading population from file: %s" % args['pop_file'])
 
-        p = neat.Checkpointer.restore_checkpoint(pop_file)
+        p = neat.Checkpointer.restore_checkpoint(args['pop_file'])
         config = p.config  # use the config from the loaded population
 
         if config.genome_config.num_inputs not in NNetPolicy.INPUT_ENC_SIZES:
@@ -233,9 +282,10 @@ def run():
         p = neat.Population(config)
 
     # add checkpointing reporter
+    strongweak_string = 'strong' if args['strong'] else 'weak'
 
     encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
-    chk_file_prefix = os.path.join(NETWORK_DIR, POPULATION_PREFIX % (encoding, config.pop_size))
+    chk_file_prefix = os.path.join(os.getcwd(),NETWORK_DIR, POPULATION_PREFIX % (strongweak_string,encoding, config.pop_size))
     checkpointer = neat.Checkpointer(generation_interval=None,   # do this manually
                                      time_interval_seconds=None,
                                      filename_prefix=chk_file_prefix)
@@ -246,38 +296,38 @@ def run():
     reporters = [StdOutReporterWGenomSizesPlus(True), stats]
     for r in reporters:
         p.add_reporter(r)
-    
-    pe = neat.ParallelEvaluator(n_cores, eval_genome_gameplay) if n_cores > 1 else None
 
-    n_gen_per_iter = 10
-    for iter in range(10):
-        print("------>  Iteration %d" % (iter*10))
+    pe = neat.ParallelEvaluator(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
 
-        if n_cores > 1:
-            winner = p.run(pe.evaluate, n_gen_per_iter)
+    pop_backup_interval = 10  # generations between population backups
+    for iter in range(args['generations']):
+        
+        print("Iteration %d (pop=%i, evals=%i, cores=%i)" % (iter, config.pop_size,
+                                                            N_EVAL_GAMES, args['n_cores']))
+
+
+        if args['n_cores'] > 1:
+            winner = p.run(pe.evaluate, 1)
         else:
-            winner = p.run(eval_genomes_gameplay, n_gen_per_iter)
+            winner = p.run(eval_genomes_gameplay, 1)
 
         # Save the winner.
         encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
-        filename = os.path.join(NETWORK_DIR, WINNER_FILE % (encoding, config.pop_size, p.generation))
+        filename = os.path.join(os.getcwd(),NETWORK_DIR, WINNER_FILE % (strongweak_string,encoding, config.pop_size, p.generation))
         with open(filename, 'wb') as f:
             pickle.dump(winner, f)
-            print("------------------------------------->   SAVED WINNER FOR ITER %i:  %s" % (p.generation, filename))
-
-        if iter % 5 == 0:
-           # if False:  # TODO: FIX
-            species_set = p.species
-            generation = p.generation
+            print("--------> Saved winner genome, gen %i:  %s" % (p.generation, filename))
+            
+        if (iter +1) % pop_backup_interval == 0 or iter == args['generations'] - 1:
             checkpointer.save_checkpoint(config=config,
-                                         population=p.population,
-                                         species_set=species_set,
-                                         generation=generation)
-            print("----------------------------------------->   SAVED POPULATION FOR ITER %i:  %s" % (iter, filename))
+                                        population=p.population,
+                                        species_set=p.species,
+                                        generation=p.generation)
+            print("----------> Save population checkpoint: %s" % (filename,))
 
     # visualize.draw_net(config, winner, view=True)
-    visualize.plot_stats(stats, ylog=False, view=True)
-    visualize.plot_species(stats, view=True)
+    visualize.plot_stats(stats, ylog=False, view=True, pop_size=config.pop_size)
+    visualize.plot_species(stats, view=True, pop_size=config.pop_size)
 
     # p = neat.Checkpointer.restore_checkpoint('neat-checkpoint-4')
     # p.run(eval_genomes, 10)

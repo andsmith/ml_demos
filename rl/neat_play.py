@@ -32,7 +32,9 @@ def neat_play(n_rules_2=2):
     #opponent = HeuristicPlayer(n_rules=n_rules_2, mark=Mark.O)
     opponent = MiniMaxPolicy(player_mark=Mark.O)
     viz = PolicyEvaluationResultViz(player_policy=agent, opp_policy=opponent)
-    viz.play(n_games=2000)
+
+
+    viz.play(n_games=200)
 
 
     img = viz.draw(img_size)
