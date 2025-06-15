@@ -225,7 +225,9 @@ def _get_args():
     parser = argparse.ArgumentParser(description="Run NEAT evolution for Tic Tac Toe.")
     parser.add_argument('-c', '--n_cores', type=int, default=12,
                         help='Number of cores to use for parallel evaluation (default: 12)')
-    parser.add_argument('-g','--generations', type=int, default=100,)
+    parser.add_argument('-g','--generations', type=int, default=100, help='Number of generations to run (default: 100)')
+    parser.add_argument('-p', '--pop_size', type=int, default=None,
+                        help='Population size, overrides config file (default: [config file value])')
     parser.add_argument('-r', '--resume_population', type=str, default=None,
                         help='Path to a population file to resume from (default: None, start fresh)')
     parser.add_argument('-s', '--strong', action='store_true',
@@ -246,6 +248,7 @@ def _get_args():
     return {'config_file': config_path,
             'generations': args.generations,
             'pop_file': pop_file,
+            'pop_size': args.pop_size,
             'n_cores': args.n_cores,
             'strong': args.strong,
             'pop_file': args.resume_population,
@@ -259,6 +262,12 @@ def run():
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          args['config_file'])
+    if args['pop_size'] is not None:
+        # Override the population size in the configuration.
+        config.pop_size = args['pop_size']
+        print("------>  Population overriding config file value, size set to %d" % config.pop_size)
+    
+
     # Create the population, which is the top-level object for a NEAT run.
     if args['pop_file'] is not None:
         # Load a population from a file.
