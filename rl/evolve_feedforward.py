@@ -26,14 +26,11 @@ NETWORK_DIR = os.path.join(os.getcwd(), 'NEAT_nets')
 CONFIG_FILE = 'config-feedforward'
 
 
-N_EVAL_GAMES = 20  # games to play for evaluating a genome
+N_EVAL_GAMES = 101  # games to play for evaluating a genome (100 going first, 100 going second)
 
 WINNER_FILE = f'neat-winner_in=%s_p=%i_neval={N_EVAL_GAMES}_gen=%i.pkl'   # input encoding, pop size , generation
 # input encoding, pop size  (generation number will be added automatically)
 POPULATION_PREFIX = f'neat-population_in=%s_p=%i_neval={N_EVAL_GAMES}_gen='
-
-print("Winner file: %s" % WINNER_FILE  )
-print("Population prefix: %s" % POPULATION_PREFIX)
 
 class Arena(object):
     def __init__(self, opp_pi):
@@ -220,6 +217,7 @@ def run():
 
         p = neat.Checkpointer.restore_checkpoint(pop_file)
         config = p.config  # use the config from the loaded population
+
         if config.genome_config.num_inputs not in NNetPolicy.INPUT_ENC_SIZES:
             raise ValueError("Invalid number of inputs in the configuration: %d" % config.genome_config.num_inputs)
         print("------>  Population loaded with %d genomes" % len(p.population))
