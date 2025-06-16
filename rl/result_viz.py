@@ -63,13 +63,18 @@ class PolicyEvaluationResultViz(object):
         match = Match(self._pi, self._opp_pi)
 
         for iter in range(n_games):
-            trace = match.play_and_trace(order=0, verbose=False)
+            trace = match.play_and_trace(order=((-1)**iter), verbose=False)
             self._results.add_trace(trace)
 
-            if iter % 100==0:
-                import pprint
-                print("Played %i games" % (iter+1))
-                pprint.pprint(self._results.get_summary())
+            if iter % 100==0 or iter == n_games-1:
+                
+                summary = self._results.get_summary()
+
+                print("Played %i games, W: %i, D: %i, L: %i:" % (iter+1,
+                                                               summary['wins']['total'],
+                                                               summary['draws']['total'],
+                                                               summary['losses']['total']))
+                
 
     def _draw_summary(self, img):
         x_center = int(img.shape[1] / 2)
@@ -133,10 +138,10 @@ class PolicyEvaluationResultViz(object):
 
         summary_lines = OrderedDict()
         count_ucount_result = self._results.get_summary()
-        sum_result = {'games': count_ucount_result['games'],
-                      'wins': count_ucount_result['wins'][0],
-                      'draws': count_ucount_result['draws'][0],
-                      'losses': count_ucount_result['losses'][0]}
+        sum_result = {'games': count_ucount_result['n_games'],
+                      'wins': count_ucount_result['wins']['total'],
+                      'draws': count_ucount_result['draws']['total'],
+                      'losses': count_ucount_result['losses']['total']}
 
         summary_lines['games'] = 'N Games: %i' % sum_result['games']
         summary_lines['wins'] = '%s-Wins: %i' % (self._player.name, sum_result['wins'])

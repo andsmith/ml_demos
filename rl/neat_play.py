@@ -10,7 +10,9 @@ from perfect_player import MiniMaxPolicy
 from baseline_players import HeuristicPlayer
 import neat
 import sys
-config_file = 'config-feedforward'
+from evolve_feedforward import NETWORK_DIR
+import os
+config_file = os.path.join(os.getcwd(),'config-feedforward')
 config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                         neat.DefaultSpeciesSet, neat.DefaultStagnation,
                         config_file)
@@ -48,6 +50,7 @@ if __name__=="__main__":
     if len(sys.argv)>1: 
         filename = sys.argv[1]
     else:
-        filename = "r-neat-checkpoint-0-enc+free.pkl"
+        print("usage: python neat_play.py <neat-winner...pkl>")
+        
     logging.basicConfig(level=logging.INFO)
     neat_play()

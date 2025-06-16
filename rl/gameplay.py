@@ -51,7 +51,7 @@ class Match(object):
         print(trace['game'][-1]['next_state'])
         print("Result: %s" % trace['result'].name)
 
-    def play_and_trace(self, order=0, verbose=False, initi_state=None, deterministic=False):
+    def play_and_trace(self, order=0, verbose=False, init_state=None, deterministic=False):
         """
         Play a random game, return the sequence of states and actions.
         :param order:  -1 (p2,p1), 0 (random), 1 (p1, p2)
@@ -64,7 +64,7 @@ class Match(object):
         if order == -1 or (order == 0 and np.random.rand() < 0.5):
             players = self._players[::-1]
 
-        self._game = Game() if initi_state is None else initi_state
+        self._game = Game() if init_state is None else init_state
 
         trace = {'first player': players[0].player,
                  'second_player': players[1].player,
@@ -96,11 +96,11 @@ class Match(object):
                     trace['game'][-1]['reward'] = get_reward(self._game, action, player.player)
                     return trace
 
-    def play(self, order=0, verbose=False, initi_state=None):
+    def play(self, order=0, verbose=False, init_state=None):
         """
         Play one game , return result.
         """
-        trace = self.play_and_trace(order=order, verbose=verbose, initi_state=initi_state)
+        trace = self.play_and_trace(order=order, verbose=verbose, init_state=init_state)
         return trace['result']
 
 
@@ -119,7 +119,7 @@ def demo_fixed_match():
 
     for _ in range(10):
 
-        print("Winner: %s" % match.play(verbose=False, initi_state=starting_point).name)
+        print("Winner: %s" % match.play(verbose=False, init_state=starting_point).name)
         print('\n\n\n----------------------\n')
 
 
@@ -145,9 +145,8 @@ class ResultSet(object):
         self._state_to_ind = {}
         self._gamestates = []  # inverse mapping
 
-
         self._game_traces = {'traces': [],  # list of game trace records (as returned by Match.play_and_trace)
-                             'indsqs': [],  # list of tuples of indices into self._gamestates
+                             'indsqs': [],  # list of tuples of indices into self._gamestates (each tuple is a trace)
                              'played_first': [],  # list of booleans, True if player_mark played first
                              'outcomes': []}  # list of OutcomeEnum values.
 
@@ -164,11 +163,11 @@ class ResultSet(object):
             if state not in self._state_to_ind:
                 self._state_to_ind[state] = len(self._gamestates)
                 self._gamestates.append(state)
-                
+
             indices.append(self._state_to_ind[state])
 
         return tuple(indices)
-    
+
     def get_summary(self):
         """
         Get a summary of the results.
@@ -240,8 +239,8 @@ class ResultSet(object):
         n_v_traces = 2  # Hard code, x first above, o first below
 
         num_wins, num_draws, num_losses = np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.WIN), \
-                                          np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.DRAW), \
-                                          np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.LOSS)
+            np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.DRAW), \
+            np.sum(np.array(self._game_traces['outcomes']) == OutcomeEnum.LOSS)
 
         n_win_cols = min(num_wins, int(np.ceil(n_h_traces/3)))
         n_loss_cols = min(num_losses, int(np.ceil(n_h_traces/3)))
@@ -324,14 +323,13 @@ class ResultSet(object):
             :param trace_lists: list of lists of {'trace': <trace info>, 'count': <int>}, 1 list per row
             :param kind: 'wins', 'losses', or 'draws'
             """
-            count = self._counts
             x_left = group_bbox['x'][0] + trace_pad[0]
             y_top = group_bbox['y'][0] + trace_pad[1]
             for row in range(len(trace_lists)):
                 y = y_top + row * (trace_h + trace_pad[1])
                 for col in range(len(trace_lists[row])):
                     x = x_left + col * (trace_w + trace_pad[0])
-                    trace = trace_lists[row][col]['trace']
+                    trace = trace_lists[row][col]['traces'][0]
                     count = trace_lists[row][col]['count']
                     header_text = ("x %i" % count) if count > 1 else " "
                     pos = (x, y)
@@ -345,6 +343,7 @@ class ResultSet(object):
         draw_samp_size = {'cols': n_draw_cols, 'num': n_draws, 'rows': n_rows}
         loss_samp_size = {'cols': n_loss_cols, 'num': n_losses, 'rows': n_rows}
         sample = self.resample(win_samp_size, draw_samp_size, loss_samp_size)
+        import ipdb; ipdb.set_trace()
         _draw_trace_set(win_bbox, sample['wins'])
         _draw_trace_set(draw_bbox, sample['draws'])
         _draw_trace_set(loss_bbox,  sample['losses'])
@@ -381,41 +380,48 @@ class ResultSet(object):
                                                            was_first == self._game_traces['played_first'][i]))]
             ind_seqs = [self._game_traces['indsqs'][i] for i in subset]
             counts = {}
-            for ind_seq in ind_seqs:
+            for i, ind_seq in enumerate(ind_seqs):
                 if ind_seq not in counts:
-                    counts[ind_seq] = 0
-                counts[ind_seq] += 1
+                    counts[ind_seq] = {'count': 0,
+                                       'traces': []}
+                counts[ind_seq]['count'] += 1
+                counts[ind_seq]['traces'].append(self._game_traces['traces'][subset[i]])
             unique_game_seqs = list(counts.keys())
             seqences_rank = sorted(list(range(len(unique_game_seqs))),
-                                   key=lambda i: counts[unique_game_seqs[i]], reverse=True)
+                                   key=lambda i: counts[unique_game_seqs[i]]['count'], reverse=True)
+
             return {'order': seqences_rank,
-                    'counts': counts,
+                    'trace_counts': counts,
                     'unique_game_seqs': unique_game_seqs,
-                    'subset': subset,
+                    'subset': np.array(subset),
                     'n_unique': len(unique_game_seqs)}
 
         def _get_sample(outcome, info):
-                
+
             if info['rows'] == 2:
                 p_first = _get_ranking(outcome, was_first=True)
                 p_second = _get_ranking(outcome, was_first=False)
-
                 n = info['cols']
                 if show_most_freq_offset is None:
                     sample_ind_rows = [np.random.choice(p_first['n_unique'], size=n, replace=False),
                                        np.random.choice(p_second['n_unique'], size=n, replace=False)]
                 else:
-                    sample_ind_rows = [[i + show_most_freq_offset for i in range(min(n, p_first['n_unique']))],
-                                       [i + show_most_freq_offset for i in range(min(n, p_second['n_unique']))]]
-                    
+                    sample_first = [i + show_most_freq_offset for i in range(min(n, p_first['n_unique']))]
+                    sample_second = [i + show_most_freq_offset for i in range(min(n, p_second['n_unique']))]
+                sample_first = [s for s in sample_first if s < p_first['n_unique']]
+                sample_second = [s for s in sample_second if s < p_second['n_unique']]
+                sample_ind_rows = [sample_first, sample_second
+                                   ]
             elif info['rows'] != 2:
                 raise NotImplemented
 
-            import ipdb; ipdb.set_trace()
-            sample = [[{'trace': self._game_traces['traces'][p_first['subset'][p_first['order'][i]]],
-                        'count': p_first['counts'][p_first['unique_game_seqs'][p_first['order'][i]]]}
-                       for i in sample_inds] 
-                    for sample_inds in sample_ind_rows]
+            sample = [[{'traces': p_first['trace_counts'][p_first['unique_game_seqs'][p_first['order'][i]]]['traces'],
+                        'count': p_first['trace_counts'][p_first['unique_game_seqs'][p_first['order'][i]]]['count']}
+                       for i in sample_first],
+
+                      [{'traces': p_second['trace_counts'][p_second['unique_game_seqs'][p_second['order'][i]]]['traces'],
+                        'count': p_second['trace_counts'][p_second['unique_game_seqs'][p_second['order'][i]]]['count']}
+                       for i in sample_second]]
 
             return sample
 
@@ -446,9 +452,9 @@ def test_result_set(n=100):
     # Set the resize callback to update the image size
     cv2.setMouseCallback("results", on_mouse)
 
-    #import pprint
-    #print("Test set summary:")
-    #pprint.pprint(rs.get_summary(), width=40)
+    # import pprint
+    # print("Test set summary:")
+    # pprint.pprint(rs.get_summary(), width=40)
 
     while True:
         _, _, width, height = cv2.getWindowImageRect("results")

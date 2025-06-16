@@ -23,7 +23,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                 'space_sizes': [12, 2, 2, 2, 2, 3]
           },  # sizes of the spaces between states in pixels
           'margin_rel': .0025,  # margin between frames in relative coordinates
-
+        'img_margin_rel': .01,  # for tab and viz images
           'fonts': {'panel_title': ('Helvetica', 16, 'underline'),
                     'title': ('Helvetica', 16, 'underline'),
                     'default': ('Helvetica', 12),
@@ -37,9 +37,9 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                     
         'cv2_fonts': {'main_titles': {'font': cv2.FONT_HERSHEY_COMPLEX,'scale':1.0},
                       'sub_titles': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.9},
-                      'state_captions': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.7, 'v_spacing':.4}},
+                      'state_captions': {'font': cv2.FONT_HERSHEY_SIMPLEX, 'scale': 0.65, 'v_spacing':.4}},
 
-          'results_viz': {
+           'results_viz': {
 
               'summary': {
                   'font': cv2.FONT_HERSHEY_COMPLEX,
@@ -51,12 +51,12 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   'bar_w_frac': 0.5,  # fraction of font scale for bar graph
                   'graph_width_frac': 0.4,  # fraction of the summary area width for the bar graph
                   'graph_indent_frac': 0.1},
-    'match_area': {
+               'match_area': {
                   'trace_size': (90, 380),  # w,h in pixels
-                  'trace_pad_frac': .025,  # between traces, frac of trace width
+                  'trace_pad_frac': (.0, 0.05),  # between traces, frac of trace width, height
                   'group_pad_frac': .01,  # between groups, frac of img_width
-                  'group_bar_thickness_frac': 0.02},  # fraction of image height for the bar thickness, fraction of image_width
-    'trace_params': {
+                  'group_bar_thickness_frac': 0.01},  # fraction of image height for the bar thickness, fraction of image_width
+               'trace_params': {
                   'header_font_frac': 0.45,  # fraction of image side length for the header text
                   'return_font_frac': 0.4,  # same for the return text
                   'col_title_frac': 0.4,  # fraction of image side length for the column titles
@@ -64,7 +64,8 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   # fraction of image side length to use as padding between images and text, etc.
                   "pad_frac": 0.2,
                   'font': cv2.FONT_HERSHEY_SIMPLEX,
-                  'colors': COLOR_SCHEME}},
+                  'colors': COLOR_SCHEME},
+               'color_key': {'width': 200, 'height': 80}},
 
           'keys': {'h_pad_px': 15}}
 
