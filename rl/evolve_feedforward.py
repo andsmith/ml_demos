@@ -29,8 +29,8 @@ NEAT_REWARDS = {Mark.X: {Result.X_WIN: 1.0, Result.O_WIN: -1.0, Result.DRAW: 0.0
 
 
 NETWORK_DIR = 'NEAT_nets'
-CONFIG_FILE = 'config-feedforward'
-
+CONFIG_FILE = 'config-gameplay'
+CONFIG_TEACHER_FILE = 'config-teacher'
 
 # strong/weak, input encoding, pop size , generation
 WINNER_FILE = f'neat-winner-%s_in=%s_p=%i_neval=%i_gen=%i.pkl'
@@ -191,16 +191,52 @@ class Arena(object):
         player_moves = np.sum(final_state.state == self.player_mark)
         return (went_first, player_moves)
 
-def get_opponent():
 
+class Teacher(Arena):
+    def __init__(self, teacher_pi):
+        self._pi = teacher_pi  # the policy to use as a teacher
+        self.player = self._pi.player  # the player's mark is the same as the teacher's mark
+        self.env = Environment(opponent_policy=self._pi, player_mark=self.player)
+        self._states_by_turn = self._get_all_updatable_states()
+
+    def eval_network(self, net_pi, n_states=1000):
+        """
+        See if the network chooses one of the teacher's recommended actions for a sample of n_states states.
+        :param net_pi: A NNetPolicy instance with the network to evaluate.
+        :param n_states: The number of states to sample.
+        :returns: The fraction of states where the network chose one of the teacher's recommended actions.
+        """
+        n_first = min(n_states // 2, len(self._states_by_turn['first']))
+        n_second = min(n_states - n_first, len(self._states_by_turn['second']))
+        going_first_states = np.random.choice(self._states_by_turn['first'], n_first, replace=False).tolist()
+        going_second_states = np.random.choice(self._states_by_turn['second'], n_second, replace=False).tolist()
+        good_choice = [self._eval_decision(net_pi, state) for state in going_first_states + going_second_states]
+        return np.mean(good_choice), (n_first, n_second)
+
+    def _eval_decision(self, net_pi, state):
+        net_choice = net_pi.recommend_action(state)[0][0]
+        teacher_choices = [action for action, _ in self._pi.recommend_action(state)]
+        was_good = net_choice in teacher_choices
+        return was_good
+
+# Baseline player policies:
+
+
+def get_opponent():
     return MiniMaxPolicy(Mark.O)
 
 
+def get_teacher():
+    return MiniMaxPolicy(Mark.X)
+
+
+# Shared state for multiprocessing pool:
+shared_stats = [None]
 shared_arena = [None]
 
 
 def eval_genome_gameplay(genome, config, get_stats=True):
-    # Run this in parallel (via the ParallelEvaluatorWStats) 
+    # Run this in parallel (via the ParallelEvaluatorWStats)
     arena = shared_arena[0] if shared_arena[0] is not None else Arena(
         get_opponent(), strong=config.strong, sliding_loss=config.sliding_loss)
     shared_arena[0] = arena  # store the arena for the rest of the genomes
@@ -213,7 +249,6 @@ def eval_genome_gameplay(genome, config, get_stats=True):
     return genome.fitness
 
 
-shared_stats = [None]
 def eval_genomes_gameplay(genomes, config):
     # For running serially (via neat.Population.run())
     shared_stats[0] = {'n_matches': [], 'n_repeats': []}  # reset stats for this run
@@ -223,27 +258,54 @@ def eval_genomes_gameplay(genomes, config):
         shared_stats[0]['n_repeats'].append(repeat_stats['n_repeats'])
 
 
+shared_teacher = [None]
+
+
+def eval_genome_teacher(genome, config, get_stats=True):
+    # Run this in parallel (via the ParallelEvaluatorWStats)
+    teacher = shared_teacher[0] if shared_teacher[0] is not None else Teacher(
+        get_teacher())
+    shared_teacher[0] = teacher  # store the teacher for the rest of the genomes
+    agent = NNetPolicy(neat.nn.FeedForwardNetwork.create(genome, config))
+    good_choice_fraction, n_train = teacher.eval_network(agent, n_states=config.n_evals)
+    genome.fitness = good_choice_fraction
+    if get_stats:
+        return genome.fitness, {'n_matches': n_train, 'n_repeats':0}
+    return genome.fitness
+
+
+def eval_genomes_teacher(genomes, config):
+    shared_stats[0] = {'n_matches': [], 'n_repeats': []}
+    for genome_id, genome in genomes:
+        eval_genome_teacher(genome, config, get_stats=True)
+        shared_stats[0]['n_matches'].append(config.n_evals)
+
 
 def _get_args():
-    parser = argparse.ArgumentParser(description="Run NEAT evolution for Tic Tac Toe.")
-    parser.add_argument('-n', '--neat_config', type=str, default=CONFIG_FILE,
-                        help='Path to the NEAT configuration file (default: %s)' % CONFIG_FILE)
+    parser = argparse.ArgumentParser(description="Run NEAT evolution for Tic Tac Toe:")
+    parser.add_argument('-n', '--neat_config', type=str, default=None,
+                        help='NEAT config file (default: config-gameplay or config-teacher).')
     parser.add_argument('-c', '--n_cores', type=int, default=12,
-                        help='Number of cores to use for parallel evaluation (default: 12)')
+                        help='Number of cores to use for parallel evaluation (default: 12).')
     parser.add_argument('-g', '--generations', type=int, default=100,
-                        help='Number of generations to run (default: 100)')
+                        help='Number of generations to run (default: 100).')
     parser.add_argument('-e', '--n_eval', type=int, default=100,
-                        help='Number of games to play for evaluating a genome (default: 100)')
+                        help='Number of games to play for evaluating a genome (default: 100).')
     parser.add_argument('-p', '--pop_size', type=int, default=None,
-                        help='Population size, overrides config file (default: [config file value])')
+                        help='Population size, overrides config file (default: [config file value]).')
     parser.add_argument('-r', '--resume_population', type=str, default=None,
-                        help='Path to a population file to resume from (default: None, start fresh)')
+                        help='Path to a population file to resume from (default: None, start fresh).')
     parser.add_argument('-s', '--strong', action='store_true',
-                        help='If set, learn to maximize reward from any state, otherwise learn from initial states only')
+                        help='If set, learn to maximize reward from any state, otherwise learn from initial states only.')
     parser.add_argument('-l', '--sliding_loss', action='store_true', default=True,
-                        help='If set, use "sliding" loss penalty, losing in fewer moves is worse (default: True)')
+                        help='If set, use "sliding" loss penalty, losing in fewer moves is worse (default: True).')
+    parser.add_argument('-t', '--teacher', action='store_true', default=False,
+                        help='If true, evaluate by comparing w/teacher policy, if false, by playing the opponent policy (default: False).')
     args = parser.parse_args()
 
+    if args.neat_config is None:
+        args.neat_config = CONFIG_FILE if not args.teacher else CONFIG_TEACHER_FILE
+        
     net_dir = os.path.join(os.getcwd(), 'NEAT_nets')
 
     net_dir = os.path.join(os.getcwd(), NETWORK_DIR)
@@ -257,6 +319,7 @@ def _get_args():
     return {'config_file': args.neat_config,
             'sliding_loss': args.sliding_loss,
             'network_dir': net_dir,
+            'teacher': args.teacher,
             'generations': args.generations,
             'pop_file': pop_file,
             'pop_size': args.pop_size,
@@ -272,12 +335,14 @@ def run():
     args = _get_args()
 
     # Load configuration.
+    logging.info("Loading NEAT configuration from: %s" % args['config_file'])
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          args['config_file'])
     config.n_evals = args['n_eval']  # set the number of evaluations per genome
     config.strong = args['strong']  # set the strong/weak flag
     config.sliding_loss = args['sliding_loss']  # set the sliding loss flag
+    config.teacher = args['teacher']  # set the teacher flag
 
     if args['pop_size'] is not None:
         # Override the population size in the configuration.
@@ -294,7 +359,13 @@ def run():
         else:
             logging.warning("Resuming population with no stats file, statistics will be accumulated from this point on.")
             stats = neat.StatisticsReporter()
+        
+        # override values:    
         config = p.config  # use the config from the loaded population
+
+        # backwards compatibility:
+        if not hasattr(config, 'teacher'):
+            config.teacher = False
 
         if config.genome_config.num_inputs not in NNetPolicy.INPUT_ENC_SIZES:
             raise ValueError("Invalid number of inputs in the configuration: %d" % config.genome_config.num_inputs)
@@ -306,8 +377,12 @@ def run():
         print("------>  Population fitness criterion: %s" % config.fitness_criterion)
         print("------>  Population fitness threshold: %s" % config.fitness_threshold)
         print("------>  n_evals: %d" % config.n_evals)
-        print("------>  Finding strong solution?: %s" % config.strong)
-        print("------>  Sliding loss?: %s" % config.sliding_loss)
+        print("------>  Training type: %s" %
+              'playing against opponent' if not config.teacher else 'comparing with teacher policy')
+        if not config.teacher:
+            print("------>  Finding strong solution?: %s" % config.strong)
+            print("------>  Sliding loss?: %s" % config.sliding_loss)
+
     else:
         # Create a new population.
         print("------>  Creating new population")
@@ -315,27 +390,30 @@ def run():
         stats = neat.StatisticsReporter()
 
     # add checkpointing reporter
-    strongweak_string = 'strong' if args['strong'] else 'weak'
+    strongweak_string = ('strong' if args['strong'] else 'weak') if not config.teacher else 'mimic'
 
     encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
     chk_file_prefix = os.path.join(os.getcwd(), NETWORK_DIR, POPULATION_PREFIX %
                                    (strongweak_string, encoding, config.pop_size, args['n_eval']))
     checkpointer = CheckpointerWithStats(generation_interval=None,   # do this manually
-                                     time_interval_seconds=None,
-                                     filename_prefix=chk_file_prefix)
+                                         time_interval_seconds=None,
+                                         filename_prefix=chk_file_prefix)
     p.add_reporter(checkpointer)
     reporters = [StdOutReporterWGenomSizesPlus(True), stats]
     for r in reporters:
         p.add_reporter(r)
-    pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
+
+    if config.teacher:
+        pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_teacher) if args['n_cores'] > 1 else None
+    else:
+        pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
 
     # visualizer:
     plt.ion()
     fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-    
-    
-    visualizer=Visualizer(ax, config)
-    #plt.show()
+
+    visualizer = Visualizer(ax, config)
+    # plt.show()
 
     pop_backup_interval = 10  # generations between population backups
     for iter in range(args['generations']):
@@ -345,23 +423,28 @@ def run():
 
         if args['n_cores'] > 1:
             pe.reset_stats()
-            winner=p.run(pe.evaluate, 1)
+            winner = p.run(pe.evaluate, 1)
             repeat_stats = pe.stats
-            
+
         else:
-            winner=p.run(eval_genomes_gameplay, 1)
+
+            if config.teacher:
+                winner = p.run(eval_genomes_teacher, 1)
+            else:
+                winner = p.run(eval_genomes_gameplay, 1)
+
             repeat_stats = shared_stats[0]  # get the stats from the last run
 
         # Print evaluation repeat statistics:
-        print("\tEvaluation played %.2f (%.3f) different games, %.2f (%.3f) repeats" %
-              (np.mean(repeat_stats['n_matches']),
-               np.std(repeat_stats['n_matches']),
-                np.mean(repeat_stats['n_repeats']),
-                np.std(repeat_stats['n_repeats'])))
+        print("\tEvaluation played %s (%s) different games, %s (%s) repeats" %
+              (np.mean(repeat_stats['n_matches'],axis=0),
+               np.std(repeat_stats['n_matches'],axis=0),
+               np.mean(repeat_stats['n_repeats'],axis=0),
+               np.std(repeat_stats['n_repeats'],axis=0)))
 
         # Save the winner.
-        encoding=NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
-        filename=os.path.join(os.getcwd(), NETWORK_DIR, WINNER_FILE % (
+        encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
+        filename = os.path.join(os.getcwd(), NETWORK_DIR, WINNER_FILE % (
             strongweak_string, encoding, config.pop_size, args['n_eval'], p.generation))
         with open(filename, 'wb') as f:
             pickle.dump(winner, f)
@@ -374,12 +457,12 @@ def run():
                                          generation=p.generation,
                                          stats=stats)
             print("\t----------> Save population checkpoint: %s" % (filename,))
-        
+
         visualizer.update(stats)
         fig.canvas.draw()
         fig.canvas.flush_events()
         plt.pause(0.001)
-        
+
 
 if __name__ == '__main__':
     # Determine path to configuration file. This path manipulation is
