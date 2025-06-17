@@ -49,6 +49,7 @@ LAYOUT = {'frames': {'control': {'x_rel': (0.0, HALF_MID_X),
                   # fit text in spaces this X smaller than vertical room allows.
                   'text_spacing_frac': .7,
                   'bar_w_frac': 0.5,  # fraction of font scale for bar graph
+                  'graph_sep': 10,
                   'graph_width_frac': 0.4,  # fraction of the summary area width for the bar graph
                   'graph_indent_frac': 0.1},
                'match_area': {

@@ -80,13 +80,13 @@ class PolicyEvaluationResultViz(object):
         x_center = int(img.shape[1] / 2)
         w, h = img.shape[1], img.shape[0]
         # first calculate font sizes
-        n_lines = 4  # len(summary_lines)
+        n_lines = 5  # len(summary_lines)
         height = self._layout['summary']['size']['h'] - self._layout['summary']['text_indent'][1] * 2
         h_per_line = int(height / n_lines)  # of text
 
         lefover_x_space = w - self._color_key_size[0]
         summary_width = int(lefover_x_space * self._layout['summary']['graph_width_frac'])
-        graph_width = int(summary_width * self._layout['summary']['graph_width_frac']
+        total_graph_width = int(summary_width * self._layout['summary']['graph_width_frac']
                           * (1.0 - self._layout['summary']['graph_indent_frac']))
 
         font_scale = get_font_scale(self._layout['summary']['font'], h_per_line *
@@ -112,43 +112,43 @@ class PolicyEvaluationResultViz(object):
             return pos, txt_height, txt_width, baseline
 
         # on the left, print the policy names, the number of policy differences and the number of games played.
-        summary_lines = OrderedDict()
-        summary_lines['player1'] = 'Player 1: %s' % self._pi
-        summary_lines['player2'] = 'Player 2: %s' % self._opp_pi
-        summary_lines['n_diffs'] = 'pi_1(s) != pi_2(s): %i / %i' % (self._n_diffs,
-                                                                    len(self._updatable_states))
-        # Write text stats, remember y positions for the bar graph
 
         y0 = self._layout['summary']['text_indent'][1]
         x0 = self._layout['summary']['text_indent'][0]
 
-        max_w = 0
-        for i, (line_key, line) in enumerate(summary_lines.items()):
-            pos, _, w, _ = _draw_text(line, (x0, y0), self._colors['text'], font_scale=font_scale)
+        # Policy names:
+        summary_lines = OrderedDict()
+        summary_lines['player1'] = 'Player 1: %s' % self._pi
+        summary_lines['player2'] = 'Player 2: %s' % self._opp_pi
 
+        max_w = 0
+        summary_y = y0 + h_per_line 
+        for i, (line_key, line) in enumerate(summary_lines.items()):
+            pos, _, w, _ = _draw_text(line, (x0, summary_y), self._colors['text'], font_scale=font_scale)
             img[pos[0], pos[1], :] = (0, 0, 255)
-            y0 += h_per_line
+            summary_y += h_per_line
             max_w = max(max_w, w)
+        graph_indent_x = int(max_w * self._layout['summary']['graph_indent_frac'])
 
         # Now print & draw the results graph:
-        x_far_left = max_w + self._layout['summary']['text_indent'][0] * 2 + \
-            x0 + int(max_w * self._layout['summary']['graph_indent_frac'])
+        x_far_left = x0 + max_w + self._layout['summary']['text_indent'][0] * 2 
         x_far_right = img.shape[1] - self._layout['summary']['text_indent'][0]
-        x_center = int((x_far_left + x_far_right) / 2)
 
         summary_lines = OrderedDict()
         count_ucount_result = self._results.get_summary()
-        sum_result = {'games': count_ucount_result['n_games'],
+        
+        sum_result = {'games': count_ucount_result['games']['total'],
                       'wins': count_ucount_result['wins']['total'],
                       'draws': count_ucount_result['draws']['total'],
                       'losses': count_ucount_result['losses']['total']}
-
-        summary_lines['games'] = 'N Games: %i' % sum_result['games']
+        
+        summary_lines['first'] = " " # first is blank
         summary_lines['wins'] = '%s-Wins: %i' % (self._player.name, sum_result['wins'])
         summary_lines['draws'] = '%s-Draws: %i' % (self._player.name, sum_result['draws'])
         summary_lines['losses'] = '%s-Losses: %i' % (self._player.name, sum_result['losses'])
+        summary_lines['games'] = 'Games: %i' % sum_result['games']
 
-        x0 = x_far_left
+        x0 = x_far_left+graph_indent_x
         y0 = self._layout['summary']['text_indent'][1]
         y_text_pos = {}
         y_text_heights = {}
@@ -159,16 +159,22 @@ class PolicyEvaluationResultViz(object):
             y_text_pos[line_key] = base_pos, baseline
             y_text_heights[line_key] = heigt
             y0 += h_per_line
-            if line_key != 'games':
-                width = max(width, txt_width)
+            width = max(width, txt_width)
 
-        # Draw the bar graph
-        x_left = x_far_left + width + self._layout['summary']['text_indent'][0] // 2
-        x_right = x_left + graph_width
-
+        # Draw the bar graphs(x-first, then x-second)
+        x_left_t = x0 + width + self._layout['summary']['text_indent'][0] // 2
+        x_right_t = x_left_t + total_graph_width
+        x_sep =  self._layout['summary']['graph_sep']
+        graph_width = (total_graph_width -x_sep)//2
         bar_max_len = graph_width
+        
+        x_first_left = x_left_t
+        x_second_left = x_first_left + graph_width + x_sep
+        x_first_right = x_first_left + graph_width
+        x_second_right = x_second_left + graph_width
 
-        def _draw_bar(color, x_frac_rel, name):
+        def _draw_bar(color, x_span, x_frac_rel, name):
+            x_left, x_right = x_span
             print("Drawing bar for %s with x_frac_rel=%f  (spanning x %i to %i)" % (name, x_frac_rel, x_left, x_right))
             x_end = x_right - int((1.0-x_frac_rel) * bar_max_len)
             x_start = x_left
@@ -180,16 +186,35 @@ class PolicyEvaluationResultViz(object):
             y_end = y_t_bottom
             print('\tDrawing bar  x(%i, %i)  y(%i, %i)' % (x_start, x_end, y_start, y_end))
             img[y_start:y_end, x_start:x_end] = color
-        n_games = sum_result['games']
-        # before drawing bars, shade area under it
-        grah_y_top = y_text_pos['wins'][0][1] - y_text_heights['wins'] - y_text_pos['losses'][1]
-        grah_y_bottom = y_text_pos['losses'][0][1] + y_text_pos['losses'][1]
-        patch = img[grah_y_top:grah_y_bottom, x_left:x_right]
-        img[grah_y_top:grah_y_bottom, x_left:x_right] = (patch * .9).astype(np.uint8)
 
-        _draw_bar(self._colors['color_x'], sum_result['wins'] / n_games, 'wins')
-        _draw_bar(self._colors['color_draw'], sum_result['draws'] / n_games, 'draws')
-        _draw_bar(self._colors['color_o'], sum_result['losses'] / n_games, 'losses')
+        # before drawing bars, shade area under it
+        graph_y_top = y_text_pos['wins'][0][1] - y_text_heights['wins'] - y_text_pos['losses'][1]
+        graph_y_bottom = y_text_pos['losses'][0][1] + y_text_pos['losses'][1]
+
+        def gray_box(x_span):
+            patch = img[graph_y_top:graph_y_bottom, x_span[0]:x_span[1]]
+            img[graph_y_top:graph_y_bottom, x_span[0]:x_span[1]] = (patch * .9).astype(np.uint8)
+            
+        gray_box((x_second_left, x_second_right))
+        gray_box((x_first_left, x_first_right))
+        # draw x-first bars:
+        n_first = count_ucount_result['games']['as_first']
+        n_second = count_ucount_result['games']['as_second']
+        _draw_bar(self._colors['color_x'], (x_first_left, x_first_right), count_ucount_result['wins']['as_first'] / n_first, 'wins')
+        _draw_bar(self._colors['color_o'], (x_first_left, x_first_right), count_ucount_result['losses']['as_first'] / n_first, 'losses')
+        _draw_bar(self._colors['color_draw'], (x_first_left, x_first_right), count_ucount_result['draws']['as_first'] / n_first, 'draws')
+        # draw x-second bars:
+        _draw_bar(self._colors['color_x'], (x_second_left, x_second_right), count_ucount_result['wins']['as_second'] / n_second, 'wins')
+        _draw_bar(self._colors['color_o'], (x_second_left, x_second_right), count_ucount_result['losses']['as_second'] / n_second, 'losses')
+        _draw_bar(self._colors['color_draw'], (x_second_left, x_second_right), count_ucount_result['draws']['as_second'] / n_second, 'draws')
+
+        x_first_txt_pos = (x_first_left, graph_y_top- h_per_line//3)   
+        x_second_txt_pos = (x_second_left, graph_y_top- h_per_line//3)
+        cv2.putText(img, 'X-First', x_first_txt_pos, self._layout['summary']['font'],
+                    font_scale * .9, self._colors['text'], 1, cv2.LINE_AA)
+        cv2.putText(img, 'X-Second', x_second_txt_pos, self._layout['summary']['font'],
+                    font_scale* .9, self._colors['text'], 1, cv2.LINE_AA)
+        
     
 
     def _get_distinct_results_and_counts(self):

@@ -188,7 +188,9 @@ class ResultSet(object):
                 'draws': {'total': np.sum(draws),
                           'as_first': np.sum(draws[went_first]),
                           'as_second': np.sum(draws[~went_first])},
-                'n_games': n_games}
+                'games': {'total': n_games,
+                          'as_first': np.sum(went_first),
+                          'as_second': np.sum(~went_first)}}
 
     def _get_outcome(self, trace):
         """
@@ -343,7 +345,7 @@ class ResultSet(object):
         draw_samp_size = {'cols': n_draw_cols, 'num': n_draws, 'rows': n_rows}
         loss_samp_size = {'cols': n_loss_cols, 'num': n_losses, 'rows': n_rows}
         sample = self.resample(win_samp_size, draw_samp_size, loss_samp_size)
-        import ipdb; ipdb.set_trace()
+
         _draw_trace_set(win_bbox, sample['wins'])
         _draw_trace_set(draw_bbox, sample['draws'])
         _draw_trace_set(loss_bbox,  sample['losses'])

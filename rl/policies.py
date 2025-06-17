@@ -2,7 +2,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from tic_tac_toe import Game
-from game_base import Mark, Result, TERMINAL_REWARDS, get_reward
+from game_base import Mark, Result, get_reward
 
 
 class Policy(ABC):

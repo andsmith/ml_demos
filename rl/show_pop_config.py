@@ -48,11 +48,12 @@ def _show_genome_config(filename):
     n_hidden = len(connection_dests )-n_outputs
     hidden_ids = [node_id for node_id in connection_dests if node_id >= n_outputs]
     hidden_conns = [conn for conn in genome.connections if conn[0] in hidden_ids or conn[1] in hidden_ids]
+    import ipdb; ipdb.set_trace()
     print(f"Number of input nodes:  {n_inputs}")
     print(f"Number of output nodes: {n_outputs}")
     print(f"Number of hidden nodes: {n_hidden}")
-    print(f"Number of connections: {len(genome.connections)}")
-    print(f"Number of hidden_connections: {len(hidden_conns)}")
+    print(f"Number of total connections: {len(genome.connections)}")
+    print(f"Number of hidden connections: {len(hidden_conns)}")
     enabled_connections = sum(1 for conn in genome.connections if genome.connections[conn].enabled)
     print(f"Enabled connections: {enabled_connections} ({enabled_connections / len(genome.connections):.2%})")
     print("========================================")
