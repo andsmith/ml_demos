@@ -10,9 +10,10 @@ from backprop_net import train_net
 import argparse
 
 
-def play_minimax(n_games, n_hidden, n_epochs):
+def play_minimax(n_games, n_hidden, n_epochs, encoding='one-hot'):
     img_size = (1590, 980)
-    agent = train_net(n_hidden=n_hidden, n_epochs=n_epochs)
+
+    agent = train_net(n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding)
     opponent = MiniMaxPolicy(player_mark=Mark.O)
     viz = PolicyEvaluationResultViz(player_policy=agent, opp_policy=opponent)
 
@@ -28,7 +29,9 @@ def get_args():
                         help='Number of hidden units learning the policy.')
     parser.add_argument('-n', '--n_games', type=int, default=2000,
                         help='Number of games to play.')
-    parser.add_argument('-e', '--n_epochs', type=int, default=5000,)
+    parser.add_argument('-e','--encoding', type=str, default='one-hot',
+                        help='Encoding for the neural network input. Options: "enc", "enc+free", "one-hot".')
+    parser.add_argument('-i', '--n_epochs', type=int, default=5000,)
     args = parser.parse_args()
     return args
 
@@ -36,4 +39,4 @@ def get_args():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = get_args()
-    play_minimax(args.n_games, args.n_hidden, n_epochs=args.n_epochs)
+    play_minimax(args.n_games, args.n_hidden, n_epochs=args.n_epochs, encoding=args.encoding)

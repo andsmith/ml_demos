@@ -67,7 +67,7 @@ class Arena(object):
 
         self._states_by_turn = self._get_all_updatable_states()
 
-    def play_matches(self, agent_pi, n_games, n_games_min=50, repeat_timeout=9):
+    def play_matches(self, agent_pi, n_games, n_games_min=50, repeat_timeout=15):
         """
         Play a match with the opponent policy.
 
@@ -80,6 +80,7 @@ class Arena(object):
             (Only relevant for weak solutions, where the agent starts from one of the initial states.)
         :returns: The average reward per game.
         """
+        n_games_min = min(n_games_min, n_games)  # don't play less than n_games_min
         def _hash_trace(trace):
             def _hash_state(state):
                 return tuple(state.state.flatten().astype(int))
@@ -382,6 +383,7 @@ def run():
     config.strong = args['strong']  # set the strong/weak flag
     config.sliding_loss = args['sliding_loss']  # set the sliding loss flag
     config.teacher = args['teacher']  # set the teacher flag
+    config_compat = config.species_set_config.compatibility_threshold
 
     if args['pop_size'] is not None:
         # Override the population size in the configuration.
@@ -400,10 +402,21 @@ def run():
             logging.warning("Resuming population with no stats file, statistics will be accumulated from this point on.")
             stats = neat.StatisticsReporter()
 
-        # override values:
-        config = p.config  # use the config from the loaded population
+        # CONFIG RESOLUTION:
 
-        # backwards compatibility:
+        # Use the CMD-line value for these:
+        # n_evals = config.n_evals  already set above
+
+        # Use the checkpoint's config for these:
+        config = p.config  
+
+        # Use the config file's values for these:
+        if config.species_set_config.compatibility_threshold != config_compat:
+            print("------>  Population loaded with different compatibility threshold: %f, using %f" %
+                  (config.species_set_config.compatibility_threshold, config_compat))
+            config.species_set_config.compatibility_threshold = config_compat  # use the compatibility threshold from the config file
+
+        # BACKWARD COMPATIBILITY:
         if not hasattr(config, 'teacher'):
             config.teacher = False
 
@@ -448,7 +461,7 @@ def run():
     else:
         pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
 
-    visualizer = None
+    visualizer,fig = None,None
     if not args['no_plot']:
         plt.ion()
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))

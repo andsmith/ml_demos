@@ -39,14 +39,14 @@ enabled_default         = True
 enabled_mutate_rate     = 0.02
 
 feed_forward            = True
-initial_connection      = full
+initial_connection      = full_direct
 
 # node add/remove rates
 node_add_prob           = 0.1
 node_delete_prob        = 0.1
 
 # network parameters
-num_hidden              = 0
+num_hidden              = 9
 num_inputs              = 18
 num_outputs             = 9
 
@@ -69,7 +69,7 @@ weight_mutate_rate      = 0.25
 weight_replace_rate     = 0.05
 
 [DefaultSpeciesSet]
-compatibility_threshold = 1.3
+compatibility_threshold = 1.8
 
 [DefaultStagnation]
 species_fitness_func = max
