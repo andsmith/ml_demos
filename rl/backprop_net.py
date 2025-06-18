@@ -122,16 +122,22 @@ class BackpropNet(NNetPolicy):
         net_actions = [act_prob[0] for act_prob in self.recommend_action(state, model=model)]
         teacher_actions = [act_prob[0] for act_prob in self._teacher.pi.recommend_action(state)]
         good = [net_action in teacher_actions for net_action in net_actions]
-        return np.mean(good)
+        return np.mean(good), len(net_actions), good
 
-    def eval(self, model=None):
+    def score(self, model=None):
         model = self._model if model is None else model
         first, second = self._teacher._states_by_turn['first'], self._teacher._states_by_turn['second']
-        first_eval = np.mean([self._eval_state(state, model=model) for state in first])
-        second_eval = np.mean([self._eval_state(state, model=model) for state in second])
-        mean_eval = (first_eval + second_eval) / 2.0
-        # logging.info("Evaluation, net-first: %.2f, net-second: %.2f, mean: %.2f" % (first_eval, second_eval, mean_eval))
-        return mean_eval
+        all_states = first + second
+        scores = []
+        n_acts = []
+        perfect = []
+        for state in all_states:
+            score, n_actions, good = self._eval_state(state, model=model)
+            scores.append(score)
+            n_acts.append(n_actions)
+            perfect.append(np.all(good))
+
+        return np.mean(scores), np.array(n_acts), np.array(perfect)
 
     def _train(self, n_epochs):
         x, y, w = self._teacher.extract_dataset(encoding=self.encoding)
@@ -159,6 +165,8 @@ class BackpropNet(NNetPolicy):
         logging.info("\tencoding: %s" % self.encoding)
         logging.info("\tweight alpha: %.2f" % self.weight_alpha)
         logging.info("\tweight range:  %.6f - %.6f" % (np.min(w), np.max(w)))
+        if n_epochs > 1:
+            logging.info("\tn_epochs: %d" % n_epochs)
         logging.info("")
 
         for epoch in range(n_epochs):
@@ -172,7 +180,7 @@ class BackpropNet(NNetPolicy):
 
             else:
                 # Using Sequential model with 'adam' optimizer
-                model.fit(x, y, sample_weight=w, batch_size=64, verbose=0, shuffle=True)  # has its own print
+                model.fit(x, y, sample_weight=w, batch_size=256, verbose=0, shuffle=True)  # has its own print
                 new_model = ShallowNet(model, activation=ACTIVATION)
                 loss = model.history.history['loss'][0]
                 if epoch % 25 == 0 or epoch == n_epochs - 1:
@@ -184,11 +192,22 @@ class BackpropNet(NNetPolicy):
 
         model = new_model  # use the shallow net or the MLPRegressor
 
-        final_loss = self.eval(model)
-        logging.info("Training done, final loss on all states: %.4f" % final_loss)
+        final_results = self.score(model)
 
-        final_loss = self.eval(best_model)
-        logging.info("Training done, best loss on all states: %.4f" % final_loss)
+        def print_score(results):
+            logging.info("\tmean teacher-agreement ratio: %.6f" % results[0])
+            logging.info("\tmean deterministic action dist: %.2f" % np.mean(results[1]))
+            logging.info("\tnum perfect actions: %d/%d" % (np.sum(results[2]), len(results[2])))
+            deterministic = (np.array(results[1]) == 1)
+            logging.info("\tmean det & perfect: %.6f" % np.mean(results[2][deterministic]))
+
+        logging.info("Training done, final model score:")
+        print_score(final_results)
+        
+        if n_epochs > 1:
+            final_loss = self.score(best_model)
+            logging.info("best model score:")
+            print_score(final_loss)
 
         return model
 
