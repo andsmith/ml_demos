@@ -1,6 +1,6 @@
 import pickle
 from tic_tac_toe import Game
-from evolve_feedforward import NNetPolicy, Arena
+from evolve_feedforward import CONFIG_FILE
 import neat
 import visualize
 
@@ -12,7 +12,7 @@ def load(filename):
 
 def show(genome):
         
-    config_file = 'config-feedforward'
+    config_file = CONFIG_FILE
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
         neat.DefaultSpeciesSet, neat.DefaultStagnation,
                             config_file)

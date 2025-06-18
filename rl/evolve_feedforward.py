@@ -81,6 +81,7 @@ class Arena(object):
         :returns: The average reward per game.
         """
         n_games_min = min(n_games_min, n_games)  # don't play less than n_games_min
+
         def _hash_trace(trace):
             def _hash_state(state):
                 return tuple(state.state.flatten().astype(int))
@@ -222,41 +223,38 @@ class Teacher(Arena):
         return was_good
 
     def extract_dataset(self, encoding='enc'):
-        # Get all input/ouputs possible for supervised training.
+        """
+        Extract a dataset from the teacher policy for supervised training.
+           inputs: encoded game state
+           outputs:  9 element vector (one-hot encoding of which actions the teacher recommends)
+           weights:  Getting early decisions right is more important, so states with more empty cells are weighted higher.
+                  w' = (n_free/9)     
+        :param encoding: The encoding to use for the inputs.
+            see tic_tac_toe.Game.to_nnet_input() for options.
+        :returns: A tuple of (inputs, outputs, weights) for supervised training.
+        """
         logging.info("Extracting dataset from the teacher policy...")
         inputs = []
         outputs = []
+        weights = []
 
         for state in self._states_by_turn['first'] + self._states_by_turn['second']:
             input = state.to_nnet_input(method=encoding)
             output = np.zeros(9)
             teacher_actions = self.pi.recommend_action(state)
+
             for action, _ in teacher_actions:
                 row, col = action
                 output[row*3+col] = 1.0
 
+            weights.append(state.n_free()/9.0)
             inputs.append(input)
             outputs.append(output)
         inputs = np.array(inputs)
         outputs = np.array(outputs)
         logging.info("Extracted %s inputs and %s outputs from the teacher policy." % ((inputs.shape), (outputs.shape)))
 
-        return inputs, outputs
-
-
-def write_dataset(encoding='enc+free'):
-    """
-    Extract a dataset from the teacher policy for supervised training.
-    :param encoding: The encoding to use for the inputs.
-    :returns: A tuple of (inputs, outputs) for supervised training.
-    """
-    teacher = Teacher(get_teacher_pi())
-    inputs, outputs = teacher.extract_dataset(encoding=encoding)
-    with open("Minimax_data.pkl", 'wb') as f:
-        pickle.dump((inputs, outputs), f)
-
-
-# Baseline player policies:
+        return inputs, outputs, weights
 
 
 def get_opponent_pi():
@@ -340,7 +338,7 @@ def _get_args():
                         help='If set, do not plot the statistics during evolution (default: False).')
     parser.add_argument('-t', '--teacher', action='store_true', default=False,
                         help='If true, evaluate by comparing w/teacher policy, if false, by playing the opponent policy (default: False).')
-    parser.add_argument('-m','--compatibility_threshold', type=float, default=None,
+    parser.add_argument('-m', '--compatibility_threshold', type=float, default=None,
                         help='Compatibility threshold for species, overrides config file (default: [config file value]).')
     args = parser.parse_args()
 
@@ -391,7 +389,7 @@ def run():
         # Override the population size in the configuration.
         config.pop_size = args['pop_size']
         print("------>  Population overriding config file value, size set to %d" % config.pop_size)
-    old_stats=False
+    old_stats = False
     # Create the population, which is the top-level object for a NEAT run.
     if args['pop_file'] is not None:
         # Load a population from a file.
@@ -406,20 +404,20 @@ def run():
 
         # CONFIG RESOLUTION:
 
-
         # Use the checkpoint's config for these:
-        config = p.config  
+        config = p.config
 
         # Use the CMD-line value for these:
         config.n_evals = args['n_eval']
 
         # Use the config file's values for these:
-        if args['compatibility_threshold'] is not None:    
-            config.species_set_config.compatibility_threshold = args['compatibility_threshold']  # use the compatibility threshold from the CMD-line
-            
+        if args['compatibility_threshold'] is not None:
+            # use the compatibility threshold from the CMD-line
+            config.species_set_config.compatibility_threshold = args['compatibility_threshold']
+
         print("------>  Speciating with compatibility threshold: %f" %
               config.species_set_config.compatibility_threshold)
-        
+
         # BACKWARD COMPATIBILITY:
         if not hasattr(config, 'teacher'):
             config.teacher = False
@@ -465,15 +463,15 @@ def run():
     else:
         pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
 
-    visualizer,fig = None,None
+    visualizer, fig = None, None
     if not args['no_plot']:
         plt.ion()
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
         visualizer = Visualizer(ax, config)
         if old_stats:
-            
+
             _update_vis(visualizer, stats, fig)
-    
+
     pop_backup_interval = 10  # generations between population backups
     for iter in range(args['generations']):
 
@@ -517,10 +515,10 @@ def run():
                                          stats=stats)
             print("\t----------> Save population checkpoint: %s" % (filename,))
 
-        
         _update_vis(visualizer, stats, fig)
 
-def _update_vis(visualizer,stats,fig):
+
+def _update_vis(visualizer, stats, fig):
     if visualizer is not None:
         visualizer.update(stats)
         fig.canvas.draw()

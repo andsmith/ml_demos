@@ -10,10 +10,10 @@ from backprop_net import train_net
 import argparse
 
 
-def play_minimax(n_games, n_hidden, n_epochs, encoding='one-hot'):
+def play_minimax(n_games, n_hidden, n_epochs, w_alpha, encoding='one-hot'):
     img_size = (1590, 980)
 
-    agent = train_net(n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding)
+    agent = train_net(n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding, w_alpha=w_alpha)
     opponent = MiniMaxPolicy(player_mark=Mark.O)
     viz = PolicyEvaluationResultViz(player_policy=agent, opp_policy=opponent)
 
@@ -27,6 +27,8 @@ def get_args():
     parser = argparse.ArgumentParser(description="Play NEAT vs MiniMax")
     parser.add_argument('n_hidden', type=int,
                         help='Number of hidden units learning the policy.')
+    parser.add_argument('-w', '--weight_alpha', type=float, default=0.0,
+                        help='Weigh early moves more, w=(n_free)^weight_alpha, default off.')
     parser.add_argument('-n', '--n_games', type=int, default=2000,
                         help='Number of games to play.')
     parser.add_argument('-e','--encoding', type=str, default='one-hot',
@@ -39,4 +41,4 @@ def get_args():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = get_args()
-    play_minimax(args.n_games, args.n_hidden, n_epochs=args.n_epochs, encoding=args.encoding)
+    play_minimax(args.n_games, args.n_hidden, n_epochs=args.n_epochs, encoding=args.encoding, w_alpha=args.weight_alpha)

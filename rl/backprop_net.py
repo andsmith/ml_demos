@@ -5,7 +5,7 @@ from neat_util import NNetPolicy
 import pickle
 import numpy as np
 from game_base import Mark, Result
-from sklearn.neural_network import MLPRegressor as MLPC
+from sklearn.neural_network import MLPRegressor as MLPR
 import logging
 from perfect_player import MiniMaxPolicy
 from evolve_feedforward import Teacher
@@ -18,7 +18,7 @@ class MiniMaxEvaluator(MiniMaxPolicy):
         return self._pi
 
 
-ACTIVATION = 'tanh'
+ACTIVATION = 'relu'
 
 
 class ShallowNet(object):
@@ -60,9 +60,10 @@ class ShallowNet(object):
 
 
 class BackpropNet(NNetPolicy):
-    def __init__(self, teacher, n_hidden=18, encoding='one-hot', n_epochs=200):
+    def __init__(self, teacher, n_hidden=18, encoding='one-hot', n_epochs=200, weight_alpha=0.0):
         self._model = None
         self.encoding = encoding
+        self.weight_alpha = weight_alpha
         self.player = teacher.player
         self._teacher = teacher
         self.n_hidden = n_hidden
@@ -72,16 +73,24 @@ class BackpropNet(NNetPolicy):
     def __str__(self):
         return f"BackpropNet(h={self.n_hidden})({self.player.name})"
 
-    def _get_model(self):
+    def _get_model(self, use_mlpr=True):
+        """
+        If there are no hidden units, we need to use a Sequential model.
+        If there are hidden units, we can use a MLPR or a Sequential model.
+
+        NOTE: Only the sequential model can train with sample weights
+
+        """
+
         number_of_outputs = 9
         test_state = self._teacher._states_by_turn['first'][-10]
         test_input = test_state.to_nnet_input(method=self.encoding)
         number_of_features = len(test_input)
         input_shape = (number_of_features,)
         if self.n_hidden > 0:
-            if True:
-                model = MLPC(hidden_layer_sizes=(self.n_hidden,),
-                             max_iter=4520*2, batch_size=4520,
+            if use_mlpr:
+                model = MLPR(hidden_layer_sizes=(self.n_hidden,),
+                             max_iter=4520*self.n_hidden, batch_size=4520,
                              solver='lbfgs', activation=ACTIVATION)
             else:
                 # Define the model sequentially.
@@ -121,39 +130,57 @@ class BackpropNet(NNetPolicy):
         first_eval = np.mean([self._eval_state(state, model=model) for state in first])
         second_eval = np.mean([self._eval_state(state, model=model) for state in second])
         mean_eval = (first_eval + second_eval) / 2.0
-        logging.info("Evaluation, net-first: %.2f, net-second: %.2f, mean: %.2f" % (first_eval, second_eval, mean_eval))
+        # logging.info("Evaluation, net-first: %.2f, net-second: %.2f, mean: %.2f" % (first_eval, second_eval, mean_eval))
         return mean_eval
 
     def _train(self, n_epochs):
-        x, y = self._teacher.extract_dataset(encoding=self.encoding)
+        x, y, w = self._teacher.extract_dataset(encoding=self.encoding)
         x = np.array(x)
         y = np.array(y)
+        w = np.array(w) ** self.weight_alpha  # apply weight alpha to the weights
 
-        model, test_state = self._get_model()
+        # Use the MLPR only if there are hidden units but no sample weights.
+
+        model, _ = self._get_model(use_mlpr=(self.n_hidden > 0 and self.weight_alpha == 0.0))
 
         best_loss = np.inf
         best_model = None
-        using_sequential = isinstance(model, Sequential)
+        last_loss = np.inf
+        if isinstance(model, Sequential):
+            using_sequential = True
+        else:
+            using_sequential = False
+            n_epochs = 1
+
+        model_kind = "Sequential" if using_sequential else "MLPRegressor"
+        logging.info("")
+        logging.info("Starting training with model:  %s" % model_kind)
+        logging.info("\thidden units: %d" % self.n_hidden)
+        logging.info("\tencoding: %s" % self.encoding)
+        logging.info("\tweight alpha: %.2f" % self.weight_alpha)
+        logging.info("\tweight range:  %.6f - %.6f" % (np.min(w), np.max(w)))
+        logging.info("")
 
         for epoch in range(n_epochs):
 
-            if epoch % 100 == 0:
-                print(f"Epoch {epoch+1}/{n_epochs}")
             if not using_sequential:
-                model.partial_fit(x, y)
+                # Using MLPRegressor with lbfgs solver
+                model.fit(x, y)
                 new_model = model
                 loss = model.loss_
-                if epoch % 100 == 0:
-                    logging.info(f"Epoch {epoch}, Loss: {loss}")
+                logging.info("\tlbfgs fit - loss: %.7f" % loss)
+
             else:
-                model.fit(x, y)  # has its own print
+                # Using Sequential model with 'adam' optimizer
+                model.fit(x, y, sample_weight=w, batch_size=64, verbose=0, shuffle=True)  # has its own print
                 new_model = ShallowNet(model, activation=ACTIVATION)
                 loss = model.history.history['loss'][0]
+                if epoch % 25 == 0 or epoch == n_epochs - 1:
+                    logging.info("\tEpoch %i, ADAM fit - loss: %.7f" % (epoch, loss))
 
             if loss < best_loss:
                 best_loss = loss
                 best_model = new_model
-
 
         model = new_model  # use the shallow net or the MLPRegressor
 
@@ -177,9 +204,9 @@ class BackpropNet(NNetPolicy):
         return [(best_act, 1.0)]
 
 
-def train_net(n_hidden=18, n_epochs=2000, encoding='enc+free'):
+def train_net(n_hidden=18, n_epochs=2000, encoding='enc+free', w_alpha=0.0):
     t = Teacher(MiniMaxEvaluator(Mark.X))
-    bn = BackpropNet(teacher=t, n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding)
+    bn = BackpropNet(teacher=t, n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding, weight_alpha=w_alpha)
     return bn
 
 
