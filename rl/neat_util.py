@@ -83,10 +83,19 @@ class NNetPolicy(Policy):
     def __init__(self, nnet):
         self._net = nnet
         input_size = len(nnet.input_nodes)
-        self.encoding = encoding = self.INPUT_ENC_SIZES[input_size]
+        self.encoding = self.INPUT_ENC_SIZES[input_size]
         self.player = Mark.X
-        if encoding not in ['enc', 'enc+free', 'one-hot']:
+        if self.encoding not in ['enc', 'enc+free', 'one-hot']:
             raise ValueError("encoding must be one of 'enc', 'enc+free', or 'one-hot'")
+        
+    def _net_out_to_action(self, state,output):
+        open_actions = state.get_actions(flat_inds=True)
+        valid_outputs = output[open_actions]
+        bi = np.argmax(valid_outputs)
+        best_action_flat = open_actions[bi]  # get the index of the best action in the flat array
+        best_action = (best_action_flat // 3, best_action_flat % 3)  # convert to (i, j) tuple
+        return [(best_action, 1.0)]  # return the best action with probability 1.0
+
 
     def recommend_action(self, state):
         """
@@ -96,10 +105,4 @@ class NNetPolicy(Policy):
         """
         inputs = state.to_nnet_input(method=self.encoding)  # get the input for the neural network
         output = np.array(self._net.activate(inputs))
-        open_actions = state.get_actions(flat_inds=True)
-        valid_outputs = output[open_actions]
-        bi = np.argmax(valid_outputs)
-        best_action_flat = open_actions[bi]  # get the index of the best action in the flat array
-        best_action = (best_action_flat // 3, best_action_flat % 3)  # convert to (i, j) tuple
-        return [(best_action, 1.0)]  # return the best action with probability 1.0
-
+        return self._net_out_to_action(state,output)

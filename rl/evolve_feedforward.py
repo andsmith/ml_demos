@@ -21,6 +21,7 @@ from neat_util import NNetPolicy, StdOutReporterWGenomSizesPlus, ParallelEvaluat
 from visualize import Visualizer
 import time
 import argparse
+from tic_tac_toe import Game
 from neat.six_util import itervalues, iterkeys
 from checkpoint import CheckpointerWithStats
 import matplotlib.pyplot as plt
@@ -194,10 +195,11 @@ class Arena(object):
 
 class Teacher(Arena):
     def __init__(self, teacher_pi):
-        self._pi = teacher_pi  # the policy to use as a teacher
-        self.player = self._pi.player  # the player's mark is the same as the teacher's mark
-        self.env = Environment(opponent_policy=self._pi, player_mark=self.player)
+        self.pi = teacher_pi  # the policy to use as a teacher
+        self.player = self.pi.player  # the player's mark is the same as the teacher's mark
+        self.env = Environment(opponent_policy=self.pi, player_mark=self.player)
         self._states_by_turn = self._get_all_updatable_states()
+
 
     def eval_network(self, net_pi, n_states=1000):
         """
@@ -215,18 +217,53 @@ class Teacher(Arena):
 
     def _eval_decision(self, net_pi, state):
         net_choice = net_pi.recommend_action(state)[0][0]
-        teacher_choices = [action for action, _ in self._pi.recommend_action(state)]
+        teacher_choices = [action for action, _ in self.pi.recommend_action(state)]
         was_good = net_choice in teacher_choices
         return was_good
+    
+    def extract_dataset(self, encoding='enc'):
+        # Get all input/ouputs possible for supervised training.
+        logging.info("Extracting dataset from the teacher policy...")
+        inputs = []
+        outputs = []
+
+
+        for state in self._states_by_turn['first'] + self._states_by_turn['second']:
+            input = state.to_nnet_input(method=encoding)
+            output = np.zeros(9)
+            teacher_actions = self.pi.recommend_action(state)
+            for action, _ in teacher_actions:
+                row,col = action
+                output[row*3+col]=1.0
+            
+            inputs.append(input)
+            outputs.append(output)
+        inputs = np.array(inputs)
+        outputs = np.array(outputs)
+        logging.info("Extracted %s inputs and %s outputs from the teacher policy." % ((inputs.shape), (outputs.shape)))
+        
+        return inputs, outputs
+    
+def write_dataset(encoding='enc+free'):
+    """
+    Extract a dataset from the teacher policy for supervised training.
+    :param encoding: The encoding to use for the inputs.
+    :returns: A tuple of (inputs, outputs) for supervised training.
+    """
+    teacher = Teacher(get_teacher_pi())
+    inputs, outputs = teacher.extract_dataset(encoding=encoding)
+    with open("Minimax_data.pkl", 'wb') as f:
+        pickle.dump((inputs, outputs), f)
+
 
 # Baseline player policies:
 
 
-def get_opponent():
+def get_opponent_pi():
     return MiniMaxPolicy(Mark.O)
 
 
-def get_teacher():
+def get_teacher_pi():
     return MiniMaxPolicy(Mark.X)
 
 
@@ -238,7 +275,7 @@ shared_arena = [None]
 def eval_genome_gameplay(genome, config, get_stats=True):
     # Run this in parallel (via the ParallelEvaluatorWStats)
     arena = shared_arena[0] if shared_arena[0] is not None else Arena(
-        get_opponent(), strong=config.strong, sliding_loss=config.sliding_loss)
+        get_opponent_pi(), strong=config.strong, sliding_loss=config.sliding_loss)
     shared_arena[0] = arena  # store the arena for the rest of the genomes
     net = neat.nn.FeedForwardNetwork.create(genome, config)
     agent = NNetPolicy(net)
@@ -469,4 +506,5 @@ if __name__ == '__main__':
     # here so that the script will run successfully regardless of the
     # current working directory.
     logging.basicConfig(level=logging.INFO)
+    get_dataset()
     run()

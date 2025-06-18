@@ -18,7 +18,7 @@ class Visualizer(object):
         self._config = config
         self._iter = 0
         self._axes = axes
-        strongweak_string = "STRONG" if config.strong else "WEAK"
+        strongweak_string = ("STRONG" if config.strong else "WEAK") if not config.teacher else 'MIMIC'
         enc_size_str = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
         self._title = "NEAT, finding %s solution, pop-size=%i\ninput-encoding: %s,  samp/eval=%i" % (
             strongweak_string, config.pop_size, enc_size_str, config.n_evals)
