@@ -42,3 +42,22 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     args = get_args()
     play_minimax(args.n_games, args.n_hidden, n_epochs=args.n_epochs, encoding=args.encoding, w_alpha=args.weight_alpha)
+
+
+
+    """
+    backprop_play:
+
+    Notes:  Show hidden=0 first, 3 encodings, w=0.0, 1.0, 2.0.
+
+    Show hiden=18, enc+hot, w=0, w=2
+
+    Show hiden 36 with/without weights
+        python .\backprop_play.py 36 -e enc+free -w 2.0  -i 700
+        
+    Show hidden 150
+    
+    
+    
+    
+    """

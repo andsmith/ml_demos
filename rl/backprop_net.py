@@ -139,12 +139,20 @@ class BackpropNet(NNetPolicy):
 
         return np.mean(scores), np.array(n_acts), np.array(perfect)
 
-    def _train(self, n_epochs):
+    def _train(self, n_epochs, remove_no_choice=True):
         x, y, w = self._teacher.extract_dataset(encoding=self.encoding)
         x = np.array(x)
         y = np.array(y)
-        w = np.array(w) ** self.weight_alpha  # apply weight alpha to the weights
+        w = np.array(w)
 
+        if remove_no_choice:
+            valid = w>np.min(w)
+            x = x[valid]
+            y = y[valid]
+            w = w[valid]
+            print("  --------------------->  Removing no-choice samples: %i" % np.sum(~valid))
+
+        w = w ** self.weight_alpha
         # Use the MLPR only if there are hidden units but no sample weights.
 
         model, _ = self._get_model(use_mlpr=(self.n_hidden > 0 and self.weight_alpha == 0.0))
@@ -201,6 +209,7 @@ class BackpropNet(NNetPolicy):
             deterministic = (np.array(results[1]) == 1)
             logging.info("\tmean det & perfect: %.6f" % np.mean(results[2][deterministic]))
 
+        logging.info("")
         logging.info("Training done, final model score:")
         print_score(final_results)
         

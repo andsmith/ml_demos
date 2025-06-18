@@ -226,7 +226,7 @@ class Teacher(Arena):
         """
         Extract a dataset from the teacher policy for supervised training.
            inputs: encoded game state
-           outputs:  9 element vector (one-hot encoding of which actions the teacher recommends)
+           outputs:  9 element vector (+1 for teacher's choice(s), -1 for other free actions, 0 for taken cells)
            weights:  Getting early decisions right is more important, so states with more empty cells are weighted higher.
                   w' = (n_free/9)     
         :param encoding: The encoding to use for the inputs.
@@ -241,11 +241,18 @@ class Teacher(Arena):
         for state in self._states_by_turn['first'] + self._states_by_turn['second']:
             input = state.to_nnet_input(method=encoding)
             output = np.zeros(9)
-            teacher_actions = self.pi.recommend_action(state)
+            teacher_action_dist = self.pi.recommend_action(state)
+            teacher_actions = [action for action, _ in teacher_action_dist]
+            free_actions = state.get_actions()
 
-            for action, _ in teacher_actions:
+            for action in teacher_actions:
                 row, col = action
                 output[row*3+col] = 1.0
+
+            for action in free_actions:
+                if action not in teacher_actions:
+                    row, col = action
+                    output[row*3+col] = -1.0
 
             weights.append(state.n_free()/9.0)
             inputs.append(input)
