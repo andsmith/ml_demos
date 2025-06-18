@@ -387,7 +387,7 @@ def run():
         # Override the population size in the configuration.
         config.pop_size = args['pop_size']
         print("------>  Population overriding config file value, size set to %d" % config.pop_size)
-
+    old_stats=False
     # Create the population, which is the top-level object for a NEAT run.
     if args['pop_file'] is not None:
         # Load a population from a file.
@@ -395,6 +395,7 @@ def run():
         p = CheckpointerWithStats.restore_checkpoint(args['pop_file'])
         if isinstance(p, tuple):
             p, stats = p
+            old_stats = True
         else:
             logging.warning("Resuming population with no stats file, statistics will be accumulated from this point on.")
             stats = neat.StatisticsReporter()
@@ -421,7 +422,7 @@ def run():
         if not config.teacher:
             print("------>  Finding strong solution?: %s" % config.strong)
             print("------>  Sliding loss?: %s" % config.sliding_loss)
-
+        print("------>  Plotting graphs: %s" % (not args['no_plot']))
     else:
         # Create a new population.
         print("------>  Creating new population")
@@ -450,9 +451,12 @@ def run():
     visualizer = None
     if not args['no_plot']:
         plt.ion()
-        visualizer = Visualizer(ax, config)
         fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-
+        visualizer = Visualizer(ax, config)
+        if old_stats:
+            
+            _update_vis(visualizer, stats, fig)
+    
     pop_backup_interval = 10  # generations between population backups
     for iter in range(args['generations']):
 
@@ -496,11 +500,15 @@ def run():
                                          stats=stats)
             print("\t----------> Save population checkpoint: %s" % (filename,))
 
-        if visualizer is not None:
-            visualizer.update(stats)
-            fig.canvas.draw()
-            fig.canvas.flush_events()
-            plt.pause(0.001)
+        
+        _update_vis(visualizer, stats, fig)
+
+def _update_vis(visualizer,stats,fig):
+    if visualizer is not None:
+        visualizer.update(stats)
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+        plt.pause(0.001)
 
 
 if __name__ == '__main__':
