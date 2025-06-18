@@ -71,7 +71,7 @@ class BackpropNet(NNetPolicy):
             self._model = self._train(n_epochs)
 
     def __str__(self):
-        return f"BackpropNet(h={self.n_hidden})({self.player.name})"
+        return f"BackpropNet(in={self.encoding},h={self.n_hidden})({self.player.name})"
 
     def _get_model(self, use_mlpr=True):
         """
