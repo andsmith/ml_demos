@@ -200,7 +200,6 @@ class Teacher(Arena):
         self.env = Environment(opponent_policy=self.pi, player_mark=self.player)
         self._states_by_turn = self._get_all_updatable_states()
 
-
     def eval_network(self, net_pi, n_states=1000):
         """
         See if the network chooses one of the teacher's recommended actions for a sample of n_states states.
@@ -220,30 +219,30 @@ class Teacher(Arena):
         teacher_choices = [action for action, _ in self.pi.recommend_action(state)]
         was_good = net_choice in teacher_choices
         return was_good
-    
+
     def extract_dataset(self, encoding='enc'):
         # Get all input/ouputs possible for supervised training.
         logging.info("Extracting dataset from the teacher policy...")
         inputs = []
         outputs = []
 
-
         for state in self._states_by_turn['first'] + self._states_by_turn['second']:
             input = state.to_nnet_input(method=encoding)
             output = np.zeros(9)
             teacher_actions = self.pi.recommend_action(state)
             for action, _ in teacher_actions:
-                row,col = action
-                output[row*3+col]=1.0
-            
+                row, col = action
+                output[row*3+col] = 1.0
+
             inputs.append(input)
             outputs.append(output)
         inputs = np.array(inputs)
         outputs = np.array(outputs)
         logging.info("Extracted %s inputs and %s outputs from the teacher policy." % ((inputs.shape), (outputs.shape)))
-        
+
         return inputs, outputs
-    
+
+
 def write_dataset(encoding='enc+free'):
     """
     Extract a dataset from the teacher policy for supervised training.
@@ -307,7 +306,7 @@ def eval_genome_teacher(genome, config, get_stats=True):
     good_choice_fraction, n_train = teacher.eval_network(agent, n_states=config.n_evals)
     genome.fitness = good_choice_fraction
     if get_stats:
-        return genome.fitness, {'n_matches': n_train, 'n_repeats':0}
+        return genome.fitness, {'n_matches': n_train, 'n_repeats': 0}
     return genome.fitness
 
 
@@ -336,13 +335,15 @@ def _get_args():
                         help='If set, learn to maximize reward from any state, otherwise learn from initial states only.')
     parser.add_argument('-l', '--sliding_loss', action='store_true', default=True,
                         help='If set, use "sliding" loss penalty, losing in fewer moves is worse (default: True).')
+    parser.add_argument('-np', '--no_plot', action='store_true', default=False,
+                        help='If set, do not plot the statistics during evolution (default: False).')
     parser.add_argument('-t', '--teacher', action='store_true', default=False,
                         help='If true, evaluate by comparing w/teacher policy, if false, by playing the opponent policy (default: False).')
     args = parser.parse_args()
 
     if args.neat_config is None:
         args.neat_config = CONFIG_FILE if not args.teacher else CONFIG_TEACHER_FILE
-        
+
     net_dir = os.path.join(os.getcwd(), 'NEAT_nets')
 
     net_dir = os.path.join(os.getcwd(), NETWORK_DIR)
@@ -356,6 +357,7 @@ def _get_args():
     return {'config_file': args.neat_config,
             'sliding_loss': args.sliding_loss,
             'network_dir': net_dir,
+            'no_plot': args.no_plot,
             'teacher': args.teacher,
             'generations': args.generations,
             'pop_file': pop_file,
@@ -396,8 +398,8 @@ def run():
         else:
             logging.warning("Resuming population with no stats file, statistics will be accumulated from this point on.")
             stats = neat.StatisticsReporter()
-        
-        # override values:    
+
+        # override values:
         config = p.config  # use the config from the loaded population
 
         # backwards compatibility:
@@ -445,12 +447,11 @@ def run():
     else:
         pe = ParallelEvaluatorWStats(args['n_cores'], eval_genome_gameplay) if args['n_cores'] > 1 else None
 
-    # visualizer:
-    plt.ion()
-    fig, ax = plt.subplots(1, 2, figsize=(12, 6))
-
-    visualizer = Visualizer(ax, config)
-    # plt.show()
+    visualizer = None
+    if not args['no_plot']:
+        plt.ion()
+        visualizer = Visualizer(ax, config)
+        fig, ax = plt.subplots(1, 2, figsize=(12, 6))
 
     pop_backup_interval = 10  # generations between population backups
     for iter in range(args['generations']):
@@ -474,10 +475,10 @@ def run():
 
         # Print evaluation repeat statistics:
         print("\tEvaluation played %s (%s) different games, %s (%s) repeats" %
-              (np.mean(repeat_stats['n_matches'],axis=0),
-               np.std(repeat_stats['n_matches'],axis=0),
-               np.mean(repeat_stats['n_repeats'],axis=0),
-               np.std(repeat_stats['n_repeats'],axis=0)))
+              (np.mean(repeat_stats['n_matches'], axis=0),
+               np.std(repeat_stats['n_matches'], axis=0),
+               np.mean(repeat_stats['n_repeats'], axis=0),
+               np.std(repeat_stats['n_repeats'], axis=0)))
 
         # Save the winner.
         encoding = NNetPolicy.INPUT_ENC_SIZES[config.genome_config.num_inputs]
@@ -495,10 +496,11 @@ def run():
                                          stats=stats)
             print("\t----------> Save population checkpoint: %s" % (filename,))
 
-        visualizer.update(stats)
-        fig.canvas.draw()
-        fig.canvas.flush_events()
-        plt.pause(0.001)
+        if visualizer is not None:
+            visualizer.update(stats)
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            plt.pause(0.001)
 
 
 if __name__ == '__main__':
@@ -506,5 +508,5 @@ if __name__ == '__main__':
     # here so that the script will run successfully regardless of the
     # current working directory.
     logging.basicConfig(level=logging.INFO)
-    get_dataset()
+
     run()
