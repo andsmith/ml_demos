@@ -11,9 +11,9 @@ from baseline_players import HeuristicPlayer
 import neat
 import sys
 import argparse
-from evolve_feedforward import NETWORK_DIR
+from evolve_feedforward import CONFIG_FILE
 import os
-config_file = os.path.join(os.getcwd(), 'config-feedforward')
+config_file = os.path.join(os.getcwd(), CONFIG_FILE)
 config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                      neat.DefaultSpeciesSet, neat.DefaultStagnation,
                      config_file)

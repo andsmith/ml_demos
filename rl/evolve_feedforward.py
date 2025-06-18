@@ -67,7 +67,7 @@ class Arena(object):
 
         self._states_by_turn = self._get_all_updatable_states()
 
-    def play_matches(self, agent_pi, n_games, n_games_min=50, repeat_timeout=15):
+    def play_matches(self, agent_pi, n_games, n_games_min=50, repeat_timeout=25):
         """
         Play a match with the opponent policy.
 
@@ -301,7 +301,7 @@ shared_teacher = [None]
 def eval_genome_teacher(genome, config, get_stats=True):
     # Run this in parallel (via the ParallelEvaluatorWStats)
     teacher = shared_teacher[0] if shared_teacher[0] is not None else Teacher(
-        get_teacher())
+        get_teacher_pi())
     shared_teacher[0] = teacher  # store the teacher for the rest of the genomes
     agent = NNetPolicy(neat.nn.FeedForwardNetwork.create(genome, config))
     good_choice_fraction, n_train = teacher.eval_network(agent, n_states=config.n_evals)
@@ -340,6 +340,8 @@ def _get_args():
                         help='If set, do not plot the statistics during evolution (default: False).')
     parser.add_argument('-t', '--teacher', action='store_true', default=False,
                         help='If true, evaluate by comparing w/teacher policy, if false, by playing the opponent policy (default: False).')
+    parser.add_argument('-m','--compatibility_threshold', type=float, default=None,
+                        help='Compatibility threshold for species, overrides config file (default: [config file value]).')
     args = parser.parse_args()
 
     if args.neat_config is None:
@@ -356,6 +358,7 @@ def _get_args():
 
     pop_file = os.path.join(os.getcwd(), sys.argv[2]) if len(sys.argv) > 2 else None
     return {'config_file': args.neat_config,
+            'compatibility_threshold': args.compatibility_threshold,
             'sliding_loss': args.sliding_loss,
             'network_dir': net_dir,
             'no_plot': args.no_plot,
@@ -379,11 +382,10 @@ def run():
     config = neat.Config(neat.DefaultGenome, neat.DefaultReproduction,
                          neat.DefaultSpeciesSet, neat.DefaultStagnation,
                          args['config_file'])
-    config.n_evals = args['n_eval']  # set the number of evaluations per genome
+    # use these values regardless:
     config.strong = args['strong']  # set the strong/weak flag
     config.sliding_loss = args['sliding_loss']  # set the sliding loss flag
     config.teacher = args['teacher']  # set the teacher flag
-    config_compat = config.species_set_config.compatibility_threshold
 
     if args['pop_size'] is not None:
         # Override the population size in the configuration.
@@ -404,18 +406,20 @@ def run():
 
         # CONFIG RESOLUTION:
 
-        # Use the CMD-line value for these:
-        # n_evals = config.n_evals  already set above
 
         # Use the checkpoint's config for these:
         config = p.config  
 
-        # Use the config file's values for these:
-        if config.species_set_config.compatibility_threshold != config_compat:
-            print("------>  Population loaded with different compatibility threshold: %f, using %f" %
-                  (config.species_set_config.compatibility_threshold, config_compat))
-            config.species_set_config.compatibility_threshold = config_compat  # use the compatibility threshold from the config file
+        # Use the CMD-line value for these:
+        config.n_evals = args['n_eval']
 
+        # Use the config file's values for these:
+        if args['compatibility_threshold'] is not None:    
+            config.species_set_config.compatibility_threshold = args['compatibility_threshold']  # use the compatibility threshold from the CMD-line
+            
+        print("------>  Speciating with compatibility threshold: %f" %
+              config.species_set_config.compatibility_threshold)
+        
         # BACKWARD COMPATIBILITY:
         if not hasattr(config, 'teacher'):
             config.teacher = False
