@@ -44,10 +44,18 @@ def _show_genome_config(filename):
     connection_dests = [node_key for node_key in genome.nodes]
     n_inputs = -np.min(connection_origins)
     # find the highest consecutive node id
-    n_outputs = np.where(np.diff(connection_dests)>1)[0][0] + 1
-    n_hidden = len(connection_dests )-n_outputs
-    hidden_ids = [node_id for node_id in connection_dests if node_id >= n_outputs]
-    hidden_conns = [conn for conn in genome.connections if conn[0] in hidden_ids or conn[1] in hidden_ids]
+    # import ipdb; ipdb.set_trace()
+    breaks = np.diff(connection_dests)
+    if np.all(breaks==1) :
+        n_outputs = len(connection_dests) 
+        n_hidden=0
+        hidden_conns = []
+        hidden_ids = []
+    else:
+        n_outputs = np.where(breaks>1)[0][0] + 1
+        n_hidden = len(connection_dests )-n_outputs
+        hidden_ids = [node_id for node_id in connection_dests if node_id >= n_outputs]
+        hidden_conns = [conn for conn in genome.connections if conn[0] in hidden_ids or conn[1] in hidden_ids]
     import ipdb; ipdb.set_trace()
     print(f"Number of input nodes:  {n_inputs}")
     print(f"Number of output nodes: {n_outputs}")

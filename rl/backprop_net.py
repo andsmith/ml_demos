@@ -17,7 +17,7 @@ class MiniMaxEvaluator(MiniMaxPolicy):
     def get_policy(self):
         return self._pi
 
-
+BACKPROP_DIR = "ff_nets"
 ACTIVATION = 'relu'
 
 
@@ -59,8 +59,18 @@ class ShallowNet(object):
         return output
 
 
-class BackpropNet(NNetPolicy):
+class BackpropPolicy(NNetPolicy):
     def __init__(self, teacher, n_hidden=18, encoding='one-hot', n_epochs=200, weight_alpha=0.0):
+        player = teacher.player
+        if player != Mark.X and player != Mark.O:
+            raise ValueError("mark must be Mark.X or Mark.O")
+        self.player = player
+        self.opponent = Mark.X if player == Mark.O else Mark.O
+
+        self.winning_result = Result.X_WIN if player == Mark.X else Result.O_WIN
+        self.losing_result = Result.O_WIN if player == Mark.X else Result.X_WIN
+        self.draw_result = Result.DRAW
+        
         self._model = None
         self.encoding = encoding
         self.weight_alpha = weight_alpha
@@ -69,9 +79,26 @@ class BackpropNet(NNetPolicy):
         self.n_hidden = n_hidden
         if self._model is None:
             self._model = self._train(n_epochs)
+    @staticmethod
+    def from_file(filename):
+        """
+        Load a trained BackpropPolicy from a file.
+        :param filename: Path to the file containing the trained model.
+        :return: An instance of BackpropPolicy.
+        """
+        with open(filename, 'rb') as f:
+            net = pickle.load(f)
+        if not isinstance(net, BackpropPolicy):
+            raise ValueError("Loaded model is not an instance of BackpropPolicy")
+        return net
 
     def __str__(self):
-        return f"BackpropNet(in={self.encoding},h={self.n_hidden})({self.player.name})"
+        return f"BackpropPolicy(in={self.encoding},h={self.n_hidden})({self.player.name})"
+    
+    def save(self, filename):
+        with open(filename, 'wb') as f:
+            pickle.dump(self, f)
+        logging.info(f"Saved trained agent to {filename}")
 
     def _get_model(self, use_mlpr=True):
         """
@@ -99,13 +126,19 @@ class BackpropNet(NNetPolicy):
                                     Dense(units=number_of_outputs, activation='linear')])
 
                 model.compile(optimizer='adam', loss='mse')
-
+            
+                        
         else:
-            # Define the model sequentially.
-            model = Sequential([Input(shape=input_shape),
-                                Dense(units=number_of_outputs, activation=ACTIVATION)])
+            if True:
+                # Define the model sequentially.
+                model = Sequential([Input(shape=input_shape),
+                                    Dense(units=number_of_outputs, activation=ACTIVATION)])
 
-            model.compile(optimizer='adam', loss='mse')
+                model.compile(optimizer='adam', loss='mse')
+            else:
+                model = MLPR(hidden_layer_sizes=tuple(),
+                            max_iter=4520*3, batch_size=4520,
+                            solver='lbfgs', activation=ACTIVATION)
 
         return model, test_state
 
@@ -232,15 +265,18 @@ class BackpropNet(NNetPolicy):
         return [(best_act, 1.0)]
 
 
-def train_net(n_hidden=18, n_epochs=2000, encoding='enc+free', w_alpha=0.0):
+def train_net(n_hidden=18, n_epochs=2000, encoding='enc+free', w_alpha=0.0,save=False):
     t = Teacher(MiniMaxEvaluator(Mark.X))
-    bn = BackpropNet(teacher=t, n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding, weight_alpha=w_alpha)
+    bn = BackpropPolicy(teacher=t, n_hidden=n_hidden, n_epochs=n_epochs, encoding=encoding, weight_alpha=w_alpha)
+    if save:
+        filename = f"backprop_net_{n_hidden}_{encoding}_{n_epochs}_{w_alpha}.pkl"
+        bn.save(filename)
     return bn
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     train_net()
-    # bn = BackpropNet(mark=Mark.X, dataset_file="Minimax_data.pkl", n_hidden=10)
+    # bn = BackpropPolicy(mark=Mark.X, dataset_file="Minimax_data.pkl", n_hidden=10)
 
     # print(bn.recommend_action(state))

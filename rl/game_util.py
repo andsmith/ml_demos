@@ -48,7 +48,7 @@ def get_box_placer(img_size, all_states, box_sizes=None, layer_vpad_px=1,
     box_sizes = BOX_SIZES if box_sizes is None else box_sizes
     state_layers = sort_states_into_layers(all_states, player_mark=player)
     if key_size is not None:
-        import ipdb; ipdb.set_trace()
+        #import ipdb; ipdb.set_trace()
         #box_placer = CompactBoxOrganizer(img_size, state_layers, box_sizes, min_key_w=key_size[0], min_key_h=key_size[1],
         #                              layer_vpad_px=layer_vpad_px, layer_bar_w=layer_bar_w)
         box_placer = FixedCellWithKey(img_size, state_layers, box_sizes, min_key_h=key_size[1], min_key_w=key_size[0],  

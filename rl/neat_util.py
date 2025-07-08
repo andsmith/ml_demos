@@ -6,7 +6,7 @@ import neat
 import neat.reporting
 import time
 from neat.reporting import iterkeys
-
+import pickle
 
 class ParallelEvaluatorWStats(neat.ParallelEvaluator):
     def __init__(self, n_workers, eval_function, timeout=None):
@@ -87,6 +87,18 @@ class NNetPolicy(Policy):
         self.player = Mark.X
         if self.encoding not in ['enc', 'enc+free', 'one-hot']:
             raise ValueError("encoding must be one of 'enc', 'enc+free', or 'one-hot'")
+        
+    @staticmethod
+    def from_file(filename, config):
+        """
+        Load a neural network policy from a file.
+        :param filename: The file containing the neural network.
+        :return: An instance of NNetPolicy with the loaded neural network.
+        """
+        with open(filename, 'rb') as f:
+            genome =  pickle.load(f)
+        network = neat.nn.FeedForwardNetwork.create(genome, config)
+        return NNetPolicy(network)
         
     def _net_out_to_action(self, state,output):
         open_actions = state.get_actions(flat_inds=True)
