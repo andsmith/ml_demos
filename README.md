@@ -13,5 +13,7 @@ Demos for Machine Learning Reading Group
 
 * [Spectral Clustering - Cluster a set of objects using only a function measuring the similarity between two of them.](/spectral_clustering/README.md)
 
+* [Likelihood Ratio Test - Compare goodness of fit tests using synthetic data and models of different sizes.](/likelihood_ratio_test/README.md)
+
 #### Requirements
 install with `> pip install -r ml_demos/requirements.txt`
