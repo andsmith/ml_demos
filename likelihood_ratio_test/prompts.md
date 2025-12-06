@@ -37,4 +37,4 @@ Modify code to use kwargs when creating sliders, also fix bug where the mean_dis
 
 [NOTE: initial bug was still present, author fixed by changing `resample=true` in `on_slider_change()`, which is overkill, but fast enough.]
 
-[NOTE: The resulting notebook is basically gmm_gof_demo.ipyndb, with minor changes to the text output format and ]
+[NOTE: The resulting notebook is basically gmm_gof_demo.ipyndb, with minor changes to the text output format and figures.]
