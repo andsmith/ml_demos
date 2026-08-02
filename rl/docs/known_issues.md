@@ -3,21 +3,12 @@
 Status: recorded at restart baseline (commit 58982fd). Items are removed here when
 fixed; milestone tags (M2–M6) refer to the restart roadmap.
 
-## Blocking (app cannot run) — M2
+## Blocking (app cannot run)
 
-- Half-finished `TERMINAL_REWARDS` → `TERM_REWARDS` rename:
-  - `rl_demo.py:25`, `policy_eval.py:7` import `TERMINAL_REWARDS`, which `game_base`
-    no longer exports → ImportError; the new app cannot start.
-  - `policy_eval.py:109` indexes rewards flat (`[result]`); `TERM_REWARDS` is keyed
-    `[player][result]`.
-  - `policy_optim.py:72,89,91` index the aliased player-keyed dict with a `Result`.
-  - `state_embedding.py:165-167` (`StateEmbeddingKey`) uses `TERMINAL_REWARDS` with no
-    import → NameError when the key is drawn.
-- `InPlacePEDemoAlg.__init__` (policy_eval.py:485) calls `super().__init__(app=app,
-  env=env)` — signature mismatch with `PolicyEvalDemoAlg.__init__(app, pi_seed, gamma)`
-  → TypeError if selected.
-- `PIPhases` defined twice with different member names (reinforcement_base.py:11 vs
-  policy_eval.py:24).
+(All fixed in M2: TERM_REWARDS rename completed everywhere; `PolicyEvalDemoAlg` takes
+`(app, env, pi_seed=None, gamma)` matching how `rl_demo` constructs algorithms;
+`PIPhases` now defined once in `reinforcement_base.py` with members
+POLICY_EVAL/POLICY_OPTIM.)
 
 ## Faked / stubbed math — M3, M4
 

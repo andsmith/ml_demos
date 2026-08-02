@@ -23,18 +23,22 @@ Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
 
 ## What is known to be broken
 
-- **The new app does not start**: half-finished `TERM_REWARDS` rename breaks imports
-  (`rl_demo.py:25`, `policy_eval.py:7`, plus mis-keyed lookups). See
-  `docs/known_issues.md` for the full register.
-- Tk widgets are updated from the algorithm thread (crash risk).
+- Tk widgets are updated from the algorithm thread (crash risk; fix in M5).
+- The PE demo's displayed "learning" is placeholder math until M3 lands.
 
 ## Highest-priority remaining work
 
-1. **M2 — make `rl_demo.py` start** (finish the rename, fix signatures). ← next
-2. M3 — port real PE/PI math from `game_learn.py` into `PolicyEvalDemoAlg`.
-3. M4 — implement the DP demo algorithms.
-4. M5 — threading/responsiveness repair; M6 — dead-code removal; M7 — README.
+1. **M3 — port real PE/PI math from `game_learn.py` into `PolicyEvalDemoAlg`.** ← next
+2. M4 — implement the DP demo algorithms.
+3. M5 — threading/responsiveness repair; M6 — dead-code removal; M7 — README.
 
 ## Immediate next milestone
 
-**M2**: `python rl_demo.py` launches, all panels render, stub algorithms greyed out.
+**M3**: PE/PI runs to convergence in the GUI with real Bellman updates; converged
+greedy policy never loses as X vs Heuristic(6) and MiniMax.
+
+## Milestone log
+
+- M0 (58982fd): WIP baseline committed.
+- M1 (bf6d908): docs/ + CURRENT_STATE.md reconstructed.
+- M2: `python rl_demo.py` starts and renders; rename finished, signatures fixed.

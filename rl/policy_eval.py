@@ -1,10 +1,11 @@
 from rl_alg_base import DemoAlg
-from enum import IntEnum
 import pickle
 from util import get_clobber_free_filename
 import logging
 import layout
-from game_base import Mark, TERMINAL_REWARDS, get_reward
+from game_base import TERM_REWARDS
+from reinforcement_base import PIPhases
+from baseline_players import HeuristicPlayer
 from collections import OrderedDict
 import numpy as np
 from colors import COLOR_SCHEME
@@ -21,14 +22,9 @@ from tic_tac_toe import Game
 import matplotlib.pyplot as plt
 
 
-class PIPhases(IntEnum):
-    POLICY_EVAL = 0
-    POLICY_OPTIM = 1
-
-
 class PolicyEvalDemoAlg(DemoAlg):
 
-    def __init__(self, app, pi_seed, gamma=0.9):  # ,alg_params):
+    def __init__(self, app, env, pi_seed=None, gamma=0.9):  # ,alg_params):
 
         # TODO:   DemoAlg.get_options() shoudl return a dict of option types,
         # then the alg_params dict should match it here.
@@ -45,12 +41,14 @@ class PolicyEvalDemoAlg(DemoAlg):
         :param gamma: The discount factor (default is 0.9).
         """
         self.app = app
-        self.env = app.env
+        self.env = env if env is not None else app.env
         self._embedding = self._make_embedding()
         self._state_update_order = None  # set after box_placer is defined
         self._gamma = gamma
         self._viz_img_size = None
         self._delta_v_tol = 1e-6
+        if pi_seed is None:
+            pi_seed = HeuristicPlayer(mark=self.env.player, n_rules=2)
         self.pi_seed = pi_seed
         self.updatable_states = app.env.get_nonterminal_states()
         self.terminal_states = app.env.get_terminal_states()
@@ -106,7 +104,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         # Value function & update tables
         # initial values for terminal states (should be zero, but we're using the terminal reward):
-        self.values = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        self.values = {state: TERM_REWARDS[self.env.player][state.check_endstate()] for state in self.terminal_states}
         self.values.update({state: 0.0 for state in self.updatable_states})
         self.next_values = {state: None for state in self.updatable_states}
 
@@ -477,8 +475,6 @@ class PolicyEvalDemoAlg(DemoAlg):
         text = "%f" % (np.random.randn(),)
         cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
 
-        print("MAde viz image with size: %s" % (size,))
-
         return img
 
 
@@ -493,8 +489,7 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
         :param gamma: The discount factor (default is 0.9).
         """
 
-        super().__init__(app=app, env=env)
-        self.gamma = gamma
+        super().__init__(app=app, env=env, gamma=gamma)
 
     @staticmethod
     def get_name():
@@ -505,7 +500,6 @@ class InPlacePEDemoAlg(PolicyEvalDemoAlg):
         font_bold = layout.LAYOUT['fonts']['status_bold']
 
         status = super().get_status()
-        status[0] = ("PI(In-Pl.) Phase: Policy Evaluation", font_bold)
         status[0] = ("PI(In-Place) Phase: Policy Evaluation", font_bold)
         return status
 

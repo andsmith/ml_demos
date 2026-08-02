@@ -22,7 +22,7 @@ from colors import COLOR_SCHEME
 from selection_panel import SelectionPanel
 from reinforcement_base import Environment
 from tic_tac_toe import Game
-from game_base import Mark, TERMINAL_REWARDS, get_reward
+from game_base import Mark
 from alg_panels import TabPanel, VisualizationPanel
 from status_ctrl_panel import StatusControlPanel
 import time

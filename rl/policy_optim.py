@@ -1,5 +1,5 @@
 from policies import Policy
-from game_base import get_reward, Mark, TERM_REWARDS as TERMINAL_REWARDS
+from game_base import Mark, TERM_REWARDS
 import numpy as np
 from step_visualizer import PIStateStep
 import logging
@@ -37,6 +37,7 @@ class ValueFuncPolicy(Policy):
         self._v = v  # hash of Game (state) to value
         self._env = environment
         self._gamma = gamma
+        self._term_rewards = TERM_REWARDS[player]
         self._pi = self._optimize()
 
     def equals(self, other):
@@ -69,7 +70,7 @@ class ValueFuncPolicy(Policy):
                 next_states = []
                 if next_result is not None:
                     # Terminal states have zero value so just use the reward.
-                    reward_term = TERMINAL_REWARDS[next_result]
+                    reward_term = self._term_rewards[next_result]
                 else:
                     # Nonterminal means opponent's turn, get the probability distribution of next states:
                     opp_moves = self._env.opp_move_dist(state, action)
@@ -86,9 +87,9 @@ class ValueFuncPolicy(Policy):
                         next_states.append((next_next_state, prob))
 
                         if next_next_result == self.losing_result:
-                            reward_term += prob * TERMINAL_REWARDS[self.losing_result]
+                            reward_term += prob * self._term_rewards[self.losing_result]
                         elif next_next_result == self.draw_result:
-                            reward_term += prob * TERMINAL_REWARDS[self.draw_result]
+                            reward_term += prob * self._term_rewards[self.draw_result]
                         else:
                             reward_term += prob * self._v[next_next_state] * self._gamma
 

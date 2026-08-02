@@ -94,7 +94,7 @@ class PolicyImprovementDemo(ABC):
         self._pending_pause = False
         self._converged = False
         self._convergence_iter = None
-        self._phase = PIPhases.VALUE_F_OPT  # current phase of the algorithm
+        self._phase = PIPhases.POLICY_EVAL  # current phase of the algorithm
         self._n_updated = 0  # states updated this epoch
         self.started = False
         self.running_tournament = False
@@ -212,7 +212,7 @@ class PolicyImprovementDemo(ABC):
         while not self.shutdown:
             
             # 1. Update the value function for the current policy.
-            self._phase = PIPhases.VALUE_F_OPT
+            self._phase = PIPhases.POLICY_EVAL
             self.optimize_value_function()
             self._gui.build_images()
             self._gui.refresh_images()
@@ -222,7 +222,7 @@ class PolicyImprovementDemo(ABC):
                 break
 
             # 2. Update policy & check for convergence:
-            self._phase = PIPhases.POLICY_OPT
+            self._phase = PIPhases.POLICY_OPTIM
             new_policy, self._converged = self.optimize_policy()
             if self._converged:
                 self._convergence_iter = self._iter + 1
@@ -249,7 +249,7 @@ class PolicyImprovementDemo(ABC):
             if self.shutdown:
                 break
 
-            #vis = PIStep(self, self._gui, PIPhases.POLICY_OPT, info={'old':  self.pi, 'new': new_policy})
+            #vis = PIStep(self, self._gui, PIPhases.POLICY_OPTIM, info={'old':  self.pi, 'new': new_policy})
             self.pi = new_policy
             self.maybe_pause('pi-round', None)
 
@@ -392,7 +392,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
         status = OrderedDict()
 
         status['title'] = "Policy Improvement Demo"
-        status['PI Phase'] = "Policy Evaluation" if self._phase == PIPhases.VALUE_F_OPT else "Policy Optimization"
+        status['PI Phase'] = "Policy Evaluation" if self._phase == PIPhases.POLICY_EVAL else "Policy Optimization"
         status['PI Iteration'] = self._iter + 1
         status['PI Convergence'] = "YES (%i iter)" % (self._convergence_iter,) if self._converged else "no"
         status['PE Epoch'] = self._epoch + 1
@@ -531,7 +531,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
             # check for convergence:
             if self._delta_v_max < self._delta_v_tol:
                 self.v_converged = True
-                self._phase = PIPhases.POLICY_OPT  # change this now so the status msg is correct.
+                self._phase = PIPhases.POLICY_OPTIM  # change this now so the status msg is correct.
 
             # import ipdb; ipdb.set_trace()
 

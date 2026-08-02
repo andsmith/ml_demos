@@ -15,7 +15,7 @@ from gameplay import ResultSet, Match
 from colors import COLOR_SCHEME
 from layer_optimizer import SimpleTreeOptimizer
 from gui_base import Key, KeySizeTester
-from game_base import  Result
+from game_base import Result, Mark, TERM_REWARDS
 
 
 
@@ -162,9 +162,9 @@ class StateEmbeddingKey(Key):
                    'states': [[Game.from_strs(["X  ", " X ", "  X"]),
                               Game.from_strs(["XOO", "OXX", "OXO"]),
                               Game.from_strs(["O  ", " O ", "  O"])]],
-                   'captions': [["R: %.2F" % (TERMINAL_REWARDS[Result.X_WIN]),
-                                "R: %.2F" % (TERMINAL_REWARDS[Result.DRAW]),
-                                 "R: %.2F" % (TERMINAL_REWARDS[Result.O_WIN])]],
+                   'captions': [["R: %.2F" % (TERM_REWARDS[Mark.X][Result.X_WIN]),
+                                "R: %.2F" % (TERM_REWARDS[Mark.X][Result.DRAW]),
+                                 "R: %.2F" % (TERM_REWARDS[Mark.X][Result.O_WIN])]],
                    'font': cv2.FONT_HERSHEY_SIMPLEX,
                    'text_color': COLOR_SCHEME['text']}
 
