@@ -11,7 +11,7 @@ The so-called model-based methods take advantage of this beforehand knowledge of
     * the resulting state $s'$ from taking action $a$ in state $s$: $\text{move}(s,a)=s'$ (a new game board with 1 more mark made), and
 *  every state's terminal or non-terminal status:  $\text{term}(s)\in[\text{win-X},\text{win-O},\text{draw},- ]$.
 
-The **value function** $v_\pi(s)$ is defined as the total (potentially discounted) reward we can expect if we are in state $s$ and following policy $\pi$ from that point forward. [ADD EQN, ADD def of $\pi$, move to DEFs?]
+The **value function** $v_\pi(s)$ is defined as the total (potentially discounted) reward we can expect if we are in state $s$ and following policy $\pi$ from that point forward.
 
 #### 1) Optimally estimating the value function $v_\pi(s)$ of policy $\pi(a,s)$:
 
@@ -21,7 +21,7 @@ Model based algorithms for learning $v(s)$ have access to the game mechanics des
     * Compute values for neighboring states (parents) directly by following the state-transition graph and applying the Bellman equation.
 * **Iterative Policy Evaluation**:  
     * Set an initial  value function $v_0(s)$ to be zero for all but the terminal states.
-    * Iteratively update $v_{t}()$ by evaluating policy $\pi$ at every state $s$, returning action(s) $a$ and following states $\{\text{move}(s,a) \}$ and use the Bellman equation to set $v_{t+1}(s)$. [FIXME]
+    * Iteratively update $v_{t}()$ by evaluating policy $\pi$ at every state $s$, returning action(s) $a$ and following states $\{\text{move}(s,a) \}$ and use the Bellman equation to set $v_{t+1}(s)$.
 #### 2) Estimating an optimal policy $\pi_1$ for value function $v_\pi(s)$
 
 After we're confident our value function $v_\pi$ accurately estimates what total reward we can expect following $\pi$, can we learn a new policy, $\pi_1$ that is expected to perform better under the same value function?   In general, setting the new policy $\pi_1$ to recommend actions leading to higher-valued states than what $\pi$ recommends is called **Policy Improvement**.  
@@ -34,7 +34,7 @@ $$
 \end{equation}
 $$
 
-The original policy $\pi$ came with no guarantees, so $\pi_1$ might be different. We will always expect higher total reward from following policy $\pi_1$ over $\pi$ if, for every state $s$,  $\pi_1$ recommends an action leading to a state of greater or equal value than what $\pi$ recomends (from the *policy imporovment theorem* [proof?]).
+The original policy $\pi$ came with no guarantees, so $\pi_1$ might be different. We will always expect higher total reward from following policy $\pi_1$ over $\pi$ if, for every state $s$,  $\pi_1$ recommends an action leading to a state of greater or equal value than what $\pi$ recomends (from the *policy imporovment theorem*).
 #### 3) Alternating between 1) and 2)
 
 With a new policy $\pi_1$ to follow, the old value function will no longer calculate our expected reward, so we can learn another value fuction $v_{\pi_1}$ from one of the algorithms in section 1.  Iterating this process by alternating between the Policy Evaluation ($\underset E \to$) and Policy Improvement ($\underset I \to$),
@@ -62,19 +62,13 @@ Initialize with a set of initial states & terminal states (with values set to th
     * the sequence of states and actions,
     * the reward at the end.
 
-* Update the values of $v(s)$ using the Bellman update rule [ADD EQN & PSEUDOCODE]
+* Update the values of $v(s)$ using the Bellman update rule
 
-#### ***COMING SOON:***
+#### ***COMING SOON*** (stubs in the app, greyed out):
 
-#### 5) Q-learning
-
-In-place, stochastic value iteration.
-
-#### 6) Policy gradients
-##### 6.5?
-#### 7) Proximal Policy Optimization (PPO)
-
-#### 8) Group Level Policy Optimization (GLPO)
+#### 5) Monte-Carlo (above; not yet implemented)
+#### 6) Q-learning — in-place, stochastic value iteration.
+#### 7) Policy gradients / PPO / GLPO
 
 # Watch RL algorithms learn Tic-Tac-Toe:
 
@@ -145,50 +139,64 @@ ml_demos\rl> python game_graph.py
 
 This shows a portion of the window near the bottom, with states after 7, 8, or 9 moves have been made.  Terminal states ares shaded according to the winner's color or green for draws.  The selected state shows four orange (x) and three blue (o) moves have been made, so the only children states have blue edges and there are two open spaces so there are two edges.   The only terminal states that are children of the selected state are draws and orange wins, so if blue is in that state, the best result they can expect will be a draw and they can force either endgame with their next move.   (Blue lines are drawn from the middle row (8 moves) because those are valid move for other games in which blue went first and can make the 9th move.  This graph shows all moves from all states irrespective of which player goes first, so not all edges will be valid for a given game.)
 
----COMPLETED WORK ABOVE HERE, FUTURE WORK PAST HERE---
+## The RL Demo app:
 
-## The RL Demo apps:
+```
+ml_demos\rl> python rl_demo.py
+```
 
-Each of the reinforcement learning demos shows the progress of an agent learning as the demo's particular algorithm is applied.  They all have the same general steps:
-1. Pick a baseline policy.  For the policy improvement demos (value function estimation), they will be improving on this.  For the "model free" demos, this will be competing against the RL agent as it learns.
-2. Run the RL algorithm (step through at various speeds), watch the value function change and the consequences to the agent's strategy.
+One window, four panels.  Pick an algorithm (left), watch it learn on ~6.4k game
+states (right), step it at any granularity (control panel).  The general flow for
+every algorithm:
+1. A seed/baseline policy is chosen (currently `Heuristic(2)`), and the opponent
+   difficulty is set with the slider (a `Heuristic(n)` player folded into the
+   environment's transition probabilities).
+2. The algorithm runs on its own thread; check a "Checkpoints" box to pause at that
+   granularity and press `Go` to advance:
+    * each individual $v(s)$ update,
+    * each pass (epoch) through the set of states $S$,
+    * each policy-improvement update,
+    * or run continuously with none checked.
+3. Click any state box in the States/Values/Updates tabs to mark it as a "stop
+   state" — the algorithm pauses whenever it processes that state.
 
+#### Implemented demos (selectable in the app):
 
-    #### Baseline policies:
-    1. `Random` player
-    2. `Heuristic(n)` player, using rules 0 through n and/or defaulting to random (i.e. `Heuristic(0)` is equivalent to `Random`):
+| Demo | What it shows |
+|---|---|
+| **(PI) Policy Evaluation** | Iterative policy evaluation (two-array/Jacobi Bellman backups) alternating with greedy policy improvement, until the policy converges. |
+| **(PI) In-Place Policy Eval.** | Same, with in-place (Gauss-Seidel) backups — converges in fewer epochs. |
+| **(PI) Dynamic Programming** | Optimality (max) backups by backward induction — children before parents, in place — so $V^*$ is exact after a *single* pass. |
+| **(PI) In-Place Dynamic Prog.** | Asynchronous value iteration: same max backups in screen order, converging in a few passes. |
 
-        1. If there is a winning move, take it.
-        2. If the opponent has a winning move, block it.
-        3. If the center is open, take it.
-        4. If the opponent is in a corner, take the opposite corner.
-        5. Take any open corner.
+Q-learning and Policy Gradients appear greyed out (stubs); Monte Carlo is future
+work.  See `docs/future_work.md`.
 
-        If no rules apply, take any open space at random.
+#### Tabs:
+1. **States**: every game state drawn as a small board icon.
+2. **Values**: $V_t(s)$ for all states, colored by value (color key top-right);
+   terminal states stay fixed at their rewards.
+3. **Updates**: $\Delta V_t(s)$ per state during evaluation; during policy
+   improvement, which states changed their preferred action.
 
-    3. `Perfect` player.  (???)
+#### Baseline policies (`baseline_players.py`, `perfect_player.py`):
+1. `Random` player.
+2. `Heuristic(n)` player, applying rules 1 through n, defaulting to random
+   (i.e. `Heuristic(0)` is equivalent to `Random`):
+    1. If there is a winning move, take it.
+    2. If the opponent has a winning move, block it.
+    3. If the center is open, take it.
+    4. Take a side-center / corner (higher rules).
+3. `Perfect` player: memoized minimax (`MiniMaxPolicy`), cached to
+   `minimax_policy_cache_{X,O}.pkl`.
 
+A converged agent trained against `Heuristic(6)` beats it every game; trained
+against the perfect player it draws every game (never loses).
 
+---
 
+### Project documentation
 
-#### Main window:
-1. **Value function**:  shows $V_t(s)$, the current value function for all states $s$.  States are arranged with an embedding like the game tree, represented by a small box in a color indicating the relative value.
-2.  **Value updates**: shows  $\Delta V_t(s)$, the current (most recent, etc.) updates to the value function,   These are the changes made to each value for the next iteration, $V_{t+1}(s) = V_{t}(s) + \Delta V_t(s)$.
-3. **Competition window**:  In a separate process, Tic-Tac-Toe games are running continually w/the best RL agent so far vs the baseline agent (and possibly others).  This window shows the win/loss rate(s) changing as the agent learns.
-
-4. **Control area**: Run the algorithm at various speeds:
-    * Step through each individual $v(s)$ update.
-    * Step through each pass through the set of states $S$.
-    * Step through each iteration of PI (pause after $V_{t+1}(s)$ converges after many passes through the set of states).
-    * Run continually.
-
-#### Strategy window shows:
-A reinforcement learning agent that uses a value function and equation (1) to define its policy will "change its mind" about what to do in a certain state when the relative values of that state's children change such that there is a new highest-value child state.   After every PI iteration or N steps (etc), the number of "strategy changes" is counted and random examples are plotted showing the old and new preferred child state, and the number/kind of distinct terminal states under both child states.
-
-### Demos:       
-
-#### Dynamic Programming + Policy Improvement
-
-#### Policy Evaluation  + Policy Improvement
-
-#### Monte Carlo
+Architecture, data/event flow, component inventory, design decisions, known
+issues, and the future-work list live in `docs/`.  Current status is always in
+`CURRENT_STATE.md`.

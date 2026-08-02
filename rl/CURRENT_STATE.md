@@ -1,41 +1,48 @@
 # CURRENT_STATE
 
-Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
+Updated: 2026-08-02 — restart Version 1 complete (M0–M7).
 
 ## What currently works
 
-- Game-tree generation + cache (`tic_tac_toe.py`, `game_tree_X.pkl`), full-tree
-  browser (`game_graph.py`).
-- Old standalone PI demo math (`game_learn.py`): correct iterative policy evaluation +
-  greedy improvement (`policy_optim.ValueFuncPolicy`). Its GUI is legacy.
-- Players: `HeuristicPlayer` rule ladder, `MiniMaxPolicy` (cached perfect player).
-- Match playing/statistics (`gameplay.py` Match/ResultSet) and most visualization
-  components (drawing, node placement, state embedding, color keys, step_visualizer).
+- The demo app (`python rl_demo.py`): four model-based algorithms selectable and
+  verified correct — Policy Evaluation + PI, In-Place PE, backward-induction
+  Dynamic Programming, and In-Place (asynchronous) DP. Stepping at
+  state/epoch/policy granularity, stop-states, save/load, opponent difficulty.
+- All Tk access on the main thread; ~7–8 FPS rendering during full-speed runs.
+- Game-tree generation + cache (`tic_tac_toe.py`), full-tree browser
+  (`game_graph.py`), players (`HeuristicPlayer`, `MiniMaxPolicy`), match
+  playing/statistics (`gameplay.py`), visualization components.
 - NEAT/backprop experiment (standalone, finalized separately).
+- Documentation: `docs/` + this file, kept in sync per milestone.
 
 ## What is incomplete
 
-- New app (`rl_demo.py` + `DemoAlg`): architecture complete, but `policy_eval.py`
-  math is placeholder (random value updates, forced convergence).
-- `dynamic_prog.py` (V1 scope), `q_learning.py`, `policy_grad.py` are stubs;
-  `monte_carlo.py` is empty.
-- `tree_step_viz.ValFuncViz` and `CompactBoxOrganizer` are parked WIP.
+- Step-visualization panel (bottom-left) shows placeholder content; the real
+  per-state update tree exists in `step_visualizer.py` and needs wiring (top of
+  the post-V1 list).
+- `q_learning.py`, `policy_grad.py` stubs; `monte_carlo.py` empty (future work).
+- Parked WIP: `tree_step_viz.ValFuncViz`, `CompactBoxOrganizer`.
 
 ## What is known to be broken
 
-- Step-visualization panel shows placeholder content (real per-state update tree
-  exists in `step_visualizer.py`; wiring decision in M6).
+- Nothing known-broken in the app path. Remaining small items are listed in
+  `docs/known_issues.md`.
 
-## Highest-priority remaining work
+## Highest-priority remaining work (post-V1)
 
-1. **M7 — README update & final polish.** ← next
+1. Wire `step_visualizer.StateUpdateStep` into the step-visualization panel.
+2. Monte Carlo demo (first model-free algorithm).
+3. Render-path optimization (PhotoImage reuse); see `docs/future_work.md`.
 
 ## Immediate next milestone
 
-**M7**: README matches reality (how to run `rl_demo.py`, which demos exist);
-docs finalized.
+None active — Version 1 milestones complete. Next effort starts with the post-V1
+list above.
 
 ## Milestone log
+
+- M7: README rewritten to match reality (implemented demos table, controls,
+  docs pointers; editorial FIXME markers removed).
 
 - M6: legacy modules deleted (`gui_components.py`, `test_panels.py`,
   `game_learn.py`); Tournament block, dead helpers, `if False:` blocks, ipdb
