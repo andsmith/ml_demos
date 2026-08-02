@@ -61,8 +61,9 @@ class TabPanel(AlgDepPanel):
         :param resize_callback:  function to call to resize the panel when the tab changes.
             Whoever makes the tab images needs to know the new size, etc.
         """
-        self._tabs = OrderedDict()  
+        self._tabs = OrderedDict()
         self._tab_image_size = None
+        self._motion_refresh_pending = False
 
         #  Selecting states is common across all tabs, changing in one changes in all, etc.
   
@@ -213,11 +214,16 @@ class TabPanel(AlgDepPanel):
             self.refresh_images(is_paused=self._alg.paused,clear=True)
 
     def _on_mouse_move(self, event):
-        content_page =  self.get_current_conent_page()
-        if content_page.mouse_move((event.x, event.y)):
-            
+        # Coalesce rapid motion events: schedule at most one refresh per ~16ms
+        # instead of rebuilding the PhotoImage on every event.
+        content_page = self.get_current_conent_page()
+        if content_page.mouse_move((event.x, event.y)) and not self._motion_refresh_pending:
+            self._motion_refresh_pending = True
+            self._frame.after(16, self._do_motion_refresh)
 
-            self.refresh_images(is_paused=self._alg.paused)
+    def _do_motion_refresh(self):
+        self._motion_refresh_pending = False
+        self.refresh_images(is_paused=self._alg.paused)
 
     def _on_mouse_leave(self, event):
         content_page = self.get_current_conent_page()

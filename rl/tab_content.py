@@ -13,6 +13,7 @@ from game_base import Mark, Result, TERM_REWARDS
 from game_util import get_box_placer, get_state_icons, sort_states_into_layers
 from layer_optimizer import SimpleTreeOptimizer
 import numpy as np
+import threading
 from tic_tac_toe import Game
 import time
 import logging
@@ -68,6 +69,9 @@ class TabContentPage(ABC):
         self._env = alg.app.env
         self._cur_box = None
         self._mouse_manager = MouseBoxManager(self._app)
+        # The algorithm thread mutates the cached images (set_value/clear);
+        # the main thread renders them.  Guard both with this lock.
+        self._img_lock = threading.RLock()
 
         self._keys = keys
 
@@ -91,10 +95,11 @@ class TabContentPage(ABC):
         return img
 
     def clear_images(self,  marked_only=False):
-        if not marked_only:
-            self._base_image = None
-        self._marked_image = None
-        self._disp_image = None
+        with self._img_lock:
+            if not marked_only:
+                self._base_image = None
+            self._marked_image = None
+            self._disp_image = None
 
     def set_size(self, new_size):
         self._size = new_size
@@ -129,15 +134,15 @@ class TabContentPage(ABC):
         if size is None:
             return self._blank_frame
 
-        if annotated:
-            if self._check_invalid(self._disp_image, size):
-                self._disp_image = self._draw_annotated()
-            return self._disp_image
-        else:
-            if self._check_invalid(self._marked_image, size):
-
-                self._marked_image = self._draw_marked()
-            return self._marked_image
+        with self._img_lock:
+            if annotated:
+                if self._check_invalid(self._disp_image, size):
+                    self._disp_image = self._draw_annotated()
+                return self._disp_image
+            else:
+                if self._check_invalid(self._marked_image, size):
+                    self._marked_image = self._draw_marked()
+                return self._marked_image
 
     def _check_invalid(self, img, size):
         return img is None or (

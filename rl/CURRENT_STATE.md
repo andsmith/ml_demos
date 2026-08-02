@@ -23,19 +23,18 @@ Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
 
 ## What is known to be broken
 
-- Tk widgets are updated from the algorithm thread (crash risk; fix in M5).
 - Step-visualization panel shows placeholder content (real per-state update tree
   exists in `step_visualizer.py`; wiring decision in M6).
 
 ## Highest-priority remaining work
 
-1. **M5 — threading/responsiveness repair.** ← next
-2. M6 — dead-code removal; M7 — README.
+1. **M6 — dead-code removal & small bug fixes.** ← next
+2. M7 — README update & final polish.
 
 ## Immediate next milestone
 
-**M5**: Tk updates marshalled to the main thread; mouse-move refresh throttled;
-paused-tick FPS gate; KDTree hit-testing everywhere.
+**M6**: legacy modules retired (`gui_components.py`, `test_panels.py`, old app),
+small known bugs fixed, ValFuncViz/CompactBoxOrganizer parked or completed.
 
 ## Milestone log
 
@@ -45,7 +44,11 @@ paused-tick FPS gate; KDTree hit-testing everywhere.
 - M3 (79aecbf): real PE/PI math in `PolicyEvalDemoAlg` (Bellman backups, greedy
   improvement, true convergence). Verified: 4-iteration convergence; 500/500 wins vs
   training opponent Heuristic(6); 500/500 draws (0 losses) when trained vs MiniMax.
-- M4: DP demos implemented (backward-induction DP exact in one pass; async in-place
+- M5: all Tk access on the main thread (worker posts render requests to a
+  `root.after` loop); image caches locked; motion refresh coalesced; clean thread
+  shutdown; GIL yield keeps free-run rendering at ~7-8 FPS. Verified with a 25s
+  full-speed scripted run.
+- M4 (57cecd0): DP demos implemented (backward-induction DP exact in one pass; async in-place
   VI); In-Place PE is now genuinely in-place. DP values match converged PI values to
   2e-16; greedy(DP) policy 500/500 wins vs Heuristic(6). All 4 model-based demos
   selectable in the app.

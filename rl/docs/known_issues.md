@@ -25,20 +25,20 @@ POLICY_EVAL/POLICY_OPTIM.)
   wiring that in is part of the remaining viz work (M6 decision on
   step_visualizer vs tree_step_viz).
 
-## Threading / responsiveness — M5
+## Threading / responsiveness
 
-- `RLDemoApp.tick` (rl_demo.py:229) runs on the algorithm thread and calls Tk widget
-  methods directly (`label.config(image=...)`) — formally unsafe, intermittent-crash
-  risk.
-- Mouse-move path: every motion event copies the full base image
-  (tab_content.py:175) and rebuilds a PhotoImage (alg_panels.py:215) — no throttling.
-- Paused-tick path (rl_demo.py:234-240) has no FPS gate; every pause hit refreshes all
-  panels.
-- `BoxOrganizer.get_state_at` (node_placement.py:242) is an O(n) linear scan;
-  `MouseBoxManager` already has a KDTree — not used everywhere.
-- `DemoAlg.stop()` (rl_alg_base.py:199-217) join/retry/sleep workaround for threads
-  not exiting cleanly.
-- `rl_demo.py:263`: `self._ticks_skipped` bare expression — skip counter never resets.
+(M5 fixed the structural issues: the algorithm thread now only posts render
+requests/callables that a main-thread `root.after` loop consumes — no Tk calls off
+the main thread; tab image caches are guarded by a per-page lock; mouse-move
+refreshes coalesce to ≤60 Hz; `DemoAlg.stop()` is a single set + join with timeout,
+and `_maybe_pause` never re-blocks after shutdown; the learn loop yields the GIL
+briefly every 25ms so free-run rendering holds ~7–8 FPS while the loop still
+processes hundreds of backups/sec.)
+
+Remaining (documented in future_work.md): per-frame numpy→PIL→PhotoImage rebuild is
+the main render cost; `BoxOrganizer.get_state_at` linear scan survives only in
+legacy `gui_components.py` and standalone `game_graph.py` (the app path uses the
+`MouseBoxManager` KDTree).
 
 ## Broken / incomplete visualization — M6 (default: park)
 

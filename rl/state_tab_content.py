@@ -117,10 +117,11 @@ class ValueFunctionContentPage(FullStateContentPage):
     def reset_values(self, value=None):
         # Reset updatable states only; non-updatable entries (e.g. terminal
         # rewards) keep their displayed values.
-        for state in self._updatable_states:
-            self._values[state] = value
-        self._color_key.reset()
-        self.clear_images(marked_only=False)
+        with self._img_lock:
+            for state in self._updatable_states:
+                self._values[state] = value
+            self._color_key.reset()
+            self.clear_images(marked_only=False)
 
     def _get_key_value(self, key_name):
         if key_name == 'values':
@@ -152,11 +153,12 @@ class ValueFunctionContentPage(FullStateContentPage):
         return img
 
     def set_value(self, state, value):
-        self._values[state] = value
-        color, change = self._color_key.map_color_uint8(value, check_growing=True)
-        if change:
-            # Need to re-draw all states with new colors
-            self.clear_images(marked_only=False)
-        elif self._base_image is not None:
-            # Just draw a new box on the current base image
-            self._embed.box_placer.draw_box(self._base_image, state, color, default_color=self._undef_color)
+        with self._img_lock:
+            self._values[state] = value
+            color, change = self._color_key.map_color_uint8(value, check_growing=True)
+            if change:
+                # Need to re-draw all states with new colors
+                self.clear_images(marked_only=False)
+            elif self._base_image is not None:
+                # Just draw a new box on the current base image
+                self._embed.box_placer.draw_box(self._base_image, state, color, default_color=self._undef_color)

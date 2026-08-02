@@ -40,6 +40,7 @@ class DemoAlg(ABC):
         self._shutdown = False
         self._learn_thread = None
 
+        self._last_yield = time.perf_counter()  # last GIL yield to the GUI thread (see _maybe_pause)
         self._viz_img_size = None  # Size of the visualization image, set when the step-visualization panel is resized.
         self._state_img_size = None  # Size of the state image, set when the state-tabs panel is resized.   
 
@@ -99,7 +100,7 @@ class DemoAlg(ABC):
                 do_pause = True
                 logging.info("Stopping at user-set stop state: %s" % self.state)
 
-        if do_pause:
+        if do_pause and not self._shutdown:
             self.paused = True
             self.app.tick(is_paused=True, control_point=control_point)
             logging.info("Algorithm paused at control point: %s" % control_point)
@@ -108,6 +109,14 @@ class DemoAlg(ABC):
         else:
             self.paused = False
             self.app.tick(is_paused=False, control_point=control_point)
+            # The learn loop is CPU-bound pure Python; without an explicit
+            # yield it starves the Tk main thread of the GIL and rendering
+            # drops to ~1 FPS.  Sleep briefly every 25ms (~20% throughput)
+            # so interaction and rendering stay responsive at full speed.
+            now = time.perf_counter()
+            if now - self._last_yield > 0.025:
+                self._last_yield = now
+                time.sleep(0.005)
 
         return self._shutdown  # was this changed while paused?
 
@@ -197,21 +206,19 @@ class DemoAlg(ABC):
         logging.info("Algorithm thread started.")
 
     def stop(self):
-        if self._go_signal is not None:
-            self._go_signal.set()  # Signal the algorithm to stop.
-
+        # Set _shutdown BEFORE waking the thread: _maybe_pause never re-blocks
+        # once _shutdown is set, so a single set() suffices.
         self._shutdown = True
+        if self._go_signal is not None:
+            self._go_signal.set()
+
         if self._learn_thread is not None:
             logging.info("Waiting for algorithm thread to stop...")
-            for _ in range(3):
-                self._learn_thread.join(timeout=1)
-                if self._go_signal is not None:
-                    self._go_signal.set()  # Signal the algorithm to stop.
-            time.sleep(1)
-
-            self._learn_thread.join()
-
-            logging.info("Algorithm thread stopped.")
+            self._learn_thread.join(timeout=5)
+            if self._learn_thread.is_alive():
+                logging.warning("Algorithm thread did not stop within timeout (daemon; will not block exit).")
+            else:
+                logging.info("Algorithm thread stopped.")
         else:
             logging.info("Algorithm thread was not started.")
         self._go_signal = None

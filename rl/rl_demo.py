@@ -40,7 +40,7 @@ ALGORITHMS = [PolicyEvalDemoAlg, InPlacePEDemoAlg, DynamicProgDemoAlg, InPlaceDP
 AGENT_MARK = Mark.X  # The agent's mark in the game.
 OPPONENT_MARK = Mark.O  # The opponent's mark in the game.
 
-FPS = 10
+RENDER_INTERVAL_MS = 33  # main-thread render loop period (~30 FPS max)
 
 
 class RLDemoApp(object):
@@ -56,14 +56,19 @@ class RLDemoApp(object):
         self._advance_event = Event()  # Event to signal the algorithm to advance.
         self.selected = []  # selected states are app-wide
         self._init_ctrl_point = None  # Start paused here.
-        # For running continuous modes:
-        self._timing_info = {'t_last_refresh': time.perf_counter(),  # for refreshing the window
-                             't_last_print': time.perf_counter(),  # for printing the FPS
+        # Render requests from the algorithm thread, consumed by the
+        # main-thread render loop (see tick / _render_tick):
+        self._render_request = None
+        # Callables posted by the algorithm thread, run on the main thread by
+        # the render loop (list append/pop are atomic under the GIL):
+        self._pending_calls = []
+        # For FPS reporting:
+        self._timing_info = {'t_last_print': time.perf_counter(),
                              'print_interval_sec': 1.0,
                              'n_frames': 0,
                              'fps': 0.0}
-        self._ticks_skipped = 0
-        self._init_alg_panels()     
+        self._ticks_skipped = 0  # render requests coalesced since last report
+        self._init_alg_panels()
 
     def toggle_selected_state(self, state_id):
         if state_id in self.selected:
@@ -182,7 +187,10 @@ class RLDemoApp(object):
             self._selection_panel.set_selection(name=alg_name)
 
     def set_control_point(self, control_point):
-        self._status_control_panel.set_run_control_setting(control_point)
+        # May be called from the algorithm thread (e.g. on convergence):
+        # defer the widget update to the main-thread render loop.
+        self._pending_calls.append(
+            lambda: self._status_control_panel.set_run_control_setting(control_point))
 
     def clear_stop_states(self):
         self.selected = []  # clear the selected states
@@ -214,8 +222,10 @@ class RLDemoApp(object):
         logging.info("Starting algorithm.")
         self._alg.start(self._advance_event)
         logging.info("Starting RL Demo App")
+        self.root.after(RENDER_INTERVAL_MS, self._render_tick)
         self.root.mainloop()
         logging.info("Exiting RL Demo App")
+        self._alg.stop()
 
     def get_aspect(self):
         """
@@ -225,43 +235,48 @@ class RLDemoApp(object):
         width, height = self.root.winfo_width(), self.root.winfo_height()
         return width / height
 
-    #@LPT.time_function
     def tick(self, is_paused, control_point):
         """
-        Called every tick to update the algorithm and the panels.
-        :param is_paused: Whether the algorithm is paused or not.
+        Called by the algorithm (on its own thread) whenever the display should
+        update.  Never touches Tk: it just posts a render request that the
+        main-thread render loop (_render_tick) consumes.  Rapid requests
+        coalesce, which is also the FPS throttle.
         """
-        if is_paused:
-            self.paused = True
+        self.paused = is_paused
+        if self._render_request is not None:
+            self._ticks_skipped += 1
+        self._render_request = (is_paused, control_point)
+
+    def _render_tick(self):
+        """
+        Main-thread render loop (scheduled via root.after): consume the latest
+        render request and repaint the panels.
+        """
+        while self._pending_calls:
+            self._pending_calls.pop(0)()
+
+        request = self._render_request
+        if request is not None:
+            self._render_request = None
+            is_paused, control_point = request
             self._status_control_panel.refresh_status()
             if self._state_panel is not None:
-                self._state_panel.refresh_images(is_paused=True, clear=True)
+                self._state_panel.refresh_images(is_paused=is_paused, clear=True)
             if self._visualization_panel is not None:
-                self._visualization_panel.refresh_images(is_paused=True, control_point=control_point)
-        else:
-            self.paused = False
+                self._visualization_panel.refresh_images(is_paused=is_paused, control_point=control_point)
+
+            self._timing_info['n_frames'] += 1
             now = time.perf_counter()
-            elapsed = now - self._timing_info['t_last_refresh']
-
-            if elapsed > 1.0 / FPS:
-                self._status_control_panel.refresh_status()
-                if self._state_panel is not None:
-                    self._state_panel.refresh_images(is_paused=False, clear=True)
-                if self._visualization_panel is not None:
-                    self._visualization_panel.refresh_images(is_paused=False, control_point=control_point)
-                self._timing_info['n_frames'] += 1
-                self._timing_info['t_last_refresh'] = now
-
-            else:
-                self._ticks_skipped += 1
             elapsed = now - self._timing_info['t_last_print']
             if elapsed >= self._timing_info['print_interval_sec']:
                 self._timing_info['fps'] = self._timing_info['n_frames'] / elapsed
                 logging.info(
                     f"N-frames:  {self._timing_info['n_frames']}, FPS: {self._timing_info['fps']:.2f}, ticks skipped: {self._ticks_skipped}")
                 self._timing_info['n_frames'] = 0
-                self._ticks_skipped
+                self._ticks_skipped = 0
                 self._timing_info['t_last_print'] = now
+
+        self.root.after(RENDER_INTERVAL_MS, self._render_tick)
 
 
 if __name__ == "__main__":
