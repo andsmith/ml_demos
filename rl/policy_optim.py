@@ -1,7 +1,6 @@
 from policies import Policy
 from game_base import Mark, TERM_REWARDS
 import numpy as np
-from step_visualizer import PIStateStep
 import logging
 from tic_tac_toe import Game
 
@@ -24,7 +23,7 @@ class ValueFuncPolicy(Policy):
     uniform probability, or one is selected arbitrarily if deterministic.
     """
 
-    def __init__(self,  v, environment, old_policy, gamma=1.0, player=Mark.X):
+    def __init__(self,  v, environment, old_policy=None, gamma=1.0, player=Mark.X):
         """
         :param v: dict, hash of Game (state) to value.  The value function.
         :param environment:  The environment for the agent.  This is used to calculate the next state distribution.
@@ -58,11 +57,6 @@ class ValueFuncPolicy(Policy):
         for s_ind,state in enumerate(self._env.get_nonterminal_states()):
             if s_ind % 100 == 0:
                 logging.info("Optimizing policy for state %i of %i" % (s_ind, len(self._env.get_nonterminal_states())))
-
-            # if state == Game.from_strs(["XOO", "X  ", "   "]):
-            #    import ipdb
-            #    ipdb.set_trace()
-
 
             def get_reward_term_and_next_states(action):
                 next_state = state.clone_and_move(action, self.player)
@@ -114,14 +108,6 @@ class ValueFuncPolicy(Policy):
                 best_actions = [act for i, act in enumerate(actions) if reward_terms[i] == best_reward]
                 prob = 1.0 / num_best
                 pi[state] = [(best_action, prob) for best_action in best_actions]
-
-            #if self._app is not None:
-                #    PIStateStep(demo, gui, state, actions, next_states, rewards, old_action, new_action):
-
-            #    vis = PIStateStep(self._app, self._gui, state, actions, next_states, reward_terms, old_actions=old_action_dist,
-             #                     new_actions=pi[state])
-
-            #self._app.maybe_pause('state-update', vis)
 
         return pi
 

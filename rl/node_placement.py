@@ -279,10 +279,10 @@ class FixedCellBoxOrganizer(BoxOrganizer):
         """
         layer_heights, layer_row_counts, usable_height = self._calc_layer_heights()
 
-        print("Layer heights:", layer_heights)
-        print("Layer row counts:", layer_row_counts)
-        print("Window_height:  %i ,remaining_height: %i" %
-              (self.size_wh[1], usable_height))
+        logging.debug("Layer heights: %s" % (layer_heights,))
+        logging.debug("Layer row counts: %s" % (layer_row_counts,))
+        logging.debug("Window_height:  %i ,remaining_height: %i" %
+                      (self.size_wh[1], usable_height))
         layer_spacing = self._adjust_layer_heights(layer_heights, layer_row_counts, usable_height)
         return layer_spacing
 
@@ -486,14 +486,6 @@ class FixedCellWithKey(FixedCellBoxOrganizer):
                 'y': (0, bbox_bottom)}
 
     def _draw_layer_bars(self, image):
-        # draw a vertical line between the top row and the color key area.
-        if False:
-            line_x = self.key_bbox['x'][0]
-            line_y_top = self.key_bbox['y'][0]
-            line_y_bottom = self.layer_spacing[0]['bar_y'][0]
-            line_x_left = line_x - self._layer_bar_w//2
-            line_x_right = line_x_left + self._layer_bar_w
-            image[line_y_top:line_y_bottom, line_x_left:line_x_right] = self._line_color
         return super()._draw_layer_bars(image)
 
 
@@ -671,62 +663,10 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
 
         if s < MIN_BOX_SIZE:
             raise ValueError("Box size too small to fit all boxes: W=%i, H=%i, N=%i" % (w, h, n))
-        print("\tbox size %s (pad %s): (rows: %s) x (cols: %s) = %s is at least %s" %
-              (s, pad, n_rows, n_cols, n_rows*n_cols, n))
+        logging.debug("\tbox size %s (pad %s): (rows: %s) x (cols: %s) = %s is at least %s" %
+                      (s, pad, n_rows, n_cols, n_rows*n_cols, n))
 
         return s, pad, n_rows, n_cols
-
-    def _row_col_adjustX(self, n_boxes, box_size, w, h):
-        """
-        Adjust the number of rows and columns to minimize wasted space.  If (n_rows, n_cols) is be the output 
-        of _get_box_size, they are the numbe of rows and columns that will fit the largest box size with enough
-        space to fit n_boxes.  This may contain extra rows and/or a mostly empty final row.  
-
-        1. Calculate how many (whole) rows and columns of boxes can fit (should be >= n_boxes).
-        2. Assume columns are spaced as close as possible, count the rows.
-        3. Adjust the number of columns and rows until each box as roughly the same amount of empty space around it
-           (assuming boxes are spread as evenly as possible).
-        4. Reduce the number of columns until the last row is as full as possible.
-        5. Return the adjusted number of rows and columns.
-
-        :param n_boxes: number of boxes to fit 
-        :param box_size: size of the boxes
-        :param w: width of the space
-        :param h: height of the space
-        :returns: n_rows, n_cols, adjusted to eaven out empty space.
-        """
-        n_rows, n_cols = np.floor(h / box_size).astype(int),  np.floor(w / box_size).astype(int)
-        n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
-        h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
-
-        last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
-
-        while h_pad < v_pad and (n_rows_used * box_size <= h):
-            # remove a column, add it to the end of the last row, creat a new row if needed.
-            last = {'h_pad': h_pad, 'v_pad': v_pad, 'n_rows': n_rows_used, 'n_cols': n_cols}
-            n_cols -= 1
-            n_rows_used = np.ceil(n_boxes / n_cols).astype(int)
-            h_pad, v_pad = self.get_h_v_spacing(n_rows_used, n_cols, box_size, w, h)
-
-        # Decide if this result is better than the previous one
-        # by which has smaller difference in h/v padding.
-        if abs(h_pad - v_pad) >= abs(last['h_pad'] - last['v_pad']):
-            n_rows_used = last['n_rows']
-            n_cols = last['n_cols']
-
-        # reduce the number of columns until the last row is as full as possible (but don't increase the number of rows)
-        if n_rows_used == 1:
-            return 1, n_boxes
-
-        new_n_cols = n_cols
-        new_n_rows = n_rows_used
-        while new_n_rows == n_rows_used:
-            new_n_cols -= 1
-            new_n_rows = np.ceil(n_boxes / new_n_cols).astype(int)
-
-        n_rows, n_cols = new_n_rows-1, new_n_cols+1
-        return n_rows, n_cols
-
 
 def test_box_organizer():
     img_size = (946, 969)

@@ -240,12 +240,10 @@ class KeySizeTester(object):
         self._root.mainloop()
 
     def _on_resize(self, event):
-        print(f"Resize event: {event.width}x{event.height}")
         self._img_size = self._frame.winfo_width(), self._frame.winfo_height()
         self.refresh_key_image()
 
     def refresh_key_image(self):
-        print(f"Refreshing key image to size {self._img_size}")
 
         key= self._make_key(self._img_size)
 

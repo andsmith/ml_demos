@@ -16,8 +16,7 @@ Per-file responsibilities. Status: **active** (V1), **legacy** (retire after mig
 | `state_tab_content.py` | active | `FullStateContentPage` (all states as icons); `ValueFunctionContentPage` (boxes colored by value, incremental `set_value` redraw). |
 | `mouse_state_manager.py` | active | `MouseBoxManager`: KDTree hit-testing over box centers, mouseover/selection tracking, highlight drawing. |
 | `layout.py`, `colors.py` | active | `LAYOUT` (frame bboxes, fonts, space sizes), `WIN_SIZE`, `COLOR_SCHEME`. |
-| `gui_components.py` | legacy | Pre-refactor monolithic `RLDemoWindow`. Not imported by `rl_demo.py`. Remove in M6. |
-| `test_panels.py` | legacy | Entirely commented out; references a class that no longer exists. Remove in M6. |
+(Removed in M6: `gui_components.py` — pre-refactor monolithic window; `test_panels.py` — fully commented out.)
 
 ## Algorithms / game logic
 
@@ -27,14 +26,13 @@ Per-file responsibilities. Status: **active** (V1), **legacy** (retire after mig
 | `tic_tac_toe.py` | active | `Game` (3x3 int8 board, hashable), `GameTree` (exhaustive enumeration; terminal/children/parents dicts), `get_game_tree_cached` (pickle cache). |
 | `reinforcement_base.py` | active | `Environment`: folds opponent policy into MDP dynamics (`opp_move_dist`, `extract_dynamics`); terminal/nonterminal state access. `PIPhases`. |
 | `rl_alg_base.py` | active | `DemoAlg(ABC)`: learn-loop thread, `_maybe_pause` control points, tabs registry, save/load, `is_stub()`. |
-| `policy_eval.py` | wip | `PolicyEvalDemoAlg` / `InPlacePEDemoAlg` for the new app. GUI skeleton complete; math is placeholder (M3 ports the real math). |
+| `policy_eval.py` | active | `PolicyEvalDemoAlg` / `InPlacePEDemoAlg`: iterative policy evaluation + greedy policy improvement (real Bellman math since M3; in-place variant is Gauss-Seidel). |
 | `policy_optim.py` | active | `ValueFuncPolicy`: greedy policy improvement over a value function (argmax expected reward + discounted value, uniform ties). |
 | `policies.py` | active | `Policy(ABC)`: `recommend_action(state)` returns action distribution; `InvPolicy` (opponent-policy wrapper via board inversion). |
 | `baseline_players.py` | active | `HeuristicPlayer(n_rules)` rule ladder (win/block/center/...), `RandomPlayer` (bug: returns bare action, fix in M6). |
 | `perfect_player.py` | active | `MiniMaxPolicy`: memoized minimax, pickle-cached per player. |
-| `gameplay.py` | active | `Match` (one game + trace), `ResultSet` (stats + cv2 results rendering). `Tournament` commented out. |
-| `game_learn.py` | legacy | Old standalone PI demo (`PolicyImprovementDemo`, `PolicyEvaluationPIDemo`). Reference implementation for M3 port; retire in M6. |
-| `dynamic_prog.py` | stub | `DynamicProgDemoAlg`, `InPlaceDPDemoAlg` — implement in M4. |
+| `gameplay.py` | active | `Match` (one game + trace), `ResultSet` (stats + cv2 results rendering). |
+| `dynamic_prog.py` | active | `DynamicProgDemoAlg` (backward-induction DP, exact in one pass) and `InPlaceDPDemoAlg` (async value iteration); optimality backups over the PE machinery (M4). |
 | `q_learning.py`, `policy_grad.py` | stub | Name-only. Future work. |
 | `monte_carlo.py` | stub | Empty file. Future work. |
 | `game_util.py`, `util.py` | util | `sort_states_into_layers`, `get_box_placer`, `get_state_icons`, misc helpers. |

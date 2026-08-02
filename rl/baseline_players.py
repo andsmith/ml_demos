@@ -20,7 +20,8 @@ class RandomPlayer(Policy):
 
     def recommend_action(self, game_state):
         actions = game_state.get_actions()
-        return actions[np.random.choice(len(actions))]
+        prob = 1.0 / len(actions)
+        return [(action, prob) for action in actions]
 
     def __str__(self):
         return "RandomPlayer(%s)" % self.player.name

@@ -57,8 +57,6 @@ class FullStateContentPage(TabContentPage):
         super().resize(new_size)
         box_placer = self._embed.box_placer
         if box_placer is not None:
-            print("#############SETTING BOXES FOR %i states from page of type %s" %
-                  (len(box_placer.box_positions), type(self).__name__))
             self._mouse_manager.set_boxes(box_placer.box_positions)
 
     def _draw_base(self):
@@ -111,7 +109,6 @@ class ValueFunctionContentPage(FullStateContentPage):
         super().__init__(alg=alg, embedding=embedding, keys=keys, bg_color=bg_color)
         self._values = values  # Dictionary of state values, indexed by state.
         self._updatable_states = updatable_states
-        print("initialized ValueFunctionContentPage with %i updatable states." % len(self._updatable_states))
         self._color_key = keys['values']
 
     def reset_values(self, value=None):
@@ -147,8 +144,6 @@ class ValueFunctionContentPage(FullStateContentPage):
         img = np.zeros((size[1], size[0], 3), dtype=np.uint8)
         img[:] = self._bg_color
         value_colors = {state: self._color_key.map_color_uint8(self._values[state]) for state in self._values}
-        print("Drawing %i states with %i values, %i=NONE." %
-              (len(self._values), len(value_colors), sum(1 for v in self._values.values() if v is None)))
         img = self._embed.box_placer.draw(images=None, colors=value_colors, show_bars=False, dest=img, default_color=self._undef_color)
         return img
 

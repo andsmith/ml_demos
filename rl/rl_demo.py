@@ -30,7 +30,6 @@ import pickle
 from threading import Event
 from baseline_players import HeuristicPlayer
 # Will display in this order:
-#from test_panels import TestDemoAlg
 from util import tk_color_from_rgb
 #from loop_timing.loop_profiler import LoopPerfTimer as LPT
 
@@ -77,7 +76,6 @@ class RLDemoApp(object):
             self.selected.append(state_id)
         self._status_control_panel.refresh_status()
 
-        print(f"Toggled selection for state {state_id}, now selected: {state_id in self.selected}, Total selected: {len(self.selected)}")   
 
     def _init_tk(self):
         self.root = Tk()
@@ -183,7 +181,6 @@ class RLDemoApp(object):
             self._alg.load_state(filename)
             logging.info(f"State loaded from {filename}")
             # new algorithm might be a different type, so inform the selection panel:
-            print("Changing selector to loaded type: ", alg_name)
             self._selection_panel.set_selection(name=alg_name)
 
     def set_control_point(self, control_point):

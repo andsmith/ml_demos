@@ -40,39 +40,36 @@ the main render cost; `BoxOrganizer.get_state_at` linear scan survives only in
 legacy `gui_components.py` and standalone `game_graph.py` (the app path uses the
 `MouseBoxManager` KDTree).
 
-## Broken / incomplete visualization — M6 (default: park)
+## Parked WIP (deliberately incomplete, not imported by the app)
 
-- `tree_step_viz.ValFuncViz`: bare `action_tile` statement (:393),
-  `self._dims['tiles']` never populated → KeyError (:419), live
-  `import ipdb; ipdb.set_trace()` in test (:480), "UNCHECKED BELOW HERE" (:433).
-- `CompactBoxOrganizer` (node_placement.py:~539): `_calc_box_positions` is `pass`; its
-  test calls a constructor arg (`draw_params`) spelled `draw_darams` in the signature.
+- `tree_step_viz.ValFuncViz`: unfinished successor to
+  `step_visualizer.StateUpdateStep` (bare statement, missing `_dims['tiles']`,
+  "UNCHECKED BELOW HERE"). Parked in M6; see future_work.md.
+- `CompactBoxOrganizer` (node_placement.py): `_calc_box_positions` is `pass`; its
+  test also spells a constructor arg `draw_darams`. Parked.
 - `MicroHist` 'bins' mode raises NotImplementedError; `SlopeDiagram` `fast` param
   unused.
-- `visualize.py:195` passes nonexistent `h_spacing` kwarg (crashes 9-input NEAT case).
 
-## Small bugs — M6
+## Small bugs (remaining)
 
-- `gameplay.py:586` (`get_test_trace`): `trace` referenced before assignment when
-  `required_result` is given.
-- `baseline_players.py:21` `RandomPlayer.recommend_action` returns a bare action, not
-  an `[(action, prob)]` distribution — violates the `Policy` contract.
-- `game_learn.py:230` `filename="value_function_converged.pkl" % (self._iter+1)` →
-  TypeError on convergence (moot once game_learn.py is retired).
-- `policy_optim.py test_value_func_policy` calls `ValueFuncPolicy` without the required
-  `old_policy` arg; `step_visualizer.py:560` test references undefined `old_values`.
 - `selection_panel.py` radio buttons pass a plain str as `variable` instead of a
   `tk.Variable`; grouping works only via command callbacks.
 - `tab_content.py` `_draw_marked` uses `self._embed`, which only exists on the
-  subclass — base class unusable standalone.
+  subclass — base class unusable standalone (rename-to-MouseContentPage TODO).
+- `step_visualizer.py:560` test harness references undefined `old_values` (stale
+  signature).
 
-## Dead code / residue — M6
+(M6 fixed: `gameplay.get_test_trace` trace-before-assignment;
+`RandomPlayer.recommend_action` now returns a proper distribution;
+`ValueFuncPolicy` old_policy arg optional; `visualize.py` bad `h_spacing` kwarg.)
 
-- `gui_components.py` (legacy `RLDemoWindow`, unreferenced), `test_panels.py` (fully
-  commented out, references nonexistent `StatePanel`), `gameplay.py` `Tournament`
-  block (commented), `LayerwiseBoxOrganizer._row_col_adjustX`, assorted `if False:`
-  blocks, commented ipdb traces, stray debug `print()`s (incl. policy_eval.py:481),
-  debug `cv2.imwrite` side effects.
+## Dead code / residue
+
+(M6 removed: `gui_components.py`, `test_panels.py`, `game_learn.py` (old app —
+math fully absorbed in M3), the commented `Tournament` block,
+`LayerwiseBoxOrganizer._row_col_adjustX`, `if False:` blocks, live/commented ipdb
+traces, and app-path debug prints. Test-harness prints under `__main__` remain by
+design.)
 
 ## Non-code
 

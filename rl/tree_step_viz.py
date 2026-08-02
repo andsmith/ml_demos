@@ -477,7 +477,6 @@ def test_val_func_viz():
                                   " O ",
                                   "  O"])]
     
-    import ipdb; ipdb.set_trace()
     val_func_viz = ValFuncViz(env, agent_policy, values, img_size, key_size=key_size,
                               title='Value Function')
 

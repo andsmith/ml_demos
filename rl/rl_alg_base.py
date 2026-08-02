@@ -261,7 +261,6 @@ class DemoAlg(ABC):
         """
         Write the algorithm name to the file.
         """
-        print("Marking file type: ", self.get_name())
         pickle.dump(self.get_name(), file)
 
     def resize(self, panel, new_size):

@@ -28,15 +28,20 @@ Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
 
 ## Highest-priority remaining work
 
-1. **M6 — dead-code removal & small bug fixes.** ← next
-2. M7 — README update & final polish.
+1. **M7 — README update & final polish.** ← next
 
 ## Immediate next milestone
 
-**M6**: legacy modules retired (`gui_components.py`, `test_panels.py`, old app),
-small known bugs fixed, ValFuncViz/CompactBoxOrganizer parked or completed.
+**M7**: README matches reality (how to run `rl_demo.py`, which demos exist);
+docs finalized.
 
 ## Milestone log
+
+- M6: legacy modules deleted (`gui_components.py`, `test_panels.py`,
+  `game_learn.py`); Tournament block, dead helpers, `if False:` blocks, ipdb
+  traces, and app-path debug prints removed; small bugs fixed (get_test_trace,
+  RandomPlayer distribution, ValueFuncPolicy optional old_policy, visualize.py
+  kwarg). ValFuncViz + CompactBoxOrganizer parked. All verifications re-pass.
 
 - M0 (58982fd): WIP baseline committed.
 - M1 (bf6d908): docs/ + CURRENT_STATE.md reconstructed.

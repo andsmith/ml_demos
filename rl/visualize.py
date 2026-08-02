@@ -192,7 +192,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
     if len(input_keys) == 9:   # (x=1, o=-1, empty=0) for 9 spaces
         # 3x3 grid
         in_out_sep = 3
-        n_added, center_x = _add_unit_grid(input_keys, 0, 0, 'X/O/Free', h_spacing=4, spacing=(.5, .5))
+        n_added, center_x = _add_unit_grid(input_keys, 0, 0, 'X/O/Free', spacing=(.5, .5))
         if (n_added != len(input_keys)):
             raise ValueError("Number of input keys does not match number of inputs in genome: %d != %d" %
                              (n_added, len(input_keys)))
