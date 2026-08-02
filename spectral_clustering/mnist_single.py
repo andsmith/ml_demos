@@ -204,7 +204,7 @@ class ControlsPlot(object):
 
     def _K_changed(self, val):
         print("K clusters changed to %i" % val)
-        self.recluster()
+        #self.recluster()
 
     def _N_changed(self, val):
         print("n-pts changed to %i" % val)
