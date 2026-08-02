@@ -9,7 +9,7 @@ import tkinter.ttk as ttk
 from PIL import Image, ImageTk, ImageDraw
 from colors import COLOR_SCHEME, UI_COLORS
 from layout import LAYOUT, WIN_SIZE
-from game_base import Mark, Result, TERMINAL_REWARDS
+from game_base import Mark, Result, TERM_REWARDS 
 from game_util import get_box_placer, get_state_icons, sort_states_into_layers
 from layer_optimizer import SimpleTreeOptimizer
 import numpy as np
@@ -36,6 +36,8 @@ SPACE_SIZES = LAYOUT['state_embedding']['space_sizes']  # sizes of the spaces be
 #    - 'results' tab shows a results_viz image, not a state embedding.
 ######
 
+
+# TODO: Rename to MouseContentPage (is reused for visualization images, need mouse state mgr)
 class TabContentPage(ABC):
 
     """

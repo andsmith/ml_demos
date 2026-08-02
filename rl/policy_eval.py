@@ -461,6 +461,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         img[:] = COLOR_SCHEME['bg']
 
         artist = GameStateArtist(40)
+
         if self.state is not None:
             icon = artist.get_image(self.state)
             w, h = icon.shape[1], icon.shape[0]
@@ -475,6 +476,9 @@ class PolicyEvalDemoAlg(DemoAlg):
         cv2.putText(img, text, (10, 300), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
         text = "%f" % (np.random.randn(),)
         cv2.putText(img, text, (10, 400), cv2.FONT_HERSHEY_COMPLEX, 1, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
+
+        print("MAde viz image with size: %s" % (size,))
+
         return img
 
 

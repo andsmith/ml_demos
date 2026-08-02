@@ -2,8 +2,8 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 from tic_tac_toe import Game
-from game_base import Mark, Result, get_reward
-
+from game_base import Mark, Result, get_reward, OTHER_GUY
+import re
 
 class Policy(ABC):
     """
@@ -106,3 +106,30 @@ class Policy(ABC):
 
     def __str__(self):
         return self.__class__.__name__ + "(%s)" % self.player.name
+
+
+class InvPolicy(Policy):
+    """
+    Inverse policy, i.e. the opponent's policy.
+    """
+    def __init__(self, opp_policy):
+        self._opp_pi = opp_policy
+        self.player = OTHER_GUY[opp_policy.player]
+        self.opponent = opp_policy.player
+        self.winning_result = opp_policy.losing_result
+        self.losing_result = opp_policy.winning_result
+        self.draw_result = opp_policy.draw_result
+
+    def __str__(self):
+        orig_str = str(self._opp_pi)
+        if 'X' in orig_str[-3:].upper():
+            return orig_str[:-3]+"(O)"
+        elif 'O' in orig_str[-3:].upper():
+            return   orig_str[:-3]+"(X)"
+        else:
+            raise ValueError("Unknown player in opponent policy string: %s" % orig_str)
+        
+    def recommend_action(self, state):
+        state = state.invert()
+        act_dist = self._opp_pi.recommend_action(state)
+        return act_dist

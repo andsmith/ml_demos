@@ -97,26 +97,23 @@ class MiniMaxPolicy(Policy):
 
                 if state in policy:
                     
-                    if not compare_action_distributions(policy[state], action_dist):
-                        logging.warning("State %s already in policy with different action distribution!" % state)
-                        logging.warning("Old: %s" % policy[state])
-                        logging.warning("New: %s" % action_dist)
-                        raise Exception("State %s already in policy!" % state)
+                    
+                    raise Exception("State %s already in policy!" % state)
                 
                 policy[state] = action_dist
 
                 if len(policy) % 100 == 0:
-                    logging.info("Processed %d states." % len(policy))
+                    logging.info("\t\tProcessed %d states." % len(policy))
 
             mm_values[(state, player)] = top_val
             return top_val
 
         # get the game tree
         init_state = Game()
-        logging.info("Calculating optimal policy for player %s going first..." % player_mark.name)
+        logging.info("\tCalculating optimal policy for player %s going first..." % player_mark.name)
         _minimax(init_state, player_mark)
         opp_actions = init_state.get_actions()
-        logging.info("Calculating optimal policy for player %s going first..." % other_guy[player_mark].name)
+        logging.info("\tCalculating optimal policy for player %s going first..." % other_guy[player_mark].name)
         for opp_action in opp_actions:
             intermediate_state = init_state.clone_and_move(opp_action, other_guy[player_mark])
             _minimax(intermediate_state, player_mark)
@@ -134,5 +131,5 @@ class MiniMaxPolicy(Policy):
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
-    pi_x = MiniMaxPolicy(player_mark=Mark.X)
-    pi_o = MiniMaxPolicy(player_mark=Mark.O)
+    pi_x = MiniMaxPolicy(player_mark=Mark.X, clear_cache=True)
+    pi_o = MiniMaxPolicy(player_mark=Mark.O, clear_cache=True)

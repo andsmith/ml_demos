@@ -15,7 +15,7 @@ import numpy as np
 from drawing import GameStateArtist
 from tic_tac_toe import Game, get_game_tree_cached
 from node_placement import FixedCellBoxOrganizer
-from game_base import Result, Mark, TERMINAL_REWARDS, get_reward
+from game_base import Result, Mark, TERM_REWARDS as TERMINAL_REWARDS, get_reward
 from reinforcement_base import Environment, PIPhases
 from abc import ABC, abstractmethod
 from policy_optim import ValueFuncPolicy
@@ -61,11 +61,12 @@ class PolicyImprovementDemo(ABC):
         # with open('env_x.pkl', 'rb') as f:
         #    self._env = pickle.load(f)
         self.children = self._env.children
-
+        self._term_rewards = TERMINAL_REWARDS[player]
+        self._term_rewards[Result.DRAW]=-0.5
         self.pi = seed_policy
         self.updatable_states = self._env.get_nonterminal_states()
         self.terminal_states = self._env.get_terminal_states()
-        self._v_terminal = {state: TERMINAL_REWARDS[state.check_endstate()] for state in self.terminal_states}
+        self._v_terminal = {state: self._term_rewards[state.check_endstate()] for state in self.terminal_states}
         self._v = None  # dict from state to value function V_t (s)
         self._v_new = None  # dict from state to new value function V_{t+1} (s)
 
@@ -462,7 +463,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                     inter_result = r['inter_state'].check_endstate()
                     if inter_result in [self._env.winning_result, self._env.draw_result]:
                         # if the next state is a terminal, we got a reward so just return that.
-                        reward = TERMINAL_REWARDS[inter_result]
+                        reward = self._term_rewards[inter_result]
                         r['next_state_dist'] = [{'prob': 1.0,
                                                 'state': inter_state,
                                                 'reward': reward,
@@ -486,7 +487,7 @@ class PolicyEvaluationPIDemo(PolicyImprovementDemo):
                             next_result = next_state.check_endstate()
                             reward, discount = 0.0, 0.0
                             if next_result in [self._env.losing_result, self._env.draw_result]:
-                                reward = TERMINAL_REWARDS[next_result]
+                                reward = self._term_rewards[next_result]
                             else:
                                 discount = self._v[next_state] * self._gamma
                             expected_goal += prob * (reward + discount)

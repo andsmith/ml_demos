@@ -51,23 +51,12 @@ import logging
 import numpy as np
 import cv2
 from tic_tac_toe import Game, Mark, Result
-from game_base import TERMINAL_REWARDS
+from game_base import TERM_REWARDS as TERMINAL_REWARDS
 from colors import COLOR_SCHEME, MPL_CYCLE_COLORS
 from drawing import GameStateArtist, place_string
 import abc
 from tab_content import TabContentPage
 from layout import LAYOUT, SHIFT_BITS, SHIFT_MUL
-
-_DEFAULT_PARAMS = {'space_sizes': {
-    'state': 35,
-    'action': 25,
-    'next_state': 30},
-    'rel_dims': {'pad_frac': (0.01, 0.05),  # W, H
-                 'sep_y_space': .1,  # fraction of action unit height
-                 'caption_y_space': .15},  # fraction of action unit height
-    'string_v_spacing': 1.5,  # mult of str height, move strings DOWN this much (1.0=no spacing)
-
-}
 
 
 class CaptionedTile(object):
@@ -77,25 +66,26 @@ class CaptionedTile(object):
     Bounding box for mouseover capacity.
     """
 
-    def __init__(self, tile_img, above_cap=None, below_cap=None, pad_px=2, font_scale=None, str_dims=None):
+    def __init__(self, tile_img, captions={}, pad_px=2, font_scale=None, str_dims=None):
         """
         :param tile_img: image to use as the tile.
-        :param above_cap: text to draw above the tile.
-        :param below_cap: text to draw below the tile.
+        :param captions: dict with keys 'above', 'below', 'right' and values as strings to draw.
         :param pad_px: padding around the tile image.
         """
         self.tile_img = tile_img
         self.tile_size = tile_img.shape[1], tile_img.shape[0]  # W, H
-        self.above_cap = above_cap
-        self.below_cap = below_cap
+        self.captions = captions
         self._pad_px = pad_px
         self._font = LAYOUT['cv2_fonts']['state_captions']['font']
         self._font_scale = font_scale if font_scale is not None else LAYOUT['cv2_fonts']['state_captions']['scale']
-        test_str = above_cap if above_cap is not None else (below_cap if below_cap is not None else 'X')
+        test_str = captions['above'] if 'above' in captions else (captions['below'] if 'below' in captions else '0')
         self._str_dims = cv2.getTextSize(test_str, self._font, self._font_scale, 1) if str_dims is None else str_dims
         self._v_spacing = int(self._str_dims[0][1]*LAYOUT['cv2_fonts']['state_captions']['v_spacing'])
-        print("Font scale:  %f, v_spacing: %i" % (self._font_scale, self._v_spacing))
-        self.size, self._tile_bbox, self._captions, self._y_bottom = self._calc_dims()
+
+        self.size, self._tile_bbox, self._caption_info, self._y_bottom = self._calc_dims()
+
+        logging.info("CaptionedTile created with size: %s, tile_img_size:  %s, n_captions:  %i" % (
+            self.size, self.tile_size, len(self.captions)))
 
     def get_attach_points(self, pos=(0, 0), n=8, loc='bottom-left'):
         """
@@ -112,7 +102,7 @@ class CaptionedTile(object):
         if loc == 'bottom-left':
             x = np.linspace(self._tile_bbox['x'][0], self._tile_bbox['x']
                             [1], n+2)[1:-1]  # skip the first and last point
-            y = np.full(n,self.size[1])
+            y = np.full(n, self.size[1])
         elif loc == 'bottom':
             x = np.linspace(self._tile_bbox['x'][0], self._tile_bbox['x']
                             [1], n+2)[1:-1]  # skip the first and last point
@@ -136,30 +126,31 @@ class CaptionedTile(object):
         """
         w = self.tile_size[0] + self._pad_px * 2
         h = self.tile_size[1] + self._pad_px * 2
-        y_top = self._pad_px + self._v_spacing 
+        y_top = self._pad_px + self._v_spacing
         x_left = self._pad_px
-        captions = []
-        # import ipdb; ipdb.set_trace()
-        
-        if self.above_cap is not None:
-            cap_pos, (y_top, _) = place_string((x_left, y_top), self.above_cap, None, None,
+        caption_info = {'above': None, 'below': None, 'right': None}
+
+        # TODO: right caption(s)
+
+        if 'above' in self.captions:
+            cap_pos, (y_top, _) = place_string((x_left, y_top), self.captions['above'], None, None,
                                                None, incl_baseline=True, t_dims=self._str_dims)
-            captions.append((cap_pos, self.above_cap))
-            y_top += self._v_spacing //2
+            caption_info['above'] = cap_pos
+            y_top += self._v_spacing // 2
         img_pos = (x_left, y_top)
-        y_top += self.tile_size[1] + self._v_spacing 
+        y_top += self.tile_size[1] + self._v_spacing
         self._img_bottom = y_top
-        if self.below_cap is not None:
-            cap_pos, (y_top, _) = place_string((x_left, y_top), self.below_cap, None, None,
+        if 'below' in self.captions:
+            cap_pos, (y_top, _) = place_string((x_left, y_top),  self.captions['below'], None, None,
                                                None, incl_baseline=True, t_dims=self._str_dims)
-            captions.append((cap_pos, self.below_cap))
+            caption_info['below'] = cap_pos
             y_top += self._v_spacing
-            
-        self._bottom_space = 0# self._v_spacing //2
-        size = (w, y_top +self._bottom_space)
+
+        self._bottom_space = 0  # self._v_spacing //2
+        size = (w, y_top + self._bottom_space)
         tile_bbox = {'x': (img_pos[0], img_pos[0] + self.tile_size[0]),
                      'y': (img_pos[1], img_pos[1] + self.tile_size[1])}
-        return size, tile_bbox, captions, y_top
+        return size, tile_bbox, caption_info, y_top
 
     def draw(self, img, pos):
         """
@@ -176,8 +167,8 @@ class CaptionedTile(object):
             return {'x': (bbox['x'][0] + pos[0], bbox['x'][1] + pos[0]),
                     'y': (bbox['y'][0] + pos[1], bbox['y'][1] + pos[1])}
 
-        for cap_pos, cap_str in self._captions:
-            cap_pos = _offset_pos(cap_pos)
+        for cap_kind, cap_str in self.captions.items():
+            cap_pos = _offset_pos(self._caption_info[cap_kind])
             cv2.putText(img, cap_str, cap_pos, self._font, self._font_scale,
                         COLOR_SCHEME['text'], 1, cv2.LINE_AA)
 
@@ -208,7 +199,7 @@ def test_captioned_tile():
         space_size = test_img_size[0]//8
 
         artist = GameStateArtist(space_size=space_size)
-        ct = CaptionedTile(artist.get_image(game), above_cap='P(s): 1.0', below_cap=None)#'v(s): 0.24253')
+        ct = CaptionedTile(artist.get_image(game), captions={'above': 'P(s): 1.0'})  # 'v(s): 0.24253')
 
         n_lower_attach = (size[0]//30 % 7+1)  # Change width to try different numbers of lower attach points
 
@@ -219,8 +210,8 @@ def test_captioned_tile():
         # draw some attachment points
         def _draw_attach(points, color):
             for point in points:
-                pt =int(point[0]), int(point[1]) # (int(point[0]*SHIFT_MUL), int(point[1]*SHIFT_MUL))
-                cv2.circle(img, pt, 3, color, -1, cv2.LINE_AA)#, shift=SHIFT_BITS)
+                pt = int(point[0]), int(point[1])  # (int(point[0]*SHIFT_MUL), int(point[1]*SHIFT_MUL))
+                cv2.circle(img, pt, 3, color, -1, cv2.LINE_AA)  # , shift=SHIFT_BITS)
 
         upper_attach = ct.get_attach_points(pos, n=1, loc='top')
         lower_attach = ct.get_attach_points(pos, n=n_lower_attach, loc='bottom')
@@ -233,7 +224,6 @@ def test_captioned_tile():
         p1 = tile_bbox['x'][1], tile_bbox['y'][1]
         cv2.rectangle(img, p0, p1, (255, 0, 0), 1)
 
-        
         x_left, x_right = pos[0], pos[1] + ct.size[0]
         p0 = x_left, pos[1]
         p1 = x_right, pos[1] + ct.size[1]
@@ -256,6 +246,14 @@ class ValFuncViz(object):
 
     """
 
+    _DEFAULT_PARAMS = {'space_sizes': {
+        'state': 30,
+        'action': 25,
+        'next_state': 27},
+        'rel_dims': {'pad_frac': (0.01, 0.05),  # padding around the image in relative coordinates
+                     'v_spacing':None},
+        'string_v_spacing': 1.5}  # mult of str height, move strings DOWN this much (1.0=no spacing)
+
     def __init__(self, env, policy, values, size, key_size=None, title='Value Function', draw_params=None):
         """
         Show value function, actions & child states for the given state.
@@ -273,7 +271,7 @@ class ValFuncViz(object):
         self._par = ValFuncViz._DEFAULT_PARAMS.copy()
         if draw_params is not None:
             self._par.update(draw_params)
-        self._dims, self._bboxes = self._calc_dims()
+        self._dims = self._calc_dims()
 
     def _calc_dims(self):
         """
@@ -283,31 +281,172 @@ class ValFuncViz(object):
         returns: {'state': (bbox),
                   'action_bbox': (bbox),}
         """
-        x_marg, y_marg = LAYOUT['margin_rel'] * np.array(self.size)
+
+        x_marg, y_marg = (LAYOUT['img_margin_rel'] * np.array(self.size)).astype(int)
         x_left, x_right = x_marg, self.size[0] - x_marg - self.key_size[0]
         y_top, y_bottom = y_marg, self.size[1] - y_marg
         artists = {kind: GameStateArtist(space_size=self._par['space_sizes'][kind])
                    for kind in ['state', 'action', 'next_state']}
 
+        # Dummy tiles to get sizes:
+        state_tile = CaptionedTile(artists['state'].get_image(Game()), captions={'above': 'v(state)'})
+        action_tile = CaptionedTile(artists['action'].get_image(Game()),  captions={'above': 'P(act)'})
+        next_state_tile = CaptionedTile(artists['next_state'].get_image(Game()),
+                                        captions={'above': 'v(state)', 'below': 'V(s)'})
+        v_spacing = int(self._par['rel_dims']['sep_y_space'] * action_tile.size[1])
+
         # Title area
         title_right = min(x_right, self.key_size[0] + x_marg)
         title_left = x_left
         title_top = y_top + int(y_marg * (self._par['string_v_spacing'] - 1))
-        title_pos, y_top = place_string((title_left, title_top), self._title,
-                                        self._fonts['title']['font'], self._fonts['title']['scale'],
-                                        incl_baseline=True)
+        title_pos, (y_top, _) = place_string((title_left, title_top), self._title,
+                                             self._fonts['main_titles']['font'], self._fonts['main_titles']['scale'],
+                                             incl_baseline=True)
+        y_top += v_spacing
+
         # State icon (CaptionedTile)
-        tile_sizes = {kind: artist.dims['img_size'] for kind, artist in artists.items()}
+        state_tile_pos = (x_left, y_top)
+        y_top += state_tile.size[0] - v_spacing  # move up for first action tile
 
-        state_tile = CaptionedTile(artists['state'].get_image(None), above_cap='(set later)', below_cap=None)
-
+        # Everything else (the "action units")
         # everything but arrows must be left of the right-most arrow possible
-        left_edge_x = state_tile.get_attach_points(n=8, pos='bottom-left')[-1][0]
+        left_edge_x = state_tile.get_attach_points(n=8, loc='bottom-left', pos=state_tile_pos)[-1][0]
+        center_x = (x_left + x_right)//2
+        actions_bbox = {'x': (left_edge_x, x_right),
+                       'y': (y_top, y_bottom)}
+        actions_h, actions_w = (y_bottom - y_top), (x_right - left_edge_x)
 
-        #
+        
+
+        
+        dims = {'title': {'pos': title_pos,
+                          'bbox': {'x': (title_left, title_right),
+                                   'y': (y_top, y_top + state_tile.size[1])}},
+                'state': {'pos': state_tile_pos,
+                          'bbox': {'x': (x_left, left_edge_x),
+                                   'y': (y_top + state_tile.size[1], y_top + state_tile.size[1] + state_tile.size[1])}},
+                'tile_sizes': {'state': state_tile.size,
+                               'action': action_tile.size,
+                               'next_state': next_state_tile.size},
+                'actions': {'bbox': actions_bbox,
+                            'x_center': center_x,
+                            'size': (actions_w, actions_h)},
+                'artists': artists, 
+                'v_spacing': v_spacing,}
+
+        return dims
+
+    def _make_action_img(self, action):
+        state = Game()
+        state.state[action[0], action[1]] = self.env.player
+        return self._dims['artists']['action'].get_image(state)
+
+    def _get_subtree(self, state):
+        """
+        Get everything needed for drawing the image.
+        (make CaptionedTiles for all actions and next states)
+        :param state: The state to visualize.
+        """
+        artists = self._dims['artists']
+        print("Getting subtree for state:\n%s" % state)
+        state_tile = CaptionedTile(artists['state'].get_image(Game()), captions={'above': '(set later)'})
+        tree = {'state': state,
+                'state_tile': state_tile,
+                'state_value': self.values[state],
+                'actions': {}}
+
+        # actions
+        agent_action_dist = self.policy.recommend_action(state)
+        for action, prob in agent_action_dist:
+            next_state_dist = self.env.transition_p[state][action]  # [(ns, p), ...]
+            next_states = [ns[0] for ns in next_state_dist]
+            next_probs = [ns[1] for ns in next_state_dist]
+            next_vals = [self.values[next_state] for next_state in next_states]
+            action_tile = CaptionedTile(tile_img=self._make_action_img(action),
+                                        captions={'above': f'p: {prob:.3f}'})
+            next_state_tiles = [CaptionedTile(artists['next_state'].get_image(ns),
+                                              captions={'above': f'p: {next_probs[i]:.3f}',
+                                                        'below': f'v: {next_vals[i]:.3f}'})
+                                for i, ns in enumerate(next_states)]
+            sub_tree = {'action': action,
+                        'p(a)': prob,
+                        'action_tile': action_tile,
+                        'next_states': next_states,
+                        'next_probs': next_probs,
+                        'next_vals': next_vals,
+                        'next_state_tiles': next_state_tiles}
+            tree['actions'][action] = sub_tree
+
+        return tree
+
+    def _get_action_dims(self, tree, action, bbox, x_center):
+        """
+        Determine layout of an action unit, the subtree (agent action, next states) for each action.
+        :param tree: return value of _get_subtree(state).
+        :param action: The action to visualize.  (key in tree['actions'])
+        :param bbox: The bounding box for the action units (most of the image):
+        :returns: {'action': {'tile':CaptionedTile, 'pos': (x,y)}
+                   'states': [ {'tile':CaptionedTile, 'pos': (x,y)},
+                                  ...]  # for each next state
+        """
+        prob = tree['actions'][action]['p(a)']
+        action_tile
+        action_tile = tree['actions'][action]['action_tile']
 
     def draw(self, state):
-        self.artist = GameStateArtist(state, size=self.size, key_size=self.key_size)
+        """
+        Draw the value function visualization for the given state.
+        :param state: The state to visualize.
+        :returns: The image with the value function visualization.
+        """
+        img = np.zeros((self.size[1], self.size[0], 3), dtype=np.uint8)
+        img[:] = COLOR_SCHEME['bg']
+
+        # Get the subtree for the state
+        subtree = self._get_subtree(state)
+        n_actions = len(subtree['actions'])
+        action_bbox = self._dims['actions']['bbox']
+        #action_h = ((action_bbox['y'][1] - action_bbox['y'][0] - 
+
+        # Write title
+        title_pos = int(self._dims['title']['pos'][0]), int(self._dims['title']['pos'][1])
+        print(title_pos)
+        cv2.putText(img, self._title, title_pos, self._fonts['main_titles']['font'], self._fonts['main_titles']['scale'],
+                    COLOR_SCHEME['text'], 1, cv2.LINE_AA)
+
+        # Draw state tile
+        state_tile = self._dims['tiles']['state']
+        state_tile.tile_img = self._dims['artists']['state'].get_image(state)
+        state_tile.captions['above'] = f"V(s): {subtree['state_value']:.3f}"
+        state_bbox, y_bottom = state_tile.draw(img, self._dims['state']['pos'])
+
+        # outline key
+        p0 = (self.size[0] - self.key_size[0], 0)
+        p1 = (self.size[0], self.key_size[1])
+        cv2.rectangle(img, p0, p1, COLOR_SCHEME['lines'], 1)
+        cv2.putText(img, "(key)", (p0[0] + 5, p1[1]-15), self._fonts['main_titles']['font'],
+                    self._fonts['main_titles']['scale']*.8, COLOR_SCHEME['text'], 1, cv2.LINE_AA)
+
+        # Draw action tiles and next states
+        for act_ind, (action, act_tree) in enumerate(subtree['actions'].items()):
+
+    # UNCHECKED BELOW HERE:
+            action_tile = act_tree['action_tile']
+            action_tile.tile_img = self._make_action_img(action)
+            action_tile.captions['above'] = f"P(a|s): {act_tree['p(a)']:.3f}"
+            # Position the action tile
+            action_pos = (self._dims['actions']['x_center'], y_bottom)
+            action_bbox, y_bottom = action_tile.draw(img, action_pos)
+
+            # Draw next state tiles
+            for ns_ind, next_state_tile in enumerate(act_tree['next_state_tiles']):
+                next_state_tile.tile_img = self._dims['artists']['next_state'].get_image(act_tree['next_states'][ns_ind])
+                next_state_tile.captions['above'] = f"P(s'|a,s): {act_tree['next_probs'][ns_ind]:.3f}"
+                next_state_tile.captions['below'] = f"V(s'): {act_tree['next_vals'][ns_ind]:.3f}"
+                ns_pos = (action_bbox['x'][0] + (ns_ind+1) * (action_bbox['x'][1] - action_bbox['x'][0]) // (len(act_tree['next_states'])+1),
+                          y_bottom)
+                next_state_tile.draw(img, ns_pos)
+        return img
 
 
 def test_val_func_viz():
@@ -322,25 +461,32 @@ def test_val_func_viz():
     env = Environment(opponent_policy=opponent_policy, player_mark=Mark.X)
 
     terminals, nonterminals = env.get_terminal_states(), env.get_nonterminal_states()
-    values = {state: TERMINAL_REWARDS[state.result] for state in terminals}
+    values = {state: TERMINAL_REWARDS[Mark.X][state.check_endstate()] for state in terminals}
     values.update({state: np.random.randn() for state in nonterminals})
 
     # s val_func_viz = ValFuncViz(state=test_games[0],
-
     test_games = [Game.from_strs(["XOX",
-                                  " OX",
-                                 "X O"]),
+                                  " O ",
+                                  "X O"]),
 
                   Game.from_strs(["   ",
                                   "   ",
-                                 "   "]),
+                                  "   "]),
 
                   Game.from_strs(["XOX",
-                                  " OX",
-                                 "X O"])]
+                                  " O ",
+                                  "  O"])]
+    
+    import ipdb; ipdb.set_trace()
+    val_func_viz = ValFuncViz(env, agent_policy, values, img_size, key_size=key_size,
+                              title='Value Function')
+
+    img = val_func_viz.draw(test_games[0])
+    cv2.imshow("Value Function Visualization", img[:, :, ::-1])  # BGR to RGB
+    cv2.waitKey(0)
 
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    #
-    test_captioned_tile()
+    # test_captioned_tile()
+    test_val_func_viz()

@@ -1,5 +1,5 @@
 from policies import Policy
-from game_base import get_reward, Mark, TERMINAL_REWARDS
+from game_base import get_reward, Mark, TERM_REWARDS as TERMINAL_REWARDS
 import numpy as np
 from step_visualizer import PIStateStep
 import logging

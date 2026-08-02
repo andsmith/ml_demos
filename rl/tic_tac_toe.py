@@ -16,6 +16,8 @@ from copy import deepcopy
 
 # Defaults to get_img
 
+if Mark.X!=-Mark.O:
+    raise ValueError("Mark.X must be the negative of Mark.O, e.g. -1 and 1, or 0 and 1, or fix Game.invert().")
 
 class Game(object):
     """
@@ -27,6 +29,13 @@ class Game(object):
 
     def __hash__(self):
         return hash(tuple(self.state.flatten().tolist()))
+    def invert(self):
+        """
+        Invert the game state, i.e. swap X and O marks.
+        """
+        new_board = Game()
+        new_board.state = -np.copy(self.state)
+        return new_board
 
     def __eq__(self, other):
         return np.all(self.state == other.state)

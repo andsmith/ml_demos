@@ -7,13 +7,12 @@ States with N non-empty cells are placed in band N.
 
 
 """
+import logging
 import numpy as np
 import matplotlib.pyplot as plt
 from abc import ABC, abstractmethod
 import cv2
-
-import logging
-
+from colors import COLOR_SCHEME
 
 MIN_BOX_SIZE = 7
 
@@ -67,7 +66,7 @@ class BoxOrganizer(ABC):
         """
         pass
 
-    def draw_box(self, image, state_id, color,default_color=None, thickness=0):
+    def draw_box(self, image, state_id, color, default_color=None, thickness=0):
         """
         Draw a box on the image.
         :param image: image to draw on.
@@ -498,6 +497,54 @@ class FixedCellWithKey(FixedCellBoxOrganizer):
         return super()._draw_layer_bars(image)
 
 
+class CompactBoxOrganizer(BoxOrganizer):
+    """
+    Squish all states to the middle with minimal padding, 
+    redistribute layer spacing as needed.
+    """
+    _DRAW_PARAMS = {'layer_sep_px':5,  # vertically, between layers, horizontally, between x and o turns.
+                    'margin_px': 4,  # on outside edges
+                    }
+
+    def __init__(self, size_wh, layers, box_sizes, key_size=(0, 0), draw_darams=None):
+        """
+        :param size_wh: size of the window in pixels (width, height).
+        :param layers: list of lists of boxes, each list is a layer:
+           layer[i] is a list of boxes that will be placed in band i.
+               Each box is a dict with an 'id' key.
+        :param box_sizes: list of ints, the side-length of the square boxes in each layer.
+        :param min_key_h: minimum height of the color key area.
+        """
+        self.key_size= key_size
+        self._draw_params = CompactBoxOrganizer._DRAW_PARAMS.copy()
+        if draw_darams is not None:
+            self._draw_params.update(draw_darams)
+
+        super().__init__(size_wh, layers)
+
+        self.layer_spacing = self._recalc_layer_spacing()
+
+    def draw(self, images=None, colors=None, dest=None, **kwargs):
+
+        if 'show_bars' in kwargs:
+            raise NotImplementedError("CompactBoxOrganizer does not support showing layer bars.")
+        
+        super().draw(images, colors, dest, show_bars=False, **kwargs)    
+
+    def _calc_layer_spacing(self):
+        """
+        """
+        return None  # set after box positions
+
+    def _calc_box_positions(self):
+        """
+        :returns: 
+            box_pos: dict:  box_id -> {'x': (left, right), 'y': (top, bottom)}
+            grid_shape: list, for each layer, {'box_side_len': int, 'n_rows': int, 'n_cols': int}
+        """
+        
+        pass
+
 class LayerwiseBoxOrganizer(BoxOrganizer):
     """ 
     Given layer spacing, fit n = Layer[l] boxes in each layer.
@@ -681,6 +728,27 @@ class LayerwiseBoxOrganizer(BoxOrganizer):
         return n_rows, n_cols
 
 
-if __name__ == "__main__":
+def test_box_organizer():
+    img_size = (946, 969)
+    from reinforcement_base import Environment
+    from baseline_players import HeuristicPlayer
+    from game_base import Mark
+    from mouse_state_manager import MouseBoxManager
+    from drawing import GameStateArtist
+    from game_util import sort_states_into_layers
+    from layout import LAYOUT
+    from tic_tac_toe import Game, Mark
+    player = Mark.X
+    opponent = HeuristicPlayer(mark=Mark.O, n_rules=2)
+    env = Environment(opponent_policy=opponent, player_mark=player)
+    terminals, nonterminals = env.get_terminal_states(), env.get_nonterminal_states()
+    all_states = terminals + nonterminals
+    artists = [GameStateArtist(space_size=s, bar_w_frac=0.0) for s in LAYOUT['state_embedding']['space_sizes']]
+    box_sizes = [artists[layer_no].get_image(Game()).shape[0] for layer_no in range(len(artists))]
+    state_layers = sort_states_into_layers(all_states, player_mark=player)
+    bo = CompactBoxOrganizer((946, 950), layers=state_layers, box_sizes=box_sizes, draw_params=None)
 
-    test_BoxOrganizer()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    test_box_organizer()

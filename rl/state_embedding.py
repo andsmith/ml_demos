@@ -15,7 +15,7 @@ from gameplay import ResultSet, Match
 from colors import COLOR_SCHEME
 from layer_optimizer import SimpleTreeOptimizer
 from gui_base import Key, KeySizeTester
-from game_base import TERMINAL_REWARDS, Result
+from game_base import  Result
 
 
 
@@ -96,7 +96,7 @@ class StateEmbedding(object):
 
 
 def test_state_embedding():
-    img_size = (1200, 980)
+    img_size = (946, 969)
     from reinforcement_base import Environment
     from baseline_players import HeuristicPlayer
     from game_base import Mark
@@ -104,17 +104,31 @@ def test_state_embedding():
     agent = HeuristicPlayer(mark=Mark.X, n_rules=1)
     opponent = HeuristicPlayer(mark=Mark.O, n_rules=2)
     env = Environment(opponent_policy=opponent, player_mark=Mark.X)
-    embed = StateEmbedding(env, key_size=(300, 70))
+    embed = StateEmbedding(env, key_size=(0,0))
+    test_terminal = Game.from_strs(["OOX", "OOX", "XXO"])
+
+    #import ipdb; ipdb.set_trace()  # noqa: E702
+
+
     embed.set_size(img_size)
+
+
+    images = {state['id']: embed.artists[layer_num].get_image(
+            state['id']) for layer_num, state_list in enumerate(embed.states_by_layer) for state in state_list}
+        
+    
     mouse = MouseBoxManager(None)
     mouse.set_boxes(embed.box_placer.box_positions)
 
     img = np.zeros((img_size[1], img_size[0], 3), dtype=np.uint8)
+    img[:]  = COLOR_SCHEME['bg']
+    embed.box_placer.draw(images=images, colors=None, show_bars=False, dest=img)
+
     terminals, nonterminals = env.get_terminal_states(), env.get_nonterminal_states()
     all_states = terminals + nonterminals
     # for state in all_states:
-    mouse.render_state(img, nonterminals, 1)
-    mouse.render_state(img, terminals, 2)
+    #mouse.render_state(img, nonterminals, 1)
+    #mouse.render_state(img, [test_terminal], 2)
 
     cv2.imshow("State Embedding Test", img[:, :, ::-1])  # Flip the image horizontally
     cv2.waitKey(0)
@@ -363,8 +377,8 @@ def test_state_embedding_key():
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    # test_state_embedding()
-    test_state_embedding_key()
+    test_state_embedding()
+    #test_state_embedding_key()
     # Example usage:
     # app = MyApp()  # Replace with your application instance
     # env = Environment()  # Replace with your environment instance

@@ -5,7 +5,6 @@ import tkinter.ttk as ttk
 from PIL import Image, ImageTk, ImageDraw
 from colors import COLOR_SCHEME
 from layout import LAYOUT, WIN_SIZE
-from game_base import Mark, Result, TERMINAL_REWARDS
 from game_util import get_box_placer, get_state_icons, sort_states_into_layers
 from layer_optimizer import SimpleTreeOptimizer
 import numpy as np

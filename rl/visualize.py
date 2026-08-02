@@ -201,7 +201,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
         in_out_sep = 6
         marked_x = 1
         free_x = 8
-        _add_unit_grid(input_keys[:9], marked_x, 0, 'X/O', spacing=(1, .8), x_spread=1)
+        _add_unit_grid(input_keys[:9], marked_x+2, 0, 'X/O', spacing=(-1, .8), x_spread=1)
         _add_unit_grid(input_keys[9:], free_x, 0, 'Free', spacing=(1, .8), x_spread=1)
 
     elif len(input_keys) == 27:   # (x=1, o=-1, empty=0) for 3 spaces
@@ -215,7 +215,7 @@ def draw_ttt_net(config, genome, view=False, filename=None, node_names=None, sho
 
     outputs = set()
     output_keys = config.genome_config.output_keys
-    n_added = _add_unit_grid(output_keys, out_x, in_out_sep, 'X-Act', spacing=(1.2, .5), x_spread=3.5)[0]
+    n_added = _add_unit_grid(output_keys, out_x, in_out_sep, 'X-Act', spacing=(1.5, .8), x_spread=1.5)[0]
     if (n_added != len(output_keys)):
         raise ValueError("Number of output keys does not match number of outputs in genome: %s != %s" %
                          (n_added, len(output_keys)))
