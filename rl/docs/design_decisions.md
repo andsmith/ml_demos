@@ -20,6 +20,23 @@ A running log. Add an entry whenever a non-obvious decision is made.
 - **WIP committed as a baseline first** (commit `58982fd`) so all repair work diffs
   against a known snapshot.
 
+## 2026-08-02 — M4: what the DP demos mean
+
+- The four model-based demos are differentiated on two axes — backup type and
+  update discipline:
+  - **PE** (`pi-pe`): policy-expectation backup, two-array (Jacobi) commits per epoch.
+  - **In-Place PE** (`pi-pe-inplace`): same backup, Gauss-Seidel (immediate) commits.
+  - **DP** (`dp`): optimality (max) backup with backward induction — children before
+    parents, in place — so V* is exact after ONE pass. This is the README's "compute
+    values directly by following the state-transition graph".
+  - **In-Place DP** (`dp-inplace`): same max backup, but in default screen order —
+    asynchronous value iteration, converging in a few passes without the "right" order.
+- All four share `PolicyEvalDemoAlg`'s machinery (`_expected_return`, tabs, control
+  points, greedy improvement); the DP subclasses only override the backup and the
+  sweep order. Verified: DP one-pass values match converged PE/PI values to 2e-16.
+- Convergence is tracked as max |dV| per epoch (works identically for Jacobi and
+  in-place variants), tolerance 1e-6.
+
 ## Inherited decisions (reconstructed from the code)
 
 - **Opponent folded into the environment.** The agent sees a single-player stochastic

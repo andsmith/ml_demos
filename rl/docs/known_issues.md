@@ -16,8 +16,9 @@ POLICY_EVAL/POLICY_OPTIM.)
   per-state improvement into a `TabularPolicy`, real convergence checks. Verified
   headless: converges in 4 PI iterations; never loses to its training opponent —
   500/500 wins vs Heuristic(6), 500/500 draws vs MiniMax.)
-- `dynamic_prog.py`, `q_learning.py`, `policy_grad.py` are name-only stubs;
-  `monte_carlo.py` is empty.
+- (M4 implemented `dynamic_prog.py`: backward-induction DP + async in-place VI,
+  both verified against converged PE/PI values.)
+- `q_learning.py`, `policy_grad.py` are name-only stubs; `monte_carlo.py` is empty.
 - `step_visualizer.py`: `PIStep` / `ContinuousStep` are `pass # TODO` (:471, :488).
 - The step-visualization panel (`get_viz_image`) still shows placeholder text/state
   icon rather than the per-state update tree from `step_visualizer.StateUpdateStep` —

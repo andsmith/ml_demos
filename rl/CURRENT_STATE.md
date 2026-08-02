@@ -29,19 +29,23 @@ Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
 
 ## Highest-priority remaining work
 
-1. **M4 — implement the DP demo algorithms.** ← next
-2. M5 — threading/responsiveness repair; M6 — dead-code removal; M7 — README.
+1. **M5 — threading/responsiveness repair.** ← next
+2. M6 — dead-code removal; M7 — README.
 
 ## Immediate next milestone
 
-**M4**: `DynamicProgDemoAlg` / `InPlaceDPDemoAlg` working in the app; DP value
-function matches PE's within epsilon.
+**M5**: Tk updates marshalled to the main thread; mouse-move refresh throttled;
+paused-tick FPS gate; KDTree hit-testing everywhere.
 
 ## Milestone log
 
 - M0 (58982fd): WIP baseline committed.
 - M1 (bf6d908): docs/ + CURRENT_STATE.md reconstructed.
 - M2 (c777bae): `python rl_demo.py` starts and renders; rename finished.
-- M3: real PE/PI math in `PolicyEvalDemoAlg` (Bellman backups, greedy improvement,
-  true convergence). Verified: 4-iteration convergence; 500/500 wins vs training
-  opponent Heuristic(6); 500/500 draws (0 losses) when trained vs MiniMax.
+- M3 (79aecbf): real PE/PI math in `PolicyEvalDemoAlg` (Bellman backups, greedy
+  improvement, true convergence). Verified: 4-iteration convergence; 500/500 wins vs
+  training opponent Heuristic(6); 500/500 draws (0 losses) when trained vs MiniMax.
+- M4: DP demos implemented (backward-induction DP exact in one pass; async in-place
+  VI); In-Place PE is now genuinely in-place. DP values match converged PI values to
+  2e-16; greedy(DP) policy 500/500 wins vs Heuristic(6). All 4 model-based demos
+  selectable in the app.

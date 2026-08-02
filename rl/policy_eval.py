@@ -48,6 +48,9 @@ class PolicyEvalDemoAlg(DemoAlg):
         self._viz_img_size = None
         self._delta_v_tol = 1e-6
         self._term_rewards = TERM_REWARDS[self.env.player]
+        # In-place (Gauss-Seidel style) evaluation: new values are visible to
+        # later backups in the same epoch instead of being committed per epoch.
+        self._in_place = False
         if pi_seed is None:
             pi_seed = HeuristicPlayer(mark=self.env.player, n_rules=2)
         self.pi_seed = pi_seed
@@ -306,15 +309,21 @@ class PolicyEvalDemoAlg(DemoAlg):
         self.next_values[state] = new_val
         self.max_delta_vs = max(self.max_delta_vs, abs(delta))
         self._tabs['updates']['tab_content'].set_value(state, delta)
+        if self._in_place:
+            self.values[state] = new_val
+            if 'values' in self._tabs:
+                self._tabs['values']['tab_content'].set_value(state, new_val)
 
     def _update_values(self):
         # Copy V'(s) to V(s) (keeping terminal-state values), reset V'(s) to None,
-        # and push the new values to the 'values' tab.
+        # and push the new values to the 'values' tab.  (In-place mode already
+        # committed and displayed each value as it was computed.)
         values_tab = self._tabs['values']['tab_content'] if 'values' in self._tabs else None
-        for state, val in self.next_values.items():
-            self.values[state] = val
-            if values_tab is not None:
-                values_tab.set_value(state, val)
+        if not self._in_place:
+            for state, val in self.next_values.items():
+                self.values[state] = val
+                if values_tab is not None:
+                    values_tab.set_value(state, val)
         self.next_values = {state: None for state in self.updatable_states}
 
 
@@ -512,17 +521,15 @@ class PolicyEvalDemoAlg(DemoAlg):
 
 
 class InPlacePEDemoAlg(PolicyEvalDemoAlg):
-    def __init__(self, app, env, gamma=0.9):
-        """
-        Initialize the algorithm with the app, GUI, environment, and discount factor.
+    """
+    In-place (Gauss-Seidel) variant of iterative policy evaluation: each new
+    V(s) is committed immediately, so later backups in the same epoch use it.
+    Typically converges in fewer epochs than the two-array version.
+    """
 
-        :param app: The application object.
-        :param gui: The GUI object.
-        :param env: The environment object.
-        :param gamma: The discount factor (default is 0.9).
-        """
-
-        super().__init__(app=app, env=env, gamma=gamma)
+    def __init__(self, app, env, pi_seed=None, gamma=0.9):
+        super().__init__(app=app, env=env, pi_seed=pi_seed, gamma=gamma)
+        self._in_place = True
 
     @staticmethod
     def get_name():
