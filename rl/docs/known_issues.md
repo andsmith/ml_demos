@@ -10,15 +10,19 @@ fixed; milestone tags (M2–M6) refer to the restart roadmap.
 `PIPhases` now defined once in `reinforcement_base.py` with members
 POLICY_EVAL/POLICY_OPTIM.)
 
-## Faked / stubbed math — M3, M4
+## Faked / stubbed math — M4
 
-- `policy_eval.PolicyEvalDemoAlg`: `_optimize_state_value` returns
-  `old + randn()*0.1` (policy_eval.py:379); `_optimize_state_policy` picks a random
-  action (:409); convergence hard-coded (`pe_iter == 1` at :392, `pi_iter > 2` at
-  :280); policy-change detector always `changed = False` (:432).
+- (M3 fixed the PE/PI math: real Bellman backups via `_expected_return`, greedy
+  per-state improvement into a `TabularPolicy`, real convergence checks. Verified
+  headless: converges in 4 PI iterations; never loses to its training opponent —
+  500/500 wins vs Heuristic(6), 500/500 draws vs MiniMax.)
 - `dynamic_prog.py`, `q_learning.py`, `policy_grad.py` are name-only stubs;
   `monte_carlo.py` is empty.
 - `step_visualizer.py`: `PIStep` / `ContinuousStep` are `pass # TODO` (:471, :488).
+- The step-visualization panel (`get_viz_image`) still shows placeholder text/state
+  icon rather than the per-state update tree from `step_visualizer.StateUpdateStep` —
+  wiring that in is part of the remaining viz work (M6 decision on
+  step_visualizer vs tree_step_viz).
 
 ## Threading / responsiveness — M5
 

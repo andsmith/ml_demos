@@ -24,21 +24,24 @@ Updated: 2026-08-02 (restart baseline: commit 58982fd; docs reconstructed)
 ## What is known to be broken
 
 - Tk widgets are updated from the algorithm thread (crash risk; fix in M5).
-- The PE demo's displayed "learning" is placeholder math until M3 lands.
+- Step-visualization panel shows placeholder content (real per-state update tree
+  exists in `step_visualizer.py`; wiring decision in M6).
 
 ## Highest-priority remaining work
 
-1. **M3 — port real PE/PI math from `game_learn.py` into `PolicyEvalDemoAlg`.** ← next
-2. M4 — implement the DP demo algorithms.
-3. M5 — threading/responsiveness repair; M6 — dead-code removal; M7 — README.
+1. **M4 — implement the DP demo algorithms.** ← next
+2. M5 — threading/responsiveness repair; M6 — dead-code removal; M7 — README.
 
 ## Immediate next milestone
 
-**M3**: PE/PI runs to convergence in the GUI with real Bellman updates; converged
-greedy policy never loses as X vs Heuristic(6) and MiniMax.
+**M4**: `DynamicProgDemoAlg` / `InPlaceDPDemoAlg` working in the app; DP value
+function matches PE's within epsilon.
 
 ## Milestone log
 
 - M0 (58982fd): WIP baseline committed.
 - M1 (bf6d908): docs/ + CURRENT_STATE.md reconstructed.
-- M2: `python rl_demo.py` starts and renders; rename finished, signatures fixed.
+- M2 (c777bae): `python rl_demo.py` starts and renders; rename finished.
+- M3: real PE/PI math in `PolicyEvalDemoAlg` (Bellman backups, greedy improvement,
+  true convergence). Verified: 4-iteration convergence; 500/500 wins vs training
+  opponent Heuristic(6); 500/500 draws (0 losses) when trained vs MiniMax.

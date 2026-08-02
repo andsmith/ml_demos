@@ -114,9 +114,13 @@ class ValueFunctionContentPage(FullStateContentPage):
         print("initialized ValueFunctionContentPage with %i updatable states." % len(self._updatable_states))
         self._color_key = keys['values']
 
-    def reset_values(self, value = None):
-        self._values = {state: value for state in self._updatable_states}
+    def reset_values(self, value=None):
+        # Reset updatable states only; non-updatable entries (e.g. terminal
+        # rewards) keep their displayed values.
+        for state in self._updatable_states:
+            self._values[state] = value
         self._color_key.reset()
+        self.clear_images(marked_only=False)
 
     def _get_key_value(self, key_name):
         if key_name == 'values':

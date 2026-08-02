@@ -108,6 +108,27 @@ class Policy(ABC):
         return self.__class__.__name__ + "(%s)" % self.player.name
 
 
+class TabularPolicy(Policy):
+    """
+    Policy defined by an explicit state -> [(action, prob), ...] table,
+    e.g. the result of a policy-improvement sweep.
+    """
+
+    def __init__(self, pi, player):
+        """
+        :param pi: dict mapping Game states to [(action, prob), ...] distributions.
+        :param player: Mark.X or Mark.O
+        """
+        super().__init__(player=player)
+        self._pi = pi
+
+    def __str__(self):
+        return "TabularPolicy(%s)" % self.player.name
+
+    def recommend_action(self, state):
+        return self._pi[state]
+
+
 class InvPolicy(Policy):
     """
     Inverse policy, i.e. the opponent's policy.

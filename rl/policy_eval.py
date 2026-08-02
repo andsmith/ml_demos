@@ -6,12 +6,12 @@ import layout
 from game_base import TERM_REWARDS
 from reinforcement_base import PIPhases
 from baseline_players import HeuristicPlayer
+from policies import TabularPolicy
 from collections import OrderedDict
 import numpy as np
 from colors import COLOR_SCHEME
 import cv2
 from drawing import GameStateArtist
-import time
 from state_key import StateKey
 from color_key import SelfAdjustingColorKey, ProbabilityColorKey, get_good_cmap
 from state_embedding import StateEmbedding, StateEmbeddingKey
@@ -47,6 +47,7 @@ class PolicyEvalDemoAlg(DemoAlg):
         self._gamma = gamma
         self._viz_img_size = None
         self._delta_v_tol = 1e-6
+        self._term_rewards = TERM_REWARDS[self.env.player]
         if pi_seed is None:
             pi_seed = HeuristicPlayer(mark=self.env.player, n_rules=2)
         self.pi_seed = pi_seed
@@ -104,7 +105,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         # Value function & update tables
         # initial values for terminal states (should be zero, but we're using the terminal reward):
-        self.values = {state: TERM_REWARDS[self.env.player][state.check_endstate()] for state in self.terminal_states}
+        self.values = {state: self._term_rewards[state.check_endstate()] for state in self.terminal_states}
         self.values.update({state: 0.0 for state in self.updatable_states})
         self.next_values = {state: None for state in self.updatable_states}
 
@@ -194,14 +195,14 @@ class PolicyEvalDemoAlg(DemoAlg):
                                                                            keys=OrderedDict((('state', state_key),
                                                                                              ('embedding', embedding_key))))}),
                             ('values', {'disp_text': "Values",
-                                        'tab_content': ValueFunctionContentPage(self, self._embedding, self.values,
+                                        'tab_content': ValueFunctionContentPage(self, self._embedding, dict(self.values),
                                                                                  self._embedding.updatable_states,
                                                                                 keys=OrderedDict((('state', state_key),
                                                                                                  ('values', value_color_key))))}),
                                                                                                    
         
                             ('updates', {'disp_text': "Updates",
-                                         'tab_content': ValueFunctionContentPage(self, self._embedding, self.next_values,
+                                         'tab_content': ValueFunctionContentPage(self, self._embedding, dict(self.next_values),
                                                                                  self._embedding.updatable_states,
                                                                                  keys=OrderedDict((('state', state_key),
                                                                                                    ('values', updates_color_key))))})
@@ -275,7 +276,7 @@ class PolicyEvalDemoAlg(DemoAlg):
                 break
 
             # check for convergence
-            if self.n_pi_changes == 0 or self.pi_iter > 2:  # For testing
+            if self.n_pi_changes == 0:
                 self.pi_convergence_iter = self.pi_iter
                 self.pi_converged = True
                 logging.info("Policy converged after %i iterations." % self.pi_convergence_iter)
@@ -291,7 +292,7 @@ class PolicyEvalDemoAlg(DemoAlg):
 
 
     def _reset_tabs(self, phase):
-        logging.info("----------------------------------Resetting tabs for phase: %s" % phase.name)
+        logging.info("Resetting tabs for phase: %s" % phase.name)
         if phase == PIPhases.POLICY_EVAL:
             if 'values' in self._tabs:
                 self._tabs['values']['tab_content'].reset_values(0.0)
@@ -299,15 +300,21 @@ class PolicyEvalDemoAlg(DemoAlg):
                 self._tabs['updates']['tab_content'].reset_values(None)
 
     def _update_single_value(self, state, new_val):
-        # Set S'(state) = new_val
+        # Set V'(state) = new_val; show the change on the 'updates' tab.
         old_val = self.values[state]
         delta = new_val - old_val
         self.next_values[state] = new_val
+        self.max_delta_vs = max(self.max_delta_vs, abs(delta))
         self._tabs['updates']['tab_content'].set_value(state, delta)
 
     def _update_values(self):
-        # Copy S'(s) to S(s), reset S'(s) to None
-        self.values = self.next_values
+        # Copy V'(s) to V(s) (keeping terminal-state values), reset V'(s) to None,
+        # and push the new values to the 'values' tab.
+        values_tab = self._tabs['values']['tab_content'] if 'values' in self._tabs else None
+        for state, val in self.next_values.items():
+            self.values[state] = val
+            if values_tab is not None:
+                values_tab.set_value(state, val)
         self.next_values = {state: None for state in self.updatable_states}
 
 
@@ -321,6 +328,11 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         state_update_order = self._state_update_order  # should exist by now...
 
+        # Cold-start V(s) for the current policy (terminal values stay fixed).
+        for state in self.updatable_states:
+            self.values[state] = 0.0
+        self.next_values = {state: None for state in self.updatable_states}
+
         self.pe_iter = 0
         self.pe_converged = False
         self.pe_convergence_iter = None
@@ -331,11 +343,8 @@ class PolicyEvalDemoAlg(DemoAlg):
             if 'updates' in self._tabs:
                 self._tabs['updates']['tab_content'].reset_values(None)
 
-            # reset updates tab so blank spaces show before filling in values (because this is model-based RL).
-            # for state in self.updatable_states:
-            #    self._img_mgr.set_state_val(state, 'updates', 0.0)
-
             # One epoch:
+            self.max_delta_vs = 0.0
             self.next_state_ind = 0
             while not self._shutdown and self.next_state_ind < len(state_update_order):
                 
@@ -351,9 +360,6 @@ class PolicyEvalDemoAlg(DemoAlg):
 
             if self._shutdown:
                 return True
-
-            # for state in state_update_order:
-            #    self._img_mgr.set_state_val(state, 'values', self.next_values[state])
 
             self.pe_converged = self._check_value_function_convergence()
             if self.pe_converged:
@@ -374,72 +380,99 @@ class PolicyEvalDemoAlg(DemoAlg):
 
         return self._shutdown
 
+    def _expected_return(self, state, action):
+        """
+        The inner sum of the policy-evaluation update (eq. 4.9, Sutton & Barto):
+        the expected reward + discounted value after the agent takes `action` in
+        `state` and the opponent (folded into the environment) responds.
+
+        :returns: float, E[ R + gamma * V(s') | state, action ]
+        """
+        inter_state = state.clone_and_move(action, self.env.player)
+        inter_result = inter_state.check_endstate()
+        if inter_result is not None:
+            # Agent's move ended the game (win or draw): the return is the reward.
+            return self._term_rewards[inter_result]
+
+        # Opponent's turn: expectation over the opponent's action distribution.
+        expected = 0.0
+        for opp_action, prob in self.env.opp_move_dist(state, action):
+            if prob == 0:
+                continue
+            next_state = inter_state.clone_and_move(opp_action, self.env.opponent)
+            next_result = next_state.check_endstate()
+            if next_result is not None:
+                expected += prob * self._term_rewards[next_result]
+            else:
+                expected += prob * self._gamma * self.values[next_state]
+        return expected
+
     def _optimize_state_value(self, state):
-        logging.info("Optimizing value for state:\n\n%s" % state)
-        old_val = self.values[state]
-        delta = np.random.randn() * 0.1  # Simulate some value change
-        new_val = old_val + delta
-        time.sleep(0.00001)  # Simulate some processing time
-        return new_val
+        """
+        One policy-evaluation backup:
+        V'(s) = sum_a pi(a|s) * E[ R + gamma * V(s') | s, a ]
+        """
+        weighted_sum = 0.0
+        for action, act_prob in self.policy.recommend_action(state):
+            if act_prob == 0:
+                continue
+            weighted_sum += act_prob * self._expected_return(state, action)
+        return weighted_sum
 
     def _check_value_function_convergence(self):
         """
-        Check if the value function has converged.
+        Check if the value function has converged (largest update this epoch
+        within tolerance).
         :returns: True if converged, False otherwise.
         """
-        if self.pe_iter == 1:
-            return True  # For testing
-        max_delta = 0.0
-        for state in self.updatable_states:
-            delta = abs(self.values[state] - self.next_values[state])
-            if delta > max_delta:
-                max_delta = delta
-            if delta > self._delta_v_tol:
-                return False
-        return True
+        return self.max_delta_vs <= self._delta_v_tol
 
     def _optimize_state_policy(self, state):
         """
-        Find the best policy (action with highest expected return.)
+        Greedy policy improvement for one state: the action(s) maximizing the
+        expected return under the current value function (ties uniform).
+        :returns: [(action, prob), ...] distribution over the best actions.
         """
         actions = state.get_actions()
-
-        # STUB
-        new_action = np.random.choice(actions)  # Randomly choose an action for now
-        time.sleep(0.00001)
-
-        return new_action
-    
+        returns = [self._expected_return(state, action) for action in actions]
+        best = max(returns)
+        best_actions = [a for a, r in zip(actions, returns) if r == best]
+        prob = 1.0 / len(best_actions)
+        return [(action, prob) for action in best_actions]
 
     def _optimize_policy(self):
         logging.info("Optimizing policy for iteration %i" % self.pi_iter)
 
-        # Reset 'updates' tab, will be used in policy optimization as binary
-        # binary, marking which states have a new action, Pi(s)=a.
-        # self._img_mgr.set_range('updates', (0.0, 1.0))
-        # self._img_mgr.reset_values(tabs=('updates'))
-        # for state in self.updatable_states:  # show blank squares before filling in values
-        #    self._img_mgr.set_state_val(state, 'updates', 0.0)
+        # The 'updates' tab marks which states changed their action(s): 1.0 / 0.0.
+        if 'updates' in self._tabs:
+            self._tabs['updates']['tab_content'].reset_values(None)
 
         self.n_pi_changes = 0
         self.next_state_ind = 0
+        new_pi = {}
 
-        def update(state, new_action):
-            old_action_dist = self.policy[state]
-
-            changed = False
+        def update(state, new_action_dist):
+            old_actions = set(a for a, p in self.policy.recommend_action(state) if p > 0)
+            new_actions = set(a for a, p in new_action_dist)
+            changed = old_actions != new_actions
             if changed:
                 self.n_pi_changes += 1
+            new_pi[state] = new_action_dist
+            if 'updates' in self._tabs:
+                self._tabs['updates']['tab_content'].set_value(state, 1.0 if changed else 0.0)
 
         while not self._shutdown and self.next_state_ind < len(self.updatable_states):
             self.state = self._state_update_order[self.next_state_ind]
-            new_action = self._optimize_state_policy(self.state)
-            update(self.state, new_action)
+            new_action_dist = self._optimize_state_policy(self.state)
+            update(self.state, new_action_dist)
             if self._maybe_pause('state-update'):
                 logging.info("---------Policy optimization early shutdown.")
                 return self._shutdown, self.n_pi_changes
 
             self.next_state_ind += 1
+
+        if not self._shutdown:
+            self.policy = TabularPolicy(new_pi, player=self.env.player)
 
         self.state = None  # clear so nothing is highlighted.
         return self._shutdown, self.n_pi_changes
